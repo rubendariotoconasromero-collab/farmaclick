@@ -213,15 +213,32 @@ class CompraController extends BitacoraController
             $control->save();
 
             $detalles = $request->detalle;
-            foreach($detalles as $ep=>$det){
-                $lote = new Lote();
-                $lote->id_producto=$det['id_tienda_articulo'];
-                $lote->fecha_vecimiento=$det['fecha_vecimiento'];;
-                $lote->cantidad= $det['cantidad'];
-                $lote->lote= $det['lote'];
-                $lote->estado=1;
-                $lote->save();
+            foreach($detalles as $ep=>$det){          
+                $stock_anterior_lote = 0;
+                $stock_actual_lote = 0;
 
+                $lote_existente = Lote::where('id_producto', $det['id_tienda_articulo'])
+                      ->where('lote', $det['lote'])
+                      ->first();
+
+                if ($lote_existente) {
+                    $stock_anterior_lote = $lote_existente->cantidad;
+                    $lote_existente->cantidad += $det['cantidad'];
+                    $lote_existente->save();
+                    $lote = $lote_existente; 
+                    $stock_actual_lote = $lote->cantidad;
+                } else {
+                    $stock_anterior_lote = 0;
+                    $lote = new Lote();
+                    $lote->id_producto = $det['id_tienda_articulo'];
+                    $lote->fecha_vecimiento = $det['fecha_vecimiento'];
+                    $lote->cantidad = $det['cantidad'];
+                    $lote->lote = $det['lote'];
+                    $lote->estado = 1;
+                    $lote->save();
+
+                    $stock_actual_lote = $lote->cantidad;
+                }
 
                 $obj = new DetalleCompra();
                 $obj->id_compra= $compra->id;
@@ -250,8 +267,9 @@ class CompraController extends BitacoraController
                 $ajuste->costo_unitario=0;
                 $ajuste->costo_mayorista=0;
                 $ajuste->costo_preferencial=0;
-                $ajuste->stock_anterior=0;
-                $ajuste->stock_actual=$det['cantidad'];
+
+                $ajuste->stock_anterior=$stock_anterior_lote;
+                $ajuste->stock_actual=$stock_actual_lote;
                 $ajuste->stock_general_anterior=$tienda_articulo[0]->stock - $det['cantidad'];
                 $ajuste->stock_general=$tienda_articulo[0]->stock;
                 $ajuste->observacion=$request->descripcion;
@@ -312,7 +330,7 @@ class CompraController extends BitacoraController
     // }
 
     public function detalleCompra(Request $request){
-
+        // id_tienda_articulo
         $id=$request->id;
         $obj= detalleCompra::join('tienda_articulo','detalle_compra.id_producto','=','tienda_articulo.id')
         ->join('lote','detalle_compra.id_lote','=','lote.id')
@@ -324,7 +342,7 @@ class CompraController extends BitacoraController
         ->select('detalle_compra.id_compra','detalle_compra.costo_compra','detalle_compra.id_compra','detalle_compra.cantidad',
         'detalle_compra.sub_total','articulo.nombre_comercial as articulo','tienda.nombre as tienda','categoria.nombre as categoria'
         ,'detalle_compra.id_lote','detalle_compra.id_producto','lote.cantidad as stock','articulo.id as id_articulo','detalle_compra.eliminado','lote.fecha_vecimiento','lote.lote'
-        ,'detalle_compra.descuento')
+        ,'detalle_compra.descuento','tienda_articulo.id as id_tienda_articulo')
         ->where('detalle_compra.id_compra','=',$id)
         ->get();
         return $obj;

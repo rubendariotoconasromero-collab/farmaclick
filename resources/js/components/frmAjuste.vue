@@ -142,7 +142,7 @@
                                 <div class="col-md-6 mb-2">
                                     <label class="form-label">Productos<span style="color:red;" >(*Seleccione)</span></label>
                                     <div class="input-group mb-6">
-                                        <button type="button" class="btn btn-info text-white position-relative" data-bs-toggle="modal" @click="listarArticulo(1,buscarP,criterioP)" data-bs-target="#modalArticulo" :disabled="datos.id_motivo_ajuste == 0"><i class="fa fa-search"></i> Agregar</button>
+                                        <button type="button" class="btn btn-info text-white position-relative" data-bs-toggle="modal" @click="buscarP='',listarArticulo(1,buscarP,criterioP)" data-bs-target="#modalArticulo" :disabled="datos.id_motivo_ajuste == 0"><i class="fa fa-search"></i> Agregar</button>
                                     </div>
                                 </div>
                                 <!-- <template v-if="datos.id_motivo_ajuste == 1 || datos.id_motivo_ajuste == 2 || datos.id_motivo_ajuste == 3">
@@ -202,6 +202,7 @@
                                                 <th scope="col" class="text-white">Categoria</th>
                                                 <th scope="col" class="text-white">Nombre</th>
                                                 <!-- <th scope="col" class="text-white">Marca</th> -->
+                                                <th v-if="datos.id_motivo_ajuste == 1 || datos.id_motivo_ajuste == 2 || datos.id_motivo_ajuste == 3" scope="col" class="text-white">Stock Actual</th>
                                                 <th v-if="datos.id_motivo_ajuste == 1 || datos.id_motivo_ajuste == 2 || datos.id_motivo_ajuste == 3" scope="col" class="text-white">Stock</th>
                                                 <th v-if="datos.id_motivo_ajuste == 4" scope="col" class="text-white">Precio de Compra</th>
                                                 <th v-if="datos.id_motivo_ajuste == 5" scope="col" class="text-white">Precio Venta</th>
@@ -221,6 +222,9 @@
                                                 <td v-text="detalle.articulo"></td>
                                                 <!-- <td v-text="detalle.marca"></td> -->
                                                 <td v-if="datos.id_motivo_ajuste == 1 || datos.id_motivo_ajuste == 2 || datos.id_motivo_ajuste == 3">
+                                                    <vue-numeric v-model="detalle.saldoStock" type="number" value="3" class="form-control" :disabled="true"></vue-numeric>
+                                                </td>
+                                                <td v-if="datos.id_motivo_ajuste == 1 || datos.id_motivo_ajuste == 2 || datos.id_motivo_ajuste == 3">
                                                     <vue-numeric v-model="detalle.stock" type="number" value="3" class="form-control"></vue-numeric>
                                                 </td>
                                                 <td v-if="datos.id_motivo_ajuste == 4">
@@ -239,10 +243,10 @@
                                                     <input v-model="detalle.observacion" type="text"  id="Preferencial" class="form-control">
                                                 </td>       
                                                 <td>
-                                                    <input v-model="detalle.fecha_vencimiento" type="date"  id="Preferencial" class="form-control">
+                                                    <input v-model="detalle.fecha_vencimiento" type="date"  id="Preferencial" class="form-control" :disabled="true">
                                                 </td>     
                                                 <td>
-                                                    <input v-model="detalle.lote" type="text"  id="Preferencial" class="form-control">
+                                                    <input v-model="detalle.lote" type="text"  id="Preferencial" class="form-control" :disabled="true">
                                                 </td>                                                               
                                             </tr>
                                         </tbody>
@@ -569,7 +573,7 @@
                         costo_mayorista: data['costo_mayorista'],
                         costo_preferencial: data['costo_preferencial'],
                         observacion: '',
-                        stock: data['cantidad'],
+                        stock: 0,
                         saldoStock:data['cantidad'],
                         id_lote:data['id_lote'],
                         fecha_vencimiento : data['fecha_vecimiento'],
@@ -606,52 +610,6 @@
                     console.log(error)
                 });                
             },
-            // guardarAjuste(){
-            //     if(this.validarAjuste()){
-            //         return;
-            //     }
-            //     let me = this;
-            //         if(me.datos.id_motivo_ajuste != 3){
-            //             if(me.arrayDetalle.find(seg => (seg.stock <= 0))){
-            //                 Swal.fire({
-            //                     icon: 'error',
-            //                     title: 'Error...',
-            //                     text: 'Debe agregar Stock para producto!'
-            //                 })
-            //             } else {
-            //                 if(me.datos.id_motivo_ajuste == 1 && me.arrayDetalle.find(seg => (seg.saldoStock > 0))){
-            //                 Swal.fire({
-            //                     title: 'Esta seguro de restablecer el stock?',
-            //                     icon: 'warning',
-            //                     showCancelButton: true,
-            //                     confirmButtonColor: '#00C055',
-            //                     cancelButtonColor: '#d33',
-            //                     confirmButtonText: 'Si, actualizar!',
-            //                     cancelButtonText: 'No, cancelar!',
-            //                     }).then((result) => {
-            //                         if (result.isConfirmed) {
-            //                             me.ajuste();
-            //                         }
-            //                     })
-            //                 }else{
-            //                     me.ajuste();
-            //                 }
-            //             }
-            //         }else{
-            //             if(me.arrayDetalle.find(seg => (seg.saldoStock - seg.stock > 0))) {
-            //                 me.ajuste();
-            //             }else{
-            //                 Swal.fire({
-            //                     icon: 'error',
-            //                     title: 'Error...',
-            //                     text: 'No hay stock para el egreso!'
-            //                 })
-            //             }
-            //         }
-                
-                
-            // },
-////
 
             guardarAjuste(){
                 if(this.validarAjuste()){
