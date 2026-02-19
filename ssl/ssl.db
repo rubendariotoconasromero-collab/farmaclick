@@ -1,0 +1,93 @@
+--- 
+files: 
+  certificate: 
+    farmacia_suarez_com_9816c_9d00d_1799984453_5375b74f518b1cee1c46102310e54aa2: 
+      created: '1768448453'
+      domains: 
+        - farmacia-suarez.com
+        - mail.farmacia-suarez.com
+        - www.farmacia-suarez.com
+        - cpanel.farmacia-suarez.com
+        - webmail.farmacia-suarez.com
+        - webdisk.farmacia-suarez.com
+        - cpcontacts.farmacia-suarez.com
+        - cpcalendars.farmacia-suarez.com
+      ecdsa_curve_name: ~
+      ecdsa_public: ~
+      friendly_name: Cert for “farmacia-suarez.com”
+      id: farmacia_suarez_com_9816c_9d00d_1799984453_5375b74f518b1cee1c46102310e54aa2
+      is_self_signed: 1
+      issuer.commonName: farmacia-suarez.com
+      issuer.organizationName: ~
+      key_algorithm: rsaEncryption
+      modulus: 9816c1726cc1a1fb11780a6d18ec9b5d42854e2f636354b532dcfe1bc25c775b74db03ed815668ee654571ee4e4a2cee61feb202b08d9e8d23544d38d6010f9f80b002a8646174261ef63ff46526ed7c47850563eceb59b5acdc8b13d9d40bf08f8dd53d5f8c5dce4848d0035b477148c57b4daccc0b80571fe5608481f3cb764534a12d1757637c9e7a5ecff4455bf6dce8daea3c1d29d89d0c5d5c59a669e1ef6e5a9d981a36697eaf9beae2360db98434b5c6ed406c9ade06fa252a576d46a8b5f36eb5ccb790efc3243165becd4930c4109567c85f5cf461c220a6d4eb7fe45d993e293b283e65533b2689f562cb31b58d8e1150e7c58ad5e398da99d00d
+      modulus_length: 2048
+      not_after: '1799984453'
+      not_before: '1768448453'
+      serial: b3c7ec11
+      signature_algorithm: sha256WithRSAEncryption
+      subject.commonName: farmacia-suarez.com
+      validation_type: ~
+    farmacia_suarez_com_d48cf_c4711_1776220983_8bd9411b9b58c5c5904fc6a93e8a9655: 
+      created: '1768448494'
+      domains: 
+        - "*.farmacia-suarez.com"
+        - farmacia-suarez.com
+      ecdsa_curve_name: ~
+      ecdsa_public: ~
+      friendly_name: Cert for “farmacia-suarez.com” 1768448494.0
+      id: farmacia_suarez_com_d48cf_c4711_1776220983_8bd9411b9b58c5c5904fc6a93e8a9655
+      is_self_signed: 0
+      issuer.commonName: R13
+      issuer.organizationName: Let's Encrypt
+      key_algorithm: rsaEncryption
+      modulus: d48cf99fc6efcef8641d562c3f80382c119134ffcd928840167d0c47f0957170985eff517f74c7b9049f222c7c402e4b081af38813137cab3aae6fb9c37d2b353ef805ca509327e43e88a52eaa6c2c1b2d0a6c9bc9cf9bf47e84ba078337daf1db68b6f1fa60158ad0d2490fbb26ee4b9e0c9eb3bb296276eb72c5c717285d92547a3f9727cfb1122b8e8c8cc41145e20da87eb0a7e1bba2b59cdbc626990f7ccd666749425f04212288895a8079c9e349767d521f233bf5a1b201fa10a5f1b6524d0efa87b1b77d9f27237edc8de777a54314db75094922731645e3c2c8b12cc05bb0efd9d733a31df9890de022e295089ece516de2def0147355c9072c4711
+      modulus_length: 2048
+      not_after: '1776220983'
+      not_before: '1768444984'
+      serial: 06dc241c89b6f3901143b7773793f294da7c
+      signature_algorithm: sha256WithRSAEncryption
+      subject.commonName: farmacia-suarez.com
+      validation_type: dv
+  key: 
+    9816c_9d00d_d339332d377cba900af24be381293e57: 
+      created: '1768448453'
+      ecdsa_curve_name: ~
+      ecdsa_public: ~
+      friendly_name: Key for “farmacia-suarez.com”
+      id: 9816c_9d00d_d339332d377cba900af24be381293e57
+      key_algorithm: rsaEncryption
+      modulus: 9816c1726cc1a1fb11780a6d18ec9b5d42854e2f636354b532dcfe1bc25c775b74db03ed815668ee654571ee4e4a2cee61feb202b08d9e8d23544d38d6010f9f80b002a8646174261ef63ff46526ed7c47850563eceb59b5acdc8b13d9d40bf08f8dd53d5f8c5dce4848d0035b477148c57b4daccc0b80571fe5608481f3cb764534a12d1757637c9e7a5ecff4455bf6dce8daea3c1d29d89d0c5d5c59a669e1ef6e5a9d981a36697eaf9beae2360db98434b5c6ed406c9ade06fa252a576d46a8b5f36eb5ccb790efc3243165becd4930c4109567c85f5cf461c220a6d4eb7fe45d993e293b283e65533b2689f562cb31b58d8e1150e7c58ad5e398da99d00d
+      modulus_length: 2048
+    d48cf_c4711_80a033d6ee305984bf38318ddeba3c68: 
+      created: '1768448494'
+      ecdsa_curve_name: ~
+      ecdsa_public: ~
+      friendly_name: Key for “farmacia-suarez.com” 1768448494.0
+      id: d48cf_c4711_80a033d6ee305984bf38318ddeba3c68
+      key_algorithm: rsaEncryption
+      modulus: d48cf99fc6efcef8641d562c3f80382c119134ffcd928840167d0c47f0957170985eff517f74c7b9049f222c7c402e4b081af38813137cab3aae6fb9c37d2b353ef805ca509327e43e88a52eaa6c2c1b2d0a6c9bc9cf9bf47e84ba078337daf1db68b6f1fa60158ad0d2490fbb26ee4b9e0c9eb3bb296276eb72c5c717285d92547a3f9727cfb1122b8e8c8cc41145e20da87eb0a7e1bba2b59cdbc626990f7ccd666749425f04212288895a8079c9e349767d521f233bf5a1b201fa10a5f1b6524d0efa87b1b77d9f27237edc8de777a54314db75094922731645e3c2c8b12cc05bb0efd9d733a31df9890de022e295089ece516de2def0147355c9072c4711
+      modulus_length: 2048
+indexes: 
+  certificate: 
+    modulus: 
+      9816c1726cc1a1fb11780a6d18ec9b5d42854e2f636354b532dcfe1bc25c775b74db03ed815668ee654571ee4e4a2cee61feb202b08d9e8d23544d38d6010f9f80b002a8646174261ef63ff46526ed7c47850563eceb59b5acdc8b13d9d40bf08f8dd53d5f8c5dce4848d0035b477148c57b4daccc0b80571fe5608481f3cb764534a12d1757637c9e7a5ecff4455bf6dce8daea3c1d29d89d0c5d5c59a669e1ef6e5a9d981a36697eaf9beae2360db98434b5c6ed406c9ade06fa252a576d46a8b5f36eb5ccb790efc3243165becd4930c4109567c85f5cf461c220a6d4eb7fe45d993e293b283e65533b2689f562cb31b58d8e1150e7c58ad5e398da99d00d: 
+        farmacia_suarez_com_9816c_9d00d_1799984453_5375b74f518b1cee1c46102310e54aa2: ~
+      d48cf99fc6efcef8641d562c3f80382c119134ffcd928840167d0c47f0957170985eff517f74c7b9049f222c7c402e4b081af38813137cab3aae6fb9c37d2b353ef805ca509327e43e88a52eaa6c2c1b2d0a6c9bc9cf9bf47e84ba078337daf1db68b6f1fa60158ad0d2490fbb26ee4b9e0c9eb3bb296276eb72c5c717285d92547a3f9727cfb1122b8e8c8cc41145e20da87eb0a7e1bba2b59cdbc626990f7ccd666749425f04212288895a8079c9e349767d521f233bf5a1b201fa10a5f1b6524d0efa87b1b77d9f27237edc8de777a54314db75094922731645e3c2c8b12cc05bb0efd9d733a31df9890de022e295089ece516de2def0147355c9072c4711: 
+        farmacia_suarez_com_d48cf_c4711_1776220983_8bd9411b9b58c5c5904fc6a93e8a9655: ~
+    subject.commonName: 
+      farmacia-suarez.com: 
+        farmacia_suarez_com_9816c_9d00d_1799984453_5375b74f518b1cee1c46102310e54aa2: ~
+        farmacia_suarez_com_d48cf_c4711_1776220983_8bd9411b9b58c5c5904fc6a93e8a9655: ~
+uniques: 
+  certificate: 
+    friendly_name: 
+      Cert for “farmacia-suarez.com”: farmacia_suarez_com_9816c_9d00d_1799984453_5375b74f518b1cee1c46102310e54aa2
+      Cert for “farmacia-suarez.com” 1768448494.0: farmacia_suarez_com_d48cf_c4711_1776220983_8bd9411b9b58c5c5904fc6a93e8a9655
+  key: 
+    friendly_name: 
+      Key for “farmacia-suarez.com”: 9816c_9d00d_d339332d377cba900af24be381293e57
+      Key for “farmacia-suarez.com” 1768448494.0: d48cf_c4711_80a033d6ee305984bf38318ddeba3c68
+    modulus:ecdsa_curve_name:ecdsa_public: 
+      9816c1726cc1a1fb11780a6d18ec9b5d42854e2f636354b532dcfe1bc25c775b74db03ed815668ee654571ee4e4a2cee61feb202b08d9e8d23544d38d6010f9f80b002a8646174261ef63ff46526ed7c47850563eceb59b5acdc8b13d9d40bf08f8dd53d5f8c5dce4848d0035b477148c57b4daccc0b80571fe5608481f3cb764534a12d1757637c9e7a5ecff4455bf6dce8daea3c1d29d89d0c5d5c59a669e1ef6e5a9d981a36697eaf9beae2360db98434b5c6ed406c9ade06fa252a576d46a8b5f36eb5ccb790efc3243165becd4930c4109567c85f5cf461c220a6d4eb7fe45d993e293b283e65533b2689f562cb31b58d8e1150e7c58ad5e398da99d00d: 9816c_9d00d_d339332d377cba900af24be381293e57
+      d48cf99fc6efcef8641d562c3f80382c119134ffcd928840167d0c47f0957170985eff517f74c7b9049f222c7c402e4b081af38813137cab3aae6fb9c37d2b353ef805ca509327e43e88a52eaa6c2c1b2d0a6c9bc9cf9bf47e84ba078337daf1db68b6f1fa60158ad0d2490fbb26ee4b9e0c9eb3bb296276eb72c5c717285d92547a3f9727cfb1122b8e8c8cc41145e20da87eb0a7e1bba2b59cdbc626990f7ccd666749425f04212288895a8079c9e349767d521f233bf5a1b201fa10a5f1b6524d0efa87b1b77d9f27237edc8de777a54314db75094922731645e3c2c8b12cc05bb0efd9d733a31df9890de022e295089ece516de2def0147355c9072c4711: d48cf_c4711_80a033d6ee305984bf38318ddeba3c68

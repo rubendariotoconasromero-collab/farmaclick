@@ -1,0 +1,39 @@
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class PersonalRequest extends FormRequest
+{
+    /**
+     * Determine if the user is authorized to make this request.
+     *
+     * @return bool
+     */
+    public function authorize()
+    {
+        return true;
+    }
+
+    /**
+     * Get the validation rules that apply to the request.
+     *
+     * @return array
+     */
+    public function rules()
+    {
+        return [
+            'nombre'=>'required',
+            'id_cargo'=>'required',
+        ];
+    }
+
+    public function messages()
+    {
+        return [
+            'nombre.required'=>'El nombre del personal no puede estar vacio',
+            'id_cargo.required'=>'Seleccione un cargo',
+        ];
+    }
+}
