@@ -104,7 +104,14 @@
                                             <td><input v-model="detalle.costo_compra" type="number" value="3" class="form-control"></td>
                                             <td><input v-model="detalle.cantidad" type="number" value="3" class="form-control"></td>
                                             <td><input v-model="detalle.fecha_vecimiento" type="date" value="3" class="form-control"></td>  
-                                            <td><input v-model="detalle.lote" type="text" value="3" class="form-control"></td>
+                                            <!-- <td><input v-model="detalle.lote" type="text" value="3" class="form-control"></td> -->
+                                            <td>
+                                                <input v-model="detalle.lote" type="text" class="form-control" :class="{'is-invalid border-danger': detalle.loteDuplicado}">
+                                                
+                                                <span v-if="detalle.loteDuplicado" class="text-danger" style="font-size: 0.8em; font-weight: bold;">
+                                                    Lote repetido
+                                                </span>
+                                            </td>
                                             <td>
                                                 <input v-model="detalle.descuento" type="number" value="3" class="form-control" min='0'> 
                                             </td>
@@ -561,10 +568,32 @@
                 }
                 return sw;
             },
-            eliminarDetalle(index){
+            eliminarDetalle(index) {
                 let me = this;
-                me.arrayDetalle.splice(index,1);
                 
+                // 1. Eliminamos el registro seleccionado
+                me.arrayDetalle.splice(index, 1);
+                
+                // 2. Limpiamos el estado de error de todos los registros que quedaron
+                me.arrayDetalle.forEach(det => {
+                    me.$set(det, 'loteDuplicado', false); 
+                });
+
+                // 3. Volvemos a evaluar si aún quedan duplicados en el arreglo
+                me.arrayDetalle.forEach((detalle, idx_actual) => {
+                    let duplicado = me.arrayDetalle.some((d, idx_busqueda) => 
+                        d.lote !== "" && 
+                        d.lote !== null &&
+                        d.lote === detalle.lote && 
+                        d.id_tienda_articulo === detalle.id_tienda_articulo &&
+                        idx_busqueda !== idx_actual
+                    );
+
+                    // Si todavía hay otro igual, lo volvemos a marcar
+                    if (duplicado) {
+                        me.$set(detalle, 'loteDuplicado', true);
+                    }
+                });
             },
             seleccionarTiendaArticulo(data=[]){
                 let me = this;
@@ -666,55 +695,138 @@
                     console.log(error);
                 });
             },
-            validarCompra(){
+            // validarCompra(){
+            //     this.errorCompra = 0;
+
+            //     if(this.datos.id_proveedor==""){
+            //         Swal.fire({
+            //             icon: 'error',
+            //             title: 'Seleccione un Proveedor'
+            //         })
+            //     } 
+            //     else
+            //     {
+            //         if(this.datos.id_tipo_pago==0){
+            //             Swal.fire({
+            //                 icon: 'error',
+            //                 title: 'Seleccione un Tipo de Pago'
+            //             })
+            //         } 
+            //         else
+            //         {
+            //             if(this.datos.id_forma_pago==0){
+            //                 Swal.fire({
+            //                     icon: 'error',
+            //                     title: 'Seleccione una Forma de Pago'
+            //                 })
+            //             } 
+            //             else
+            //             {
+            //                 if(this.arrayDetalle.length<=0){
+            //                     Swal.fire({
+            //                         icon: 'error',
+            //                         title: 'Agregue Productos a la Compra'
+            //                     })
+            //                 } 
+            //                 else
+            //                 {
+            //                     if(this.arrayDetalle.find(seg => (seg.cantidad <= 0 ))){
+            //                     Swal.fire({
+            //                         icon: 'error',
+            //                         title: 'Cantidad no puede se menor a 0'
+            //                     })
+            //                     }else{ 
+            //                         if(this.arrayDetalle.find(seg => (seg.costo_compra <= 0 ))){
+            //                         Swal.fire({
+            //                             icon: 'error',
+            //                             title: 'Precio no puede ser menor a 0'
+            //                         })
+            //                         }else{ 
+            //                         this.errorCompra = 3;
+            //                         }    
+            //                     }
+            //                 }
+            //             }
+            //         }
+            //     }
+            //     return this.errorCompra;
+            // },
+
+
+            validarCompra() {
                 this.errorCompra = 0;
 
-                if(this.datos.id_proveedor==""){
+                if (this.datos.id_proveedor == "") {
                     Swal.fire({
                         icon: 'error',
                         title: 'Seleccione un Proveedor'
                     })
                 } 
-                else
-                {
-                    if(this.datos.id_tipo_pago==0){
+                else {
+                    if (this.datos.id_tipo_pago == 0) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Seleccione un Tipo de Pago'
                         })
                     } 
-                    else
-                    {
-                        if(this.datos.id_forma_pago==0){
+                    else {
+                        if (this.datos.id_forma_pago == 0) {
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Seleccione una Forma de Pago'
                             })
                         } 
-                        else
-                        {
-                            if(this.arrayDetalle.length<=0){
+                        else {
+                            if (this.arrayDetalle.length <= 0) {
                                 Swal.fire({
                                     icon: 'error',
                                     title: 'Agregue Productos a la Compra'
                                 })
                             } 
-                            else
-                            {
-                                if(this.arrayDetalle.find(seg => (seg.cantidad <= 0 ))){
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Cantidad no puede se menor a 0'
-                                })
-                                }else{ 
-                                    if(this.arrayDetalle.find(seg => (seg.costo_compra <= 0 ))){
+                            else {
+                                if (this.arrayDetalle.find(seg => (seg.cantidad <= 0))) {
                                     Swal.fire({
                                         icon: 'error',
-                                        title: 'Precio no puede ser menor a 0'
+                                        title: 'La cantidad no puede ser menor o igual a 0'
                                     })
-                                    }else{ 
-                                    this.errorCompra = 3;
-                                    }    
+                                } else {
+                                    if (this.arrayDetalle.find(seg => (seg.costo_compra <= 0))) {
+                                        Swal.fire({
+                                            icon: 'error',
+                                            title: 'El precio no puede ser menor o igual a 0'
+                                        })
+                                    }else {
+                                        let hayRegistrosDuplicados = false;
+                                        this.arrayDetalle.forEach(det => {
+                                            this.$set(det, 'loteDuplicado', false);
+                                        });
+
+                                        this.arrayDetalle.forEach((detalle, index) => {
+                                            let duplicado = this.arrayDetalle.some((d, idx) => 
+                                                d.lote !== "" && 
+                                                d.lote !== null &&
+                                                d.lote === detalle.lote && 
+                                                d.id_tienda_articulo === detalle.id_tienda_articulo &&
+                                                idx !== index
+                                            );
+
+                                            if (duplicado) {
+                                                // detalle.loteDuplicado = true;
+                                                // hayRegistrosDuplicados = true;
+                                                this.$set(detalle, 'loteDuplicado', true);
+                                                hayRegistrosDuplicados = true;
+                                            }
+                                        });
+                                        if (hayRegistrosDuplicados) {
+                                            Swal.fire({
+                                                icon: 'error',
+                                                title: 'Registros Duplicados',
+                                                text: 'Tienes el mismo artículo con el mismo número de lote en varias filas. Por favor, unifica las cantidades en una sola fila o corrige el lote.'
+                                            });
+                                        } else {
+                                            this.errorCompra = 3; 
+                                        }
+                                    }
                                 }
                             }
                         }
