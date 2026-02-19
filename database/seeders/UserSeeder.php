@@ -15,16 +15,16 @@ class UserSeeder extends Seeder
     public function run()
     {
         // User::creFITate(
-            User::create(
-            [
-                'name' => 'Administrador',
-                'matricula' => '001',
-                'email' => 'admin@admin.com',
-                'password' => '$2a$12$MJsuBM8Nicn6MaVySt4nyOQFBjh.O03PRO93pE5l3d0hgHmLfoKBy',
-                'estado' => 1,
-                'id_grupo' => 1,
-                'id_personal' => 1
-            ]
-        );_
+        User::create(
+        [
+            'name' => 'Administrador',
+            'matricula' => '001',
+            'email' => 'admin@admin.com',
+            'password' => '$2a$12$MJsuBM8Nicn6MaVySt4nyOQFBjh.O03PRO93pE5l3d0hgHmLfoKBy',
+            'estado' => 1,
+            'id_grupo' => 1,
+            'id_personal' => 1
+        ]
+        );
     }
 }

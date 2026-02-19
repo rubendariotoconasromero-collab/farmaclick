@@ -129,7 +129,7 @@
             @php
                 $numero = 1;
             @endphp
-            @forelse($detalles as $det)
+            @foreach($detalles as $det)
             <tr>
                 <td style="text-align: center;">{{ $numero++ }}</td>
                 <td>{{ $det->cliente }}</td>
@@ -145,7 +145,7 @@
                     No se encuentran registros entre estas fechas
                 </td>
             </tr>
-            @endforelse
+            @endforeach
         </tbody>
     </table>
 
