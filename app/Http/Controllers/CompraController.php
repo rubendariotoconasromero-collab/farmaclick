@@ -219,6 +219,7 @@ class CompraController extends BitacoraController
 
                 $lote_existente = Lote::where('id_producto', $det['id_tienda_articulo'])
                       ->where('lote', $det['lote'])
+                      ->where('lote.estado', '!=', 0)
                       ->first();
 
                 if ($lote_existente) {
