@@ -153,8 +153,30 @@
                                 </div>
                             </div>
                             <div class="d-grid gap-2 d-md-flex justify-content-md-end" style='width:96%;margin-left: 2.2%'>
-                                <button class="btn btn-danger me-md-2 text-white" type="button" @click="volverCompraListado()">Cancelar</button>
-                                <button class="btn btn-info btn-lg text-white" type="button" @click="guardarCompra()">Guardar</button>
+                                <button 
+                                    class="btn btn-danger me-md-2 text-white" 
+                                    type="button" 
+                                    @click="volverCompraListado()"
+                                    :disabled="is_busy == 1">
+                                    Cancelar
+                                </button>
+
+                                <button 
+                                    class="btn btn-info btn-lg text-white" 
+                                    type="button" 
+                                    @click="guardarCompra()"
+                                    :disabled="is_busy == 1">
+                                    
+                                    <template v-if="is_busy == 1">
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        Guardando...
+                                    </template>
+                                    
+                                    <template v-else>
+                                        Guardar
+                                    </template>
+                                    
+                                </button>
                             </div>
                         </div>
                     </template>
@@ -267,16 +289,7 @@
                                 </div>  
                             </div>                   
                         </div>&nbsp;
-<!-- KCda                         -->
-                        <!-- <div class="form-group row">
-                            <div class="col-md-6">
-                                <div class="input-group">
-                                    <input type="text" v-model="buscarP" @keyup.enter="listarArticulo(buscarP,criterioPbuscarP)" class="form-control" placeholder="Texto a buscar">
-                                    &nbsp;&nbsp;&nbsp;
-                                    <button type="submit" @click="listarArticulo(buscarP,criterioPbuscarP)" class="btn btn-info text-white"><i class="fa fa-search"></i> Buscar</button>
-                                </div>  
-                            </div>                   
-                        </div>&nbsp; -->
+
                         <div class="table-responsive">
                         <table class="table table-striped table-hover">
                             <thead style="background-color: #46546C">
@@ -509,19 +522,9 @@
                 me.pagination.current_page=page;
                 me.listarArticulo(page, buscar, criterio);
             },
-            // listarArticulo(buscarP,criterioPbuscarP){
-            //     let me = this;
-            //     var url='/tienda/listarSinPaginate?buscar=' + buscarP;
-            //     axios.get(url).then(function(response){
-            //         me.arrayArticulo= response.data;
-            //     })
-            //     .catch(function(error){
-            //         console.log(error);
-            //     });
-            // },
+
             listarArticulo(page,buscarP, criterioP){
                 let me = this;
-                me.is_busy=0;
                 var url='/tienda/listarSinPaginate?id_proveedor='+me.datos.id_proveedor+'&page=' + page +'&buscar=' + buscarP + '&criterio=' + criterioP;
                 axios.get(url).then(function(response){
                     me.arrayArticulo=response.data.data;
@@ -695,189 +698,131 @@
                     console.log(error);
                 });
             },
-            // validarCompra(){
-            //     this.errorCompra = 0;
+        
+            guardarCompra() {
+                this.validarCompra();
+                
+                if (this.errorCompra == 3) {
+                    if (this.is_busy == 1) {
+                        return; 
+                    }
+                    this.is_busy = 1;
+                    let me = this;
 
-            //     if(this.datos.id_proveedor==""){
-            //         Swal.fire({
-            //             icon: 'error',
-            //             title: 'Seleccione un Proveedor'
-            //         })
-            //     } 
-            //     else
-            //     {
-            //         if(this.datos.id_tipo_pago==0){
-            //             Swal.fire({
-            //                 icon: 'error',
-            //                 title: 'Seleccione un Tipo de Pago'
-            //             })
-            //         } 
-            //         else
-            //         {
-            //             if(this.datos.id_forma_pago==0){
-            //                 Swal.fire({
-            //                     icon: 'error',
-            //                     title: 'Seleccione una Forma de Pago'
-            //                 })
-            //             } 
-            //             else
-            //             {
-            //                 if(this.arrayDetalle.length<=0){
-            //                     Swal.fire({
-            //                         icon: 'error',
-            //                         title: 'Agregue Productos a la Compra'
-            //                     })
-            //                 } 
-            //                 else
-            //                 {
-            //                     if(this.arrayDetalle.find(seg => (seg.cantidad <= 0 ))){
-            //                     Swal.fire({
-            //                         icon: 'error',
-            //                         title: 'Cantidad no puede se menor a 0'
-            //                     })
-            //                     }else{ 
-            //                         if(this.arrayDetalle.find(seg => (seg.costo_compra <= 0 ))){
-            //                         Swal.fire({
-            //                             icon: 'error',
-            //                             title: 'Precio no puede ser menor a 0'
-            //                         })
-            //                         }else{ 
-            //                         this.errorCompra = 3;
-            //                         }    
-            //                     }
-            //                 }
-            //             }
-            //         }
-            //     }
-            //     return this.errorCompra;
-            // },
+                    axios.post('/compra/guardar', {
+                        'fecha': me.datos.fecha,
+                        'fecha_inicio': me.datosPago.fecha_inicio,
+                        'fecha_final': me.datosPago.fecha_final,
+                        'total_efectivo': me.datos.total_efectivo,
+                        'total_deposito': me.datos.total_deposito,
+                        'descripcion': me.datos.descripcion,
+                        'sub_total': me.datos.sub_total,
+                        'descuento': me.datos.descuento,
+                        'total': me.datos.total,
+                        'id_proveedor': me.datos.id_proveedor,
+                        'id_tipo_pago': me.datos.id_tipo_pago,
+                        'id_forma_pago': (me.datos.id_tipo_pago == 2) ? me.arrayForma[0].id : me.datos.id_forma_pago,
+                        'detalle': me.arrayDetalle,
+                        'monto_total': me.datos.total,
+                        'descripcion_pago': me.datosPago.descripcion,
+                        'saldo': me.datosPago.saldo,
+                    }).then(function(response) {
+                        console.log(me.arrayDetalle);
+                        Swal.fire({
+                            position: 'top-end',
+                            icon: 'success',
+                            title: 'Compra registrada exitosamente',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                        
+                        me.is_busy = 0; 
+                        
+                        me.volverCompraListado();
+                        me.listarCompra(1, '', 'nombre');
+                        me.cargarPdf2();
+                        me.limpiarDatosCompra();
 
+                    }).catch(function(error) {
+                        console.log(error);
+
+                        me.is_busy = 0; 
+                        
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error de conexión',
+                            text: 'No se pudo registrar la compra. Intente nuevamente.'
+                        });
+                    });
+                }
+            },
 
             validarCompra() {
                 this.errorCompra = 0;
-
                 if (this.datos.id_proveedor == "") {
+                    Swal.fire({ icon: 'error', title: 'Seleccione un Proveedor' });
+                    return this.errorCompra;
+                } 
+                
+                if (this.datos.id_tipo_pago == 0) {
+                    Swal.fire({ icon: 'error', title: 'Seleccione un Tipo de Pago' });
+                    return this.errorCompra;
+                } 
+                
+                if (this.datos.id_forma_pago == 0) {
+                    Swal.fire({ icon: 'error', title: 'Seleccione una Forma de Pago' });
+                    return this.errorCompra;
+                } 
+                
+                if (this.arrayDetalle.length <= 0) {
+                    Swal.fire({ icon: 'error', title: 'Agregue Productos a la Compra' });
+                    return this.errorCompra;
+                } 
+                
+                if (this.arrayDetalle.find(seg => (seg.cantidad <= 0))) {
+                    Swal.fire({ icon: 'error', title: 'La cantidad no puede ser menor o igual a 0' });
+                    return this.errorCompra;
+                } 
+                
+                if (this.arrayDetalle.find(seg => (seg.costo_compra <= 0))) {
+                    Swal.fire({ icon: 'error', title: 'El precio no puede ser menor o igual a 0' });
+                    return this.errorCompra;
+                }
+
+                let hayRegistrosDuplicados = false;
+                
+                this.arrayDetalle.forEach(det => {
+                    this.$set(det, 'loteDuplicado', false);
+                });
+
+                this.arrayDetalle.forEach((detalle, index) => {
+                    let duplicado = this.arrayDetalle.some((d, idx) => 
+                        d.lote !== "" && 
+                        d.lote !== null &&
+                        d.lote === detalle.lote && 
+                        d.id_tienda_articulo === detalle.id_tienda_articulo &&
+                        idx !== index
+                    );
+
+                    if (duplicado) {
+                        this.$set(detalle, 'loteDuplicado', true);
+                        hayRegistrosDuplicados = true;
+                    }
+                });
+
+                if (hayRegistrosDuplicados) {
                     Swal.fire({
                         icon: 'error',
-                        title: 'Seleccione un Proveedor'
-                    })
+                        title: 'Registros Duplicados',
+                        text: 'Tienes el mismo artículo con el mismo número de lote en varias filas. Por favor, unifica las cantidades en una sola fila o corrige el lote.'
+                    });
+                    return this.errorCompra;
                 } 
-                else {
-                    if (this.datos.id_tipo_pago == 0) {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Seleccione un Tipo de Pago'
-                        })
-                    } 
-                    else {
-                        if (this.datos.id_forma_pago == 0) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Seleccione una Forma de Pago'
-                            })
-                        } 
-                        else {
-                            if (this.arrayDetalle.length <= 0) {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Agregue Productos a la Compra'
-                                })
-                            } 
-                            else {
-                                if (this.arrayDetalle.find(seg => (seg.cantidad <= 0))) {
-                                    Swal.fire({
-                                        icon: 'error',
-                                        title: 'La cantidad no puede ser menor o igual a 0'
-                                    })
-                                } else {
-                                    if (this.arrayDetalle.find(seg => (seg.costo_compra <= 0))) {
-                                        Swal.fire({
-                                            icon: 'error',
-                                            title: 'El precio no puede ser menor o igual a 0'
-                                        })
-                                    }else {
-                                        let hayRegistrosDuplicados = false;
-                                        this.arrayDetalle.forEach(det => {
-                                            this.$set(det, 'loteDuplicado', false);
-                                        });
 
-                                        this.arrayDetalle.forEach((detalle, index) => {
-                                            let duplicado = this.arrayDetalle.some((d, idx) => 
-                                                d.lote !== "" && 
-                                                d.lote !== null &&
-                                                d.lote === detalle.lote && 
-                                                d.id_tienda_articulo === detalle.id_tienda_articulo &&
-                                                idx !== index
-                                            );
-
-                                            if (duplicado) {
-                                                // detalle.loteDuplicado = true;
-                                                // hayRegistrosDuplicados = true;
-                                                this.$set(detalle, 'loteDuplicado', true);
-                                                hayRegistrosDuplicados = true;
-                                            }
-                                        });
-                                        if (hayRegistrosDuplicados) {
-                                            Swal.fire({
-                                                icon: 'error',
-                                                title: 'Registros Duplicados',
-                                                text: 'Tienes el mismo artículo con el mismo número de lote en varias filas. Por favor, unifica las cantidades en una sola fila o corrige el lote.'
-                                            });
-                                        } else {
-                                            this.errorCompra = 3; 
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                this.errorCompra = 3; 
                 return this.errorCompra;
             },
-            guardarCompra(){
-                this.validarCompra();
-                if(this.errorCompra==3){
-                        if(this.is_busy==0){
-                            let me = this;
-                            axios.post('/compra/guardar',{
-                                'fecha': me.datos.fecha,
-                                'fecha_inicio': me.datosPago.fecha_inicio,
-                                'fecha_final': me.datosPago.fecha_final,
-                                'total_efectivo': me.datos.total_efectivo,
-                                'total_deposito': me.datos.total_deposito,
-                                'descripcion': me.datos.descripcion,
-                                'sub_total': me.datos.sub_total,
-                                'descuento': me.datos.descuento,
-                                'total': me.datos.total,
-                                'id_proveedor': me.datos.id_proveedor,
-                                'id_tipo_pago': me.datos.id_tipo_pago,
-                                'id_forma_pago': (me.datos.id_tipo_pago == 2) ? me.arrayForma[0].id : me.datos.id_forma_pago,
-                                'detalle': me.arrayDetalle,
-                                'monto_total': me.datos.total,
-                                'descripcion_pago': me.datosPago.descripcion,
-                                'saldo': me.datosPago.saldo,
-                            }).then(function(response){
-                                console.log(me.arrayDetalle);
-                                Swal.fire({
-                                    position: 'top-end',
-                                    icon: 'success',
-                                    title: 'Compra registrado exitosamente',
-                                    showConfirmButton: false,
-                                    timer: 1500
-                                });
-                                me.isBusy=0;
-                                me.volverCompraListado();
-                                me.listarCompra(1,'', 'nombre');
-                                me.cargarPdf2();
-                                me.limpiarDatosCompra();
-                            })
-                            .catch(function(error){
-                                console.log(error);
-                            });
-                        }
-                        this.is_busy=1;
-                }       
-            },
+
             limpiarDatosCompra(){
                 this.datos = {
                     id : 0,
@@ -891,14 +836,7 @@
                     total : 0, 
                 }
             },        
-            // validarCompra(){
-            //     this.errorCompra = 0;
-            //     this.errorMostrarMsjCompra = [];
-
-            //     if(!this.datos.nombre) this.errorMostrarMsjCompra.push("El nombre del Compra no puede estar vacio ");
-            //     if(this.errorMostrarMsjCompra.length) this.errorCompra=1;
-            //     return this.errorCompra;
-            // },
+ 
             frmCompra(){
                 this.listado = 1;
                 this.selectProveedor();

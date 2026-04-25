@@ -349,7 +349,7 @@ class CompraController extends BitacoraController
         return $obj;
     }
 
-    public function anular(Request $request){
+    /*public function anular(Request $request){
         $objdate = new DateTime();
         $fechaactual= $objdate->format('Y-m-d');
         $hora= $objdate->format('H:i:s');
@@ -366,15 +366,11 @@ class CompraController extends BitacoraController
 
         $detalles = DetalleCompra::select('id_compra','id_lote','cantidad','id_producto','costo_compra')
         ->where('detalle_compra.id_compra',$request->id)->get();
-
-        //dd($detalles);
         foreach($detalles as $ep=>$det){
 
                 $tienda_articulo=DB::select("SELECT ta.stock
                 FROM tienda_articulo ta
                 WHERE ta.id = '$det->id_producto'");
-                //dd($tienda_articulo);
-
                 $ajuste = new Ajuste();
                 $ajuste->stock=$det['cantidad'];
                 $ajuste->costo_compra=$det['costo_compra'];
@@ -407,22 +403,7 @@ class CompraController extends BitacoraController
 
 
         if($tipo_pago == "1"){
-            // if($forma_pago == 2){
-            //     $this->descontarCaja($total,$id_usuario);
-            //     $this->descontarCajaContado($total,$id_usuario);                
-            // }
-            // if($forma_pago ==3 || $forma_pago ==4 || $forma_pago ==5){
-            //     $this->descontarCaja($total,$id_usuario);
-            //     $this->descontarCajaContadoDeposito($total,$id_usuario);
-            // }
-            // if($forma_pago ==6){
-            //     //dd($forma_pago);
-            //     $this->descontarCaja($total_efectivo,$id_usuario);
-            //     $this->descontarCajaContado($total_efectivo,$id_usuario);
 
-            //     $this->descontarCajaDeposito($total_deposito,$id_usuario);
-            //     $this->descontarCajaContadoDeposito($total_deposito,$id_usuario);
-            // }
         }else if ($tipo_pago == "2"){
             $total_monto_credito= 0;
             $registro_venta_pago = DB::select("SELECT id, id_compra FROM pago_compra WHERE id_compra= $request->id");
@@ -430,20 +411,99 @@ class CompraController extends BitacoraController
             $registro_venta_credito = DB::select("SELECT id, id_pago, amortizacion, id_forma_pago FROM c_x_pagar WHERE c_x_pagar.id_pago = $id_pago");
             foreach($registro_venta_credito as $credito){
                 $total_monto_credito = $total_monto_credito + floatval($credito->amortizacion);
-                // if($credito->id_forma_pago == 2){
-                //     $this->descontarCajaCredito($credito->amortizacion,$id_usuario);
-                // }
-                // if($credito->id_forma_pago == 3 || $credito->id_forma_pago == 4 || $credito->id_forma_pago == 5){
-                //     $this->descontarCajaCreditoDeposito($credito->amortizacion,$id_usuario);
-                // }
             }
-            // $this->descontarCaja($total_monto_credito,$id_usuario);
         }
 
-        // $this->descontarCaja($total,$id_usuario);
-        // $this->descontarCajaCredito($total,$id_usuario);
+    }*/
 
+    public function anular(Request $request)
+    {
+        try {
+            DB::beginTransaction();
+
+            $objdate = new DateTime();
+            $fechaactual = $objdate->format('Y-m-d');
+            $hora = $objdate->format('H:i:s');
+            $id_usuario = \Auth::user()->id;
+            $compra = Compra::findOrFail($request->id);
+            
+            if ($compra->estado === 'Anulado') {
+                return response()->json(['error' => 'La compra ya se encuentra anulada'], 400);
+            }
+
+            $compra->estado = 'Anulado';
+            $compra->save();
+
+            $detalles = DetalleCompra::where('id_compra', $compra->id)->get();
+
+            foreach ($detalles as $det) {
+                
+                $lote = Lote::findOrFail($det->id_lote);
+                $stock_anterior_lote = $lote->cantidad;
+                
+                $lote->cantidad -= $det->cantidad;
+                if ($lote->cantidad <= 0) {
+                    $lote->cantidad = 0;
+                    $lote->estado = 0; 
+                }
+                $lote->save();
+                $stock_actual_lote = $lote->cantidad;
+                $tienda_articulo_ant = DB::table('tienda_articulo')->where('id', $det->id_producto)->first();
+                $stock_general_anterior = $tienda_articulo_ant ? $tienda_articulo_ant->stock : 0;
+                DB::statement('CALL stock(?)', [$det->id_producto]);
+                $tienda_articulo_act = DB::table('tienda_articulo')->where('id', $det->id_producto)->first();
+                $stock_general_actual = $tienda_articulo_act ? $tienda_articulo_act->stock : 0;
+
+                $ajuste = new Ajuste();
+                $ajuste->stock = $det->cantidad;
+                $ajuste->costo_compra = $det->costo_compra;
+                $ajuste->costo_venta = 0;
+                $ajuste->costo_unitario = 0;
+                $ajuste->costo_mayorista = 0;
+                $ajuste->costo_preferencial = 0;
+
+                $ajuste->stock_anterior = $stock_anterior_lote;
+                $ajuste->stock_actual = $stock_actual_lote;
+
+                $ajuste->stock_general_anterior = $stock_general_anterior;
+                $ajuste->stock_general = $stock_general_actual;
+                
+                $ajuste->observacion = 'Anulación de Compra Nro: ' . $compra->id;
+                $ajuste->id_lote = $lote->id;
+                $ajuste->fecha = $fechaactual;
+                $ajuste->id_usuario = $id_usuario;
+                $ajuste->id_venta = 0;
+                $ajuste->id_compra = $compra->id;
+                $ajuste->id_motivo_ajuste = 9;
+                $ajuste->id_transaccion = $compra->id;
+                $ajuste->hora = $hora;
+                $ajuste->descuento = $det->descuento;
+                $ajuste->save();
+            }
+
+            // 3. Registrar en Bitácora (Igual que en tu método guardar)
+            $datosBitacora = [
+                'tabla' => 'compra',
+                'codigo_tabla' => $compra->id,
+                'transaccion' => 'anular',
+            ];
+            $this->guardarBitacora($datosBitacora);
+
+            // Si la lógica de las Cajas la vas a implementar luego, iría aquí
+            // if($compra->id_tipo_pago == 1) { ... }
+
+            // Confirmamos los cambios en la BD
+            DB::commit();
+            
+            return response()->json(['message' => 'Compra anulada y stock recalculado correctamente.'], 200);
+
+        } catch (\Exception $e) {
+            // Revertimos TODO si falla cualquier paso
+            DB::rollBack();
+            return response()->json(['error' => 'Error al anular la compra: ' . $e->getMessage()], 500);
+        }
     }
+
     private function correlativoControl(){
         $mayor = DB::table('control')->where('control.tabla','=','Compra')->count();
          return $mayor;

@@ -6,7 +6,7 @@
                     <div class="col">
                     &nbsp;
                     <div class="card">
-                    <div class="card-header text-center text-white" style="background-color: #3399FF"><h3 class="mb-0">HISTORIAL COMPRAS.</h3></div>
+                    <div class="card-header text-center text-white" style="background-color: #3399FF"><h3 class="mb-0">HISTORIAL COMPRAS</h3></div>
                         <template v-if="listado==0">
 
                             <div class="form-group row">
