@@ -129,23 +129,26 @@
             @php
                 $numero = 1;
             @endphp
-            @foreach($detalles as $det)
-            <tr>
-                <td style="text-align: center;">{{ $numero++ }}</td>
-                <td>{{ $det->cliente }}</td>
-                <td>{{ $det->tipo_pago }}</td>
-                <td>{{ $det->forma_pago }}</td>
-                <td style="text-align: right;">{{ number_format($det->descuento, 2) }}</td>
-                <td style="text-align: right;">{{ number_format($det->sub_total, 2) }}</td>
-                <td style="text-align: right;">{{ number_format($det->total, 2) }}</td>
-            </tr>
+
+            {{-- Cambiamos @foreach por @forelse para evitar el error de sintaxis --}}
+            @forelse($detalles as $det)
+                <tr>
+                    <td style="text-align: center;">{{ $numero++ }}</td>
+                    <td>{{ $det->cliente }}</td>
+                    <td>{{ $det->tipo_pago }}</td>
+                    <td>{{ $det->forma_pago }}</td>
+                    <td style="text-align: right;">{{ number_format($det->descuento, 2) }}</td>
+                    <td style="text-align: right;">{{ number_format($det->sub_total, 2) }}</td>
+                    <td style="text-align: right;">{{ number_format($det->total, 2) }}</td>
+                </tr>
             @empty
-            <tr>
-                <td colspan="7" class="no-records">
-                    No se encuentran registros entre estas fechas
-                </td>
-            </tr>
-            @endforeach
+                {{-- Esto se ejecuta si $detalles está vacío --}}
+                <tr>
+                    <td colspan="7" class="no-records">
+                        No se encuentran registros entre estas fechas
+                    </td>
+                </tr>
+            @endforelse
         </tbody>
     </table>
 
