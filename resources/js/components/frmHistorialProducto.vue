@@ -104,20 +104,22 @@
                                         style="width:96%;margin-left:2.2%">
                                         <thead class="text-white" style="background-color: #46546c">
                                             <tr>
-                                                <th class="text-white">Fecha</th>
-                                                <th class="text-white">Producto</th>
-                                                <th class="text-white">Laboratorio</th>
-                                                <th class="text-white">Cantidad</th>
-                                                <th class="text-white">Lote</th>
-                                                <th class="text-white">F. Vencimiento</th>
-                                                <th class="text-white">Opciones</th>
+                                                <th class="text-white" style="width: 10%;">Fecha</th>
+                                                <th class="text-white" style="width: 25%;">Producto</th>
+                                                <th class="text-white" style="width: 15%;">Laboratorio</th>
+                                                <th class="text-white" style="width: 15%;">Cliente</th>
+                                                <th class="text-white" style="width: 8%;">Cantidad</th>
+                                                <th class="text-white" style="width: 10%;">Lote</th>
+                                                <th class="text-white" style="width: 10%;">F. Vencimiento</th>
+                                                <th class="text-white" style="width: 7%;">Opciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr v-for="venta in arrayTienda" :key="venta.id_lote">
+                                            <tr v-for="venta in arrayTienda" :key="venta.id_lote + '-' + venta.id_venta">
                                                 <td>{{ venta.fecha }}</td>
                                                 <td>{{ venta.nombre_comercial }}</td>
                                                 <td>{{ venta.laboratorio }}</td>
+                                                <td>{{ venta.cliente }}</td>
                                                 <td>{{ venta.cantidad }}</td>
                                                 <td>{{ venta.lote }}</td>
                                                 <td>{{ venta.fecha_vecimiento }}</td>
@@ -216,20 +218,21 @@
                                     <table class="table table-striped table-hover" style='width:96%;margin-left: 2.2%'>
                                         <thead style="background-color: #46546c">
                                             <tr>
-                                                <th scope="col" class="text-white">Fecha</th>
-                                                <th scope="col" class="text-white">Hora</th>
-                                                <th scope="col" class="text-white">Producto</th>
-                                                <th scope="col" class="text-white">Laboratorio</th>
-                                                <th scope="col" class="text-white">Lote</th>
-                                                <th scope="col" class="text-white">Transacción</th>
-                                                <th scope="col" class="text-white">Cod. Transacción</th>
-                                                <th scope="col" class="text-white">Costo</th>
-                                                <th scope="col" class="text-white">Descuento</th>
-                                                <th scope="col" class="text-white">Stock lote</th>
-                                                <th scope="col" class="text-white">Stock Anterior</th>
-                                                <th scope="col" class="text-white">Cantidad</th>
-                                                <th scope="col" class="text-white">Stock General</th>
-                                                <th scope="col" class="text-white">Usuario</th>
+                                                <th scope="col" class="text-white" style="min-width: 95px;">Fecha</th>
+                                                <th scope="col" class="text-white" style="min-width: 75px;">Hora</th>
+                                                <th scope="col" class="text-white" style="min-width: 180px;">Producto</th>
+                                                <th scope="col" class="text-white" style="min-width: 110px;">Laboratorio</th>
+                                                <th scope="col" class="text-white" style="min-width: 80px;">Lote</th>
+                                                <th scope="col" class="text-white" style="min-width: 110px;">Transacción</th>
+                                                <th scope="col" class="text-white" style="min-width: 75px;">Cod. Transacción</th>
+                                                <th scope="col" class="text-white" style="min-width: 130px;">Cliente/Proveedor</th>
+                                                <th scope="col" class="text-white" style="min-width: 70px;">Costo</th>
+                                                <th scope="col" class="text-white" style="min-width: 75px;">Descuento</th>
+                                                <th scope="col" class="text-white" style="min-width: 75px;">Stock lote</th>
+                                                <th scope="col" class="text-white" style="min-width: 75px;">Stock Anterior</th>
+                                                <th scope="col" class="text-white" style="min-width: 70px;">Cantidad</th>
+                                                <th scope="col" class="text-white" style="min-width: 75px;">Stock General</th>
+                                                <th scope="col" class="text-white" style="min-width: 90px;">Usuario</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -241,6 +244,7 @@
                                                 <td v-text="producto.lote"></td>
                                                 <td v-text="producto.motivo_ajuste"></td>
                                                 <td v-text="producto.id_transaccion"></td>
+                                                <td v-text="producto.cliente_proveedor"></td>
                                                 <td v-text="producto.costo_compra"></td>
                                                 <td v-text="producto.descuento"></td>
                                                 <td v-text="producto.stock_actual"></td>
@@ -531,239 +535,153 @@ import { toFixed } from 'accounting-js';
                 this.datos.id_lote=id_lote
                 this.listarProductoUsuario(id_lote,'','users.name')
             },
-            selectProveedor(){
-                let me=this;
-                var url='/proveedor/selectProveedor';
-                axios.get(url).then(function(response){
-                    me.arrayProveedor=response.data;
-                })
-                .catch(function(error){
-                    console.log(error)
-                });
+            async selectProveedor(){
+                try {
+                    const response = await axios.get('/proveedor/selectProveedor');
+                    this.arrayProveedor = response.data;
+                } catch (error) {
+                    console.error(error);
+                }
             },
-            ProductoCantidad(id){
-                let me=this;
-                var url='/ajuste/lote?id_articulo=' + id ;
-                axios.get(url).then(function(response){
-                    me.StockProducto=response.data[0];
-
-                })
-                .catch(function(error){
-                    console.log(error)
-                });                
+            async ProductoCantidad(id){
+                try {
+                    const response = await axios.get('/ajuste/lote?id_articulo=' + id);
+                    this.StockProducto = response.data[0];
+                } catch (error) {
+                    console.error(error);
+                }
             },
-            cargarPdfHistorialVentaUsuario(id) {
-                let time=500;
-                //this.downloadReport(time);
-                axios.get('/reporte/pdfHistorialProductoUsuario?id_lote=' + id + '&fecha_producto=' + this.datos.fecha_producto +'&fecha_fin=' + this.datos.fecha_fin +'',{responseType: 'blob'})
-                    .then(response => {
-                        var blob = new Blob([response.data], {type: 'application/pdf'});
-                        var downloadUrl = URL.createObjectURL(blob);
-                        window.open(downloadUrl, '_blank');
-                    })
-                    .catch(error => {
-                        //this.errorReport();
-                        console.log(error);
-                    })
+            async cargarPdfHistorialVentaUsuario(id) {
+                try {
+                    const response = await axios.get('/reporte/pdfHistorialProductoUsuario?id_lote=' + id + '&fecha_producto=' + this.datos.fecha_producto +'&fecha_fin=' + this.datos.fecha_fin, {responseType: 'blob'});
+                    const blob = new Blob([response.data], {type: 'application/pdf'});
+                    const downloadUrl = URL.createObjectURL(blob);
+                    window.open(downloadUrl, '_blank');
+                } catch (error) {
+                    console.error(error);
+                }
             },
-            listarProductoUsuario(id_lote, buscarU, criterioP){
-                let me=this;
-                var url='/cantidadProductoUsuario?id_lote=' + id_lote  + '&fecha_producto=' + me.datos.fecha_producto +'&fecha_fin=' + me.datos.fecha_fin +'&buscar=' + buscarU + '&criterioP=' + criterioP;
-                axios.get(url).then(function(response){
-                    me.arrayUsuario=response.data;
-
-                    // me.pagination={total:response.data.total,
-                    //     current_page:response.data.current_page,
-                    //     per_page: response.data.per_page,
-                    //     last_page: response.data.last_page,
-                    //     from: response.data.from,
-                    //     to: response.data.to
-                    // }
-                })
-                .catch(function(error){
-                    console.log(error)
-                });
+            async listarProductoUsuario(id_lote, buscarU, criterioP){
+                try {
+                    const url = '/cantidadProductoUsuario?id_lote=' + id_lote + '&fecha_producto=' + this.datos.fecha_producto + '&fecha_fin=' + this.datos.fecha_fin + '&buscar=' + buscarU + '&criterioP=' + criterioP;
+                    const response = await axios.get(url);
+                    this.arrayUsuario = response.data;
+                } catch (error) {
+                    console.error(error);
+                }
             },
-            listarArticuloBusquedaRapida2(){
-                let me=this;
-                var url='/cantidadProductoUsuario?id_lote=' + me.id_lote  + '&fecha_producto=' + me.datos.fecha_producto +'&fecha_fin=' + me.datos.fecha_fin +'&buscar=' + me.buscarU + '&criterioP=' + me.criterioP;
-                axios.get(url).then(function(response){
-                    me.arrayUsuario=response.data;
-
-                })
-                .catch(function(error){
-                    console.log(error)
-                });                
+            async listarArticuloBusquedaRapida2(){
+                try {
+                    const url = '/cantidadProductoUsuario?id_lote=' + this.id_lote + '&fecha_producto=' + this.datos.fecha_producto + '&fecha_fin=' + this.datos.fecha_fin + '&buscar=' + this.buscarU + '&criterioP=' + this.criterioP;
+                    const response = await axios.get(url);
+                    this.arrayUsuario = response.data;
+                } catch (error) {
+                    console.error(error);
+                }
             },
             BuscandoArticulo(){
-                let me = this;
-                // if(me.buscar == ''){
-                //   me.listarInventario2(me.buscar,me.criterio)  
-                // }else{
-                clearTimeout(me.setTimeoutBuscador)
-                me.setTimeoutBuscador = setTimeout(me.listarArticuloBusquedaRapida2,350)
-            // }
+                clearTimeout(this.setTimeoutBuscador)
+                this.setTimeoutBuscador = setTimeout(this.listarArticuloBusquedaRapida2, 350)
             },
             volverVentaListado(){
-                let me = this;
-                me.listado = 0;
-                // me.buscar = '';
-                // me.datos.fecha_producto = moment().format('YYYY-MM-DD');
-                // me.datos.fecha_fin = moment().format('YYYY-MM-DD');
-                // me.listarInventario2(me.buscar,me.criterio)
+                this.listado = 0;
             },
-            listarPaquete(){
-                let me=this;
-
-
-                var url='/articulo/detalleLote/principal';
-                axios.get(url).then(function(response){
-                    me.arrayProductoLote=response.data;
-
-                })
-                .catch(function(error){
-                    console.log(error)
-                });
-
-               // me.validarFecha();
+            async listarPaquete(){
+                try {
+                    const response = await axios.get('/articulo/detalleLote/principal');
+                    this.arrayProductoLote = response.data;
+                } catch (error) {
+                    console.error(error);
+                }
             },
-            // listarInventario(buscar,criterio){
-            //     let me=this;
+            async listarInventario2(page = 1, buscar = '', criterio = '') {
+                try {
+                    const { fecha_producto, fecha_fin } = this.datos;
+                    const params = new URLSearchParams({
+                        page,
+                        fecha_producto,
+                        fecha_fin,
+                        buscar,
+                        criterio
+                    }).toString();
 
-            //     var url='/cantidadProducto?buscar=' + buscar + '&criterio=' + criterio;
-            //     axios.get(url).then(function(response){
-            //         me.arrayTienda=response.data;
+                    const response = await axios.get(`/cantidadProductoFecha?${params}`);
+                    const data = response.data;
+                    this.arrayTienda = data.data;
+                    this.pagination = {
+                        total: data.total,
+                        current_page: data.current_page,
+                        per_page: data.per_page,
+                        last_page: data.last_page,
+                        from: data.from,
+                        to: data.to
+                    };
+                } catch (error) {
+                    console.error(error);
+                }
+            },
 
-            //     })
-            //     .catch(function(error){
-            //         console.log(error)
-            //     });
-            //    // me.validarFecha();
-            // },
-            /*listarInventario2(page,buscar,criterio){
-                let me=this;
-                console.log(me.datos.fecha_producto,me.datos.fecha_fin);
-                var url='/cantidadProductoFecha?page=' + page + '&fecha_producto=' + me.datos.fecha_producto +'&fecha_fin=' + me.datos.fecha_fin  + '&buscar=' + buscar + '&criterio=' + criterio;
-                axios.get(url).then(function(response){
-                    me.arrayTienda=response.data.data;
+            async listarProducto(page, buscarProducto, criterio){
+                try {
+                    const url = '/ajuste/producto?page=' + page + '&fecha_inicio=' + this.datos.fecha_inicio + '&fecha_final=' + this.datos.fecha_final + '&buscarProducto=' + buscarProducto + '&criterio=' + this.criterio + '&id_proveedor=' + this.datos.id_proveedor;
+                    const response = await axios.get(url);
+                    const data = response.data;
+                    this.arrayProducto = data.data ? data.data : data;
 
-                    me.pagination={total:response.data.total, 
-                        current_page:response.data.current_page,
-                        per_page: response.data.per_page,
-                        last_page: response.data.last_page,
-                        from: response.data.from,
-                        to: response.data.to
+                    this.paginationAjuste = {
+                        total: data.total || 0,
+                        current_page: data.current_page || 1,
+                        per_page: data.per_page || 50,
+                        last_page: data.last_page || 1,
+                        from: data.from || 1,
+                        to: data.to || 1
+                    };
+
+                    if (this.buscarProducto === '') {
+                        this.StockProducto = {};
+                    } else if (this.arrayProducto && this.arrayProducto.length > 0) {
+                        await this.ProductoCantidad(this.arrayProducto[0].id_articulo);
                     }
-
-                })
-                .catch(function(error){
-                    console.log(error)
-                });
-               // me.validarFecha();
-            },*/
-
-            listarInventario2(page = 1, buscar = '', criterio = '') {
-                const me = this;
-                const { fecha_producto, fecha_fin } = me.datos;
-
-                const params = new URLSearchParams({
-                    page,
-                    fecha_producto,
-                    fecha_fin,
-                    buscar,
-                    criterio
-                }).toString();
-
-                axios.get(`/cantidadProductoFecha?${params}`)
-                    .then(response => {
-                        const data = response.data;
-                        me.arrayTienda = data.data;
-                        me.pagination = {
-                            total: data.total,
-                            current_page: data.current_page,
-                            per_page: data.per_page,
-                            last_page: data.last_page,
-                            from: data.from,
-                            to: data.to
-                        };
-                    })
-                    .catch(error => console.error(error));
+                } catch (error) {
+                    console.error(error);
+                }
             },
-
-            listarProducto(page,buscarProducto,criterio){
-                let me=this;
-                //console.log(me.datos.fecha_inicio,me.datos.fecha_final);
-                // var url='/ajuste/producto?fecha_inicio=' + me.datos.fecha_inicio +'&fecha_final=' + me.datos.fecha_final  + '&buscarProducto=' + buscarProducto + '&criterio=' + me.criterio;
-                var url='/ajuste/producto?page=' + page + '&fecha_inicio=' + me.datos.fecha_inicio +'&fecha_final=' + me.datos.fecha_final  + '&buscarProducto=' + buscarProducto + '&criterio=' + me.criterio + '&id_proveedor=' + me.datos.id_proveedor;
-                axios.get(url).then(function(response){
-                    me.arrayProducto=response.data.data;
-
-                    me.paginationAjuste={total:response.data.total, 
-                        current_page:response.data.current_page,
-                        per_page: response.data.per_page,
-                        last_page: response.data.last_page,
-                        from: response.data.from,
-                        to: response.data.to
-                    }
-
-                    if(me.buscarProducto == '')
-                    {
-                        me.StockProducto={};
-                    }else{
-                        me.ProductoCantidad(me.arrayProducto[0].id_articulo)
-                     }
-                })
-                .catch(function(error){
-                    console.log(error)
-                });
-               // me.validarFecha();
+            async selecionarProductoProveedor(proveedor) {
+                try {
+                    const url = '/ajuste/producto?buscarProducto=' + this.buscarProducto + '&criterio=' + this.criterio + '&id_proveedor=' + proveedor + '&fecha_inicio=' + this.datos.fecha_inicio + '&fecha_final=' + this.datos.fecha_final;
+                    const response = await axios.get(url);
+                    this.arrayProducto = response.data.data ? response.data.data : response.data;
+                } catch (error) {
+                    console.error(error);
+                }
             },
-            selecionarProductoProveedor(proveedor)
-            {
-                let me = this;
-                var url='/ajuste/producto?buscarProducto=' + me.buscarProducto + '&criterio=' + me.criterio+ '&id_proveedor=' + proveedor + '&fecha_inicio=' + me.datos.fecha_inicio +'&fecha_final=' + me.datos.fecha_final;
-                axios.get(url).then(function(response){
-                    me.arrayProducto= response.data;
-                })
-                .catch(function(error){
-                    console.log(error);
-                });
-
-            },
-            listarProductoBusquedaRapida(){
-                let me=this;
-                var url='/ajuste/producto?page=' + 1 + '&fecha_inicio=' + me.datos.fecha_inicio +'&fecha_final=' + me.datos.fecha_final  + '&buscarProducto=' + me.buscarProducto + '&criterio=' + me.criterio + '&id_proveedor=' + me.datos.id_proveedor;
-                axios.get(url).then(function(response){
-                    me.arrayProducto=response.data.data;
+            async listarProductoBusquedaRapida(){
+                try {
+                    const url = '/ajuste/producto?page=1&fecha_inicio=' + this.datos.fecha_inicio + '&fecha_final=' + this.datos.fecha_final + '&buscarProducto=' + this.buscarProducto + '&criterio=' + this.criterio + '&id_proveedor=' + this.datos.id_proveedor;
+                    const response = await axios.get(url);
+                    const data = response.data;
+                    this.arrayProducto = data.data ? data.data : data;
                    
-                   me.paginationAjuste={total:response.data.total, 
-                        current_page:response.data.current_page,
-                        per_page: response.data.per_page,
-                        last_page: response.data.last_page,
-                        from: response.data.from,
-                        to: response.data.to
+                    this.paginationAjuste = {
+                        total: data.total || 0,
+                        current_page: data.current_page || 1,
+                        per_page: data.per_page || 50,
+                        last_page: data.last_page || 1,
+                        from: data.from || 1,
+                        to: data.to || 1
+                    };
+                    if (this.buscarProducto === '') {
+                        this.StockProducto = {};
+                    } else if (this.arrayProducto && this.arrayProducto.length > 0) {
+                        await this.ProductoCantidad(this.arrayProducto[0].id_articulo);
                     }
-                    if(me.buscarProducto == '')
-                    {
-                        me.StockProducto={};
-                    }else{
-                        me.ProductoCantidad(me.arrayProducto[0].id_articulo)
-                        console.log(me.arrayProducto[0].id_articulo);
-
-                    }
-                })
-                .catch(function(error){
-                    console.log(error)
-                });                
+                } catch (error) {
+                    console.error(error);
+                }
             },
             BuscandoProducto(){
-                let me = this;
-                // if(me.buscar == ''){
-                //   me.listarInventario2(me.buscar,me.criterio)  
-                // }else{
-                clearTimeout(me.setTimeoutBuscador)
-                me.setTimeoutBuscador = setTimeout(me.listarProductoBusquedaRapida,350)
-            // }
+                clearTimeout(this.setTimeoutBuscador)
+                this.setTimeoutBuscador = setTimeout(this.listarProductoBusquedaRapida, 350)
             },
             // async listarInventario(page, buscar, criterio){
             //     let me=this;

@@ -60,79 +60,72 @@ class AjusteController extends BitacoraController
         $id_proveedor = $request->id_proveedor; 
         $fecha_inicio = $request->fecha_inicio;
         $fecha_final = $request->fecha_final;
-        //dd($fecha_inicio,$fecha_final);
         $buscar = $request->buscarProducto;
-        //DD($id_proveedor);
-        
-        //dd($buscar);
         $criterio = $request->criterio;
-        if($id_proveedor == 0){   
-            if($buscar==''){
-                $obj=[]; 
-            }
-            else{
-                //dd($buscar,$id_proveedor);
 
-                $obj= Ajuste::join('lote','ajuste.id_lote','=','lote.id')
-                ->join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
-                ->join('users','ajuste.id_usuario','=','users.id')
-                ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-                ->join('motivo_ajuste','ajuste.id_motivo_ajuste','=','motivo_ajuste.id')
-                ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
-                ->join('categoria','categoria.id','=','articulo.id_categoria')
-                ->select('ajuste.id','ajuste.id_lote','ajuste.id_motivo_ajuste','motivo_ajuste.nombre as motivo_ajuste','ajuste.stock','ajuste.costo_compra','ajuste.costo_venta',
-                'ajuste.observacion','articulo.nombre_comercial as producto','ajuste.costo_unitario','ajuste.costo_mayorista','ajuste.costo_preferencial',
-                'articulo.id_categoria','categoria.nombre as categoria','ajuste.stock_anterior','ajuste.stock_actual','lote.cantidad','lote.fecha_vecimiento','lote.lote'
-                ,'ajuste.fecha','ajuste.id_transaccion','users.name as usuario','ajuste.hora','articulo.id as id_articulo','ajuste.descuento','ajuste.stock_general'
-                ,'ajuste.stock_general_anterior','proveedor.nombre as laboratorio')
-                ->whereDate('ajuste.fecha', ">=", $fecha_inicio)
-                ->whereDate('ajuste.fecha', "<=", $fecha_final)
-                ->where($criterio, 'like', '%'.$buscar.'%')
-                ->groupBy('ajuste.id')
-                ->orderBy('ajuste.id','desc')->paginate(50);       
-            }
-        }else
-        {
-            if($buscar==''){
-                $obj= Ajuste::join('lote','ajuste.id_lote','=','lote.id')
-                ->join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
-                ->join('users','ajuste.id_usuario','=','users.id')
-                ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-                ->join('motivo_ajuste','ajuste.id_motivo_ajuste','=','motivo_ajuste.id')
-                ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
-                ->join('categoria','categoria.id','=','articulo.id_categoria')
-                ->select('ajuste.id','ajuste.id_lote','ajuste.id_motivo_ajuste','motivo_ajuste.nombre as motivo_ajuste','ajuste.stock','ajuste.costo_compra','ajuste.costo_venta',
-                'ajuste.observacion','articulo.nombre_comercial as producto','ajuste.costo_unitario','ajuste.costo_mayorista','ajuste.costo_preferencial',
-                'articulo.id_categoria','categoria.nombre as categoria','ajuste.stock_anterior','ajuste.stock_actual','lote.cantidad','lote.fecha_vecimiento','lote.lote'
-                ,'ajuste.fecha','ajuste.id_transaccion','users.name as usuario','ajuste.hora','articulo.id as id_articulo','ajuste.descuento','ajuste.stock_general'
-                ,'ajuste.stock_general_anterior','proveedor.nombre as laboratorio')
-                ->whereDate('ajuste.fecha', ">=", $fecha_inicio)
-                ->whereDate('ajuste.fecha', "<=", $fecha_final)
-                ->where('articulo.id_proveedor', '=', $id_proveedor)
-                ->groupBy('ajuste.id')
-                ->orderBy('ajuste.id','desc')->paginate(50);    
-            }else{
+        $query = Ajuste::join('lote', 'ajuste.id_lote', '=', 'lote.id')
+            ->join('tienda_articulo', 'lote.id_producto', '=', 'tienda_articulo.id')
+            ->join('users', 'ajuste.id_usuario', '=', 'users.id')
+            ->join('articulo', 'tienda_articulo.id_articulo', '=', 'articulo.id')
+            ->join('motivo_ajuste', 'ajuste.id_motivo_ajuste', '=', 'motivo_ajuste.id')
+            ->join('proveedor', 'articulo.id_proveedor', '=', 'proveedor.id')
+            ->join('categoria', 'categoria.id', '=', 'articulo.id_categoria')
+            ->leftJoin('venta', function($join) {
+                $join->on('ajuste.id_transaccion', '=', 'venta.id')
+                     ->where('ajuste.id_motivo_ajuste', '=', 7);
+            })
+            ->leftJoin('cliente', 'venta.id_cliente', '=', 'cliente.id')
+            ->leftJoin('compra', function($join) {
+                $join->on('ajuste.id_transaccion', '=', 'compra.id')
+                     ->where('ajuste.id_motivo_ajuste', '=', 6);
+            })
+            ->leftJoin('proveedor as prov_compra', 'compra.id_proveedor', '=', 'prov_compra.id')
+            ->select(
+                'ajuste.id',
+                'ajuste.id_lote',
+                'ajuste.id_motivo_ajuste',
+                'motivo_ajuste.nombre as motivo_ajuste',
+                'ajuste.stock',
+                'ajuste.costo_compra',
+                'ajuste.costo_venta',
+                'ajuste.observacion',
+                'articulo.nombre_comercial as producto',
+                'ajuste.costo_unitario',
+                'ajuste.costo_mayorista',
+                'ajuste.costo_preferencial',
+                'articulo.id_categoria',
+                'categoria.nombre as categoria',
+                'ajuste.stock_anterior',
+                'ajuste.stock_actual',
+                'lote.cantidad',
+                'lote.fecha_vecimiento',
+                'lote.lote',
+                'ajuste.fecha',
+                'ajuste.id_transaccion',
+                'users.name as usuario',
+                'ajuste.hora',
+                'articulo.id as id_articulo',
+                'ajuste.descuento',
+                'ajuste.stock_general',
+                'ajuste.stock_general_anterior',
+                'proveedor.nombre as laboratorio',
+                DB::raw("CASE WHEN ajuste.id_motivo_ajuste = 7 THEN cliente.nombre WHEN ajuste.id_motivo_ajuste = 6 THEN prov_compra.nombre ELSE NULL END as cliente_proveedor")
+            )
+            ->whereDate('ajuste.fecha', '>=', $fecha_inicio)
+            ->whereDate('ajuste.fecha', '<=', $fecha_final);
 
-                $obj= Ajuste::join('lote','ajuste.id_lote','=','lote.id')
-                ->join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
-                ->join('users','ajuste.id_usuario','=','users.id')
-                ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-                ->join('motivo_ajuste','ajuste.id_motivo_ajuste','=','motivo_ajuste.id')
-                ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
-                ->join('categoria','categoria.id','=','articulo.id_categoria')
-                ->select('ajuste.id','ajuste.id_lote','ajuste.id_motivo_ajuste','motivo_ajuste.nombre as motivo_ajuste','ajuste.stock','ajuste.costo_compra','ajuste.costo_venta',
-                'ajuste.observacion','articulo.nombre_comercial as producto','ajuste.costo_unitario','ajuste.costo_mayorista','ajuste.costo_preferencial',
-                'articulo.id_categoria','categoria.nombre as categoria','ajuste.stock_anterior','ajuste.stock_actual','lote.cantidad','lote.fecha_vecimiento','lote.lote'
-                ,'ajuste.fecha','ajuste.id_transaccion','users.name as usuario','ajuste.hora','articulo.id as id_articulo','ajuste.descuento','ajuste.stock_general'
-                ,'ajuste.stock_general_anterior','proveedor.nombre as laboratorio')
-                ->where($criterio, 'like', '%'.$buscar.'%')
-                ->whereDate('ajuste.fecha', ">=", $fecha_inicio)
-                ->whereDate('ajuste.fecha', "<=", $fecha_final)
-                ->where('articulo.id_proveedor', '=', $id_proveedor)
-                ->groupBy('ajuste.id')
-                ->orderBy('ajuste.id','desc')->paginate(50);    
-            } 
+        if ($id_proveedor != 0) {
+            $query->where('articulo.id_proveedor', '=', $id_proveedor);
         }
+
+        if ($buscar != '') {
+            $query->where($criterio, 'like', '%' . $buscar . '%');
+        }
+
+        $obj = $query->groupBy('ajuste.id')
+            ->orderBy('ajuste.id', 'desc')
+            ->paginate(50);
+
         return $obj;
     }
     // public function indexProducto(Request $request){

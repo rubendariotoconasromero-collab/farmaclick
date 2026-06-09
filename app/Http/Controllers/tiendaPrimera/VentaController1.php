@@ -1990,6 +1990,7 @@ class VentaController1 extends BitacoraController
         $criterio = $request->input('criterio', '');
 
         $query = DetalleVenta::join('venta', 'detalle_venta.id_venta', '=', 'venta.id')
+            ->leftJoin('cliente', 'venta.id_cliente', '=', 'cliente.id')
             ->join('tienda_articulo', 'detalle_venta.id_producto', '=', 'tienda_articulo.id')
             ->join('articulo', 'articulo.id', '=', 'tienda_articulo.id_articulo')
             ->join('lote', 'detalle_venta.id_lote', '=', 'lote.id')
@@ -2002,7 +2003,8 @@ class VentaController1 extends BitacoraController
                 'venta.fecha',
                 'proveedor.nombre as laboratorio',
                 'lote.lote',
-                'lote.fecha_vecimiento'
+                'lote.fecha_vecimiento',
+                'cliente.nombre as cliente'
             )
             ->whereIn('venta.estado', ['Entregado', 'Devolucion'])
             ->whereBetween(DB::raw('DATE(venta.fecha)'), [$fechaInicio, $fechaFin]);
@@ -2014,7 +2016,7 @@ class VentaController1 extends BitacoraController
             }
         }
 
-        $obj = $query->groupBy('detalle_venta.id_lote')
+        $obj = $query->groupBy('detalle_venta.id_lote', 'detalle_venta.id_venta')
             ->orderByDesc('venta.fecha')
             ->paginate(70);
 
