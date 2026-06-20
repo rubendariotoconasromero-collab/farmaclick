@@ -519,18 +519,8 @@
     import moment from 'moment';
     export default {
         created() {
-            this.VentaEfectivo();
-            this.VentaDeposito();
-            this.CompraEfectivo();
-            this.CompraDeposito();
-            this.GastoEfectivo();
-            this.GastoDeposito();
-            this.VentaCobrarEfectivo();
-            this.VentaCobrarDeposito();
-            this.CompraCobrarEfectivo();
-            this.CompraCobrarDeposito();
+            this.cargarResumenArqueo();
             this.listarCajaAbierta();
-            this.registrosimportacion();
             this.usuarioAuth();
             this.listarProducto();
             this.listarProductoMeses();
@@ -660,105 +650,23 @@
                     console.log(error)
                 });
             },
-            VentaEfectivo() {
+            cargarResumenArqueo() {
                 let me = this;
-                var url = '/venta_tienda1/VentaArqueoEfectivo';
-                axios.get(url).then(function (response) {
-                        me.ventaefectivo = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
-            },
-            VentaDeposito() {
-                let me = this;
-                var url = '/venta_tienda1/VentaArqueoDeposito';
-                axios.get(url).then(function (response) {
-                        me.ventaDeposito = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
-            },
-            VentaCobrarEfectivo() {
-                let me = this;
-                var url = '/c_x_cobrar/VentaCobrarArqueoEfectivo';
-                axios.get(url).then(function (response) {
-                        me.ventaCobrarefectivo = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
-            },
-            VentaCobrarDeposito() {
-                let me = this;
-                var url = '/c_x_cobrar/VentaCobrarArqueoDeposito';
-                axios.get(url).then(function (response) {
-                        me.ventaCobrarDeposito = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
-            },
-            GastoEfectivo() {
-                let me = this;
-                var url = '/gasto/GastoArqueoEfectivo';
-                axios.get(url).then(function (response) {
-                        me.gastoEfec = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
-            },
-            GastoDeposito() {
-                let me = this;
-                var url = '/gasto/GastoArqueoDeposito';
-                axios.get(url).then(function (response) {
-                        me.gastoDep = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
-            },
-            CompraEfectivo() {
-                let me = this;
-                var url = '/compra/CompraArqueoEfectivo';
-                axios.get(url).then(function (response) {
-                        me.compraefectivo = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
-            },
-            CompraDeposito() {
-                let me = this;
-                var url = '/compra/CompraArqueoDeposito';
-                axios.get(url).then(function (response) {
-                        me.compraDeposito = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
-            },
-            CompraCobrarEfectivo() {
-                let me = this;
-                var url = '/c_x_pagar/CompraCobrarArqueoEfectivo';
-                axios.get(url).then(function (response) {
-                        me.compraCobrarefectivo = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
-            },
-            CompraCobrarDeposito() {
-                let me = this;
-                var url = '/c_x_pagar/CompraCobrarArqueoDeposito';
-                axios.get(url).then(function (response) {
-                        me.compraCobrarDeposito = response.data[0];
-                    })
-                    .catch(function (error) {
-                        console.log(error);
-                    });
+                axios.get('/arqueo/resumen').then(function(response) {
+                    const r = response.data;
+                    me.ventaefectivo        = r.ventaefectivo;
+                    me.ventaDeposito        = r.ventaDeposito;
+                    me.ventaCobrarefectivo  = r.ventaCobrarefectivo;
+                    me.ventaCobrarDeposito  = r.ventaCobrarDeposito;
+                    me.gastoEfec            = r.gastoEfec;
+                    me.gastoDep             = r.gastoDep;
+                    me.compraefectivo       = r.compraefectivo;
+                    me.compraDeposito       = r.compraDeposito;
+                    me.compraCobrarefectivo = r.compraCobrarefectivo;
+                    me.compraCobrarDeposito = r.compraCobrarDeposito;
+                }).catch(function(error) {
+                    console.log(error);
+                });
             },
             listarProductoMeses(){
                 let me=this;
@@ -1116,70 +1024,22 @@
                             me.datos.apertura=0;     
                             })
                             .catch(function(error){
-                                console.log(error);
+                                if(error.response && error.response.status === 422){
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: 'Ya Existe una Caja Abierta...',
+                                        text: 'Cierre la caja actual antes de aperturar una nueva.'
+                                    });
+                                } else {
+                                    console.log(error);
+                                }
                             });
                         }
                     }
                     this.is_busy=1;
                } 
             }, 
-            // aperturarC(){
-            //     if(this.is_busy == 0){
-            //         this.aperturarCaja();
-            //         this.is_busy=1;
-            //     }
-            // },
-            // async aperturarCaja(){
-
-            //     try {
-
-            //         //this.estadoCaja();
-            //         this.listarCajaAbierta();
-            //         this.validarCajaAbierta();
-
-            //         let me = this;
-            //         var url='/arqueo/estado';
-            //         const res = await axios.get(url)
-            //         me.estado_caja= res.data;
-
-            //         console.log(me.arrayCaja);
-
-            //         if(this.arrayCaja.length>0)
-            //         {
-            //             Swal.fire({
-            //                 icon: 'error',
-            //                 title: 'Ya Existe una Caja Abierta...',
-            //                 text: 'Cierre Caja!'
-            //             })
-            //         }else{
-            //             if(this.errorimportacion==0){
-            //                 //let me = this;
-            //                 axios.post('/arqueo/guardar',this.datos).then(function(response){
-            //                     Swal.fire({
-            //                     position: 'top-end',
-            //                     icon: 'success',
-            //                     title: 'Registro agregado...',
-            //                     showConfirmButton: false,
-            //                     timer: 1500
-            //                 })
-            //                 // me.cerrarModal();
-            //                 me.listarCajaAbierta();
-            //                 me.datos.apertura=0;
-            //                 })
-            //                 .catch(function(error){
-            //                     console.log(error);
-            //                 });
-            //             }
-            //         }
-            //     } catch (error) {
-            //         if(error.response.data){
-            //             this.errores=error.response.data.errors;
-            //             this.is_busy=0;
-            //         }
-            //     }
-
-
-            // },
+    
             Limpiar(){
                 this.datos ={
                     id : 0,
@@ -1410,16 +1270,7 @@
                     //     id_usuario : 0,
                     // };
                     me.traerArqueo();
-                    me.VentaEfectivo();
-                    me.VentaDeposito();
-                    me.VentaCobrarEfectivo();
-                    me.VentaCobrarDeposito();
-                    me.GastoEfectivo();
-                    me.GastoDeposito();
-                    me.CompraEfectivo();
-                    me.CompraDeposito();
-                    me.CompraCobrarEfectivo();
-                    me.CompraCobrarDeposito();
+                    me.cargarResumenArqueo();
                     
                 }
                 else
@@ -1548,21 +1399,6 @@
             } 
         },
         mounted() {
-            this.listarCajaAbierta();
-            this.VentaEfectivo();
-            this.VentaDeposito();
-            this.VentaCobrarEfectivo();
-            this.VentaCobrarDeposito();
-            this.GastoEfectivo();
-            this.GastoDeposito();
-            this.CompraEfectivo();
-            this.CompraDeposito();
-            this.CompraCobrarEfectivo();
-            this.CompraCobrarDeposito();
-            this.usuarioAuth();
-            this.registrosimportacion();
-            this.listarProducto();
-            this.listarProductoMeses();
         }
     }
 </script>

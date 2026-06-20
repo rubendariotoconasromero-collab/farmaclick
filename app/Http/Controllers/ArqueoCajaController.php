@@ -92,9 +92,19 @@ class ArqueoCajaController extends BitacoraController
     }
 
     public function guardar(Request $request){
-        
+        $id_usuario = \Auth::user()->id;
+
+        $cajaAbierta = DB::table('arqueo_caja')
+            ->where('id_usuario', $id_usuario)
+            ->where('estado', 'Abierta')
+            ->first();
+
+        if ($cajaAbierta) {
+            return response()->json(['error' => 'Ya existe una caja abierta para este usuario.'], 422);
+        }
+
         $caja= new ArqueoCaja();
-        
+
         $objdate = new DateTime();
         $fecha_apertura=$objdate;
 
@@ -110,7 +120,7 @@ class ArqueoCajaController extends BitacoraController
         $caja->total_credito_deposito_compra=0;
         $caja->gastos_deposito=0;
         $caja->estado="Abierta";
-        $caja->id_usuario=\Auth::user()->id;
+        $caja->id_usuario=$id_usuario;
         $caja->save();
 
         
@@ -180,6 +190,90 @@ class ArqueoCajaController extends BitacoraController
             'transaccion' => 'arqueo de caja',
         ];
         $this->guardarBitacora($datos);
+    }
+
+    public function resumenArqueo(Request $request)
+    {
+        $uid = \Auth::user()->id;
+
+        $venta_efectivo = DB::table('venta')
+            ->selectRaw('SUM(total_efectivo) as total_e')
+            ->whereIn('estado', ['Entregado', 'Devolucion'])
+            ->where('id_tipo_pago', 1)->where('control', 0)->where('id_usuario', $uid)
+            ->value('total_e');
+
+        $venta_deposito = DB::table('venta')
+            ->selectRaw('SUM(total_deposito) as total_d')
+            ->whereIn('estado', ['Entregado', 'Devolucion'])
+            ->where('id_tipo_pago', 1)->where('control', 0)->where('id_usuario', $uid)
+            ->value('total_d');
+
+        $venta_cobrar_efectivo = DB::table('c_x_cobrar')
+            ->join('pago', 'c_x_cobrar.id_pago', '=', 'pago.id')
+            ->join('venta', 'pago.id_venta', '=', 'venta.id')
+            ->selectRaw('SUM(c_x_cobrar.amortizacion) as total_e')
+            ->where('c_x_cobrar.id_forma_pago', 2)->where('c_x_cobrar.control', 0)
+            ->where('venta.estado', '!=', 'Anulado')->where('c_x_cobrar.id_usuario', $uid)
+            ->value('total_e');
+
+        $venta_cobrar_deposito = DB::table('c_x_cobrar')
+            ->join('pago', 'c_x_cobrar.id_pago', '=', 'pago.id')
+            ->join('venta', 'pago.id_venta', '=', 'venta.id')
+            ->selectRaw('SUM(c_x_cobrar.amortizacion) as total_d')
+            ->whereIn('c_x_cobrar.id_forma_pago', [3, 4, 5])->where('c_x_cobrar.control', 0)
+            ->where('venta.estado', '!=', 'Anulado')->where('c_x_cobrar.id_usuario', $uid)
+            ->value('total_d');
+
+        $gasto_efectivo = DB::table('gasto')
+            ->selectRaw('SUM(efectivo) as total_e')
+            ->where('control', 0)->where('id_usuario', $uid)
+            ->value('total_e');
+
+        $gasto_deposito = DB::table('gasto')
+            ->selectRaw('SUM(deposito) as total_d')
+            ->where('control', 0)->where('id_usuario', $uid)
+            ->value('total_d');
+
+        $compra_efectivo = DB::table('compra')
+            ->selectRaw('SUM(total_efectivo) as total_e')
+            ->where('estado', '!=', 'Anulado')->where('id_tipo_pago', 1)
+            ->where('control', 0)->where('id_usuario', $uid)
+            ->value('total_e');
+
+        $compra_deposito = DB::table('compra')
+            ->selectRaw('SUM(total_deposito) as total_d')
+            ->where('estado', '!=', 'Anulado')->where('id_tipo_pago', 1)
+            ->where('control', 0)->where('id_usuario', $uid)
+            ->value('total_d');
+
+        $compra_cobrar_efectivo = DB::table('c_x_pagar')
+            ->join('pago_compra', 'c_x_pagar.id_pago', '=', 'pago_compra.id')
+            ->join('compra', 'pago_compra.id_compra', '=', 'compra.id')
+            ->selectRaw('SUM(c_x_pagar.amortizacion) as total_e')
+            ->where('c_x_pagar.id_forma_pago', 2)->where('c_x_pagar.control', 0)
+            ->where('compra.estado', '!=', 'Anulado')->where('c_x_pagar.id_usuario', $uid)
+            ->value('total_e');
+
+        $compra_cobrar_deposito = DB::table('c_x_pagar')
+            ->join('pago_compra', 'c_x_pagar.id_pago', '=', 'pago_compra.id')
+            ->join('compra', 'pago_compra.id_compra', '=', 'compra.id')
+            ->selectRaw('SUM(c_x_pagar.amortizacion) as total_d')
+            ->whereIn('c_x_pagar.id_forma_pago', [3, 4, 5])->where('c_x_pagar.control', 0)
+            ->where('compra.estado', '!=', 'Anulado')->where('c_x_pagar.id_usuario', $uid)
+            ->value('total_d');
+
+        return response()->json([
+            'ventaefectivo'         => ['total_e' => $venta_efectivo],
+            'ventaDeposito'         => ['total_d' => $venta_deposito],
+            'ventaCobrarefectivo'   => ['total_e' => $venta_cobrar_efectivo],
+            'ventaCobrarDeposito'   => ['total_d' => $venta_cobrar_deposito],
+            'gastoEfec'             => ['total_e' => $gasto_efectivo],
+            'gastoDep'              => ['total_d' => $gasto_deposito],
+            'compraefectivo'        => ['total_e' => $compra_efectivo],
+            'compraDeposito'        => ['total_d' => $compra_deposito],
+            'compraCobrarefectivo'  => ['total_e' => $compra_cobrar_efectivo],
+            'compraCobrarDeposito'  => ['total_d' => $compra_cobrar_deposito],
+        ]);
     }
 
     public function cantidadRegistros(){
