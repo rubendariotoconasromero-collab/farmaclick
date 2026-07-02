@@ -76,7 +76,6 @@ class DashboardController extends Controller
         ->where('lote.estado', '!=', 0)
         ->whereBetween('lote.fecha_vecimiento', [$fecha1, $fecha2])
         ->orderBy('lote.fecha_vecimiento', 'asc')
-        ->limit(50)
         ->get();
 
     return $tienda_articulo;
@@ -101,7 +100,6 @@ class DashboardController extends Controller
         ->where('lote.estado', '!=', 0)
         ->whereBetween('lote.fecha_vecimiento', [$fecha1, $fecha2])
         ->orderBy('lote.fecha_vecimiento', 'asc')
-        ->limit(50)
         ->get();
 
     return $tienda_articulo;
