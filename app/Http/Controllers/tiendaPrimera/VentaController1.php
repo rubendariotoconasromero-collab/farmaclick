@@ -1034,8 +1034,7 @@ class VentaController1 extends BitacoraController
         //dd($request->id);
         $forma_pago = $registro_venta[0]->id_forma_pago;
         $tipo_pago = $registro_venta[0]->id_tipo_pago;
-        $id_usuario=$request->id_usuario;
-        //DD($request->id_usuario);
+        $id_usuario=\Auth::user()->id;
         $objdate = new DateTime();
         $fechaactual= $objdate->format('Y-m-d');
         $hora= $objdate->format('H:i:s');

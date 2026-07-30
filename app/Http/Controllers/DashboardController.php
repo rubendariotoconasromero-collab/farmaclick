@@ -58,70 +58,49 @@ class DashboardController extends Controller
     }
 
     public function listarProductoMesDashboad(Request $request){
-        //$mesProducto = $request->mesProducto;
-        $anio = $request->anio;
-        //dd($mesProducto,$anio);
-        // $fecha1 = now()->toDateString();
-        // $fecha2 = now()->addDays(30)->toDateString();
-        //dd($fecha2);
-
-        //dd($mesProducto);
-        //$foto = $request->foto;
+        $fecha1 = now()->toDateString();
+        $fecha2 = now()->addDays(365)->toDateString();
 
         $tienda_articulo = Lote::join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
         ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-        ->join('categoria','articulo.id_categoria','=','categoria.id')
         ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
         ->join('unidad_medida','articulo.id_unidad','=','unidad_medida.id')
-        ->select('lote.id','tienda_articulo.id as id_articulo','tienda_articulo.id_tienda',
-        'articulo.nombre_comercial as articulo','articulo.nombre_generico',
-        'articulo.costo_compra','articulo.costo_unitario','articulo.costo_mayorista','articulo.precio_blister','articulo.precio_caja',
-        'articulo.costo_preferencial','articulo.id_categoria','categoria.nombre as categoria','lote.cantidad as stock','lote.fecha_vecimiento',
-        'articulo.descripcion','articulo.cod_proveedor','articulo.cantidad_blister','articulo.cantidad_caja','articulo.venta_presentacion',
-        'articulo.ubicacion','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion') 
+        ->select(
+            'lote.id',
+            'articulo.nombre_comercial as articulo',
+            'lote.fecha_vecimiento',
+            'proveedor.nombre as laboratorio',
+            'unidad_medida.nombre as presentacion'
+        )
         ->where('lote.cantidad', '!=', 0)
         ->where('lote.estado', '!=', 0)
-        //->whereBetween('lote.fecha_vecimiento', [$fecha1, $fecha2])
-        //->whereMonth('lote.fecha_vecimiento', $mesProducto)
-        //->whereYear('lote.fecha_vecimiento', $anio)
-
+        ->whereBetween('lote.fecha_vecimiento', [$fecha1, $fecha2])
         ->orderBy('lote.fecha_vecimiento', 'asc')
         ->get();
-        //->get();
 
     return $tienda_articulo;
     }
     public function listarProductoMesesDashboad(Request $request){
-        //$mesProducto = $request->mesProducto;
-        $anio = $request->anio;
-        //dd($mesProducto,$anio);
         $fecha1 = now()->toDateString();
         $fecha2 = now()->addDays(90)->toDateString();
-        //dd($fecha2);
-
-        //dd($mesProducto);
-        //$foto = $request->foto;
 
         $tienda_articulo = Lote::join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
         ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-        ->join('categoria','articulo.id_categoria','=','categoria.id')
         ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
         ->join('unidad_medida','articulo.id_unidad','=','unidad_medida.id')
-        ->select('lote.id','tienda_articulo.id as id_articulo','tienda_articulo.id_tienda',
-        'articulo.nombre_comercial as articulo','articulo.nombre_generico',
-        'articulo.costo_compra','articulo.costo_unitario','articulo.costo_mayorista','articulo.precio_blister','articulo.precio_caja',
-        'articulo.costo_preferencial','articulo.id_categoria','categoria.nombre as categoria','lote.cantidad as stock','lote.fecha_vecimiento',
-        'articulo.descripcion','articulo.cod_proveedor','articulo.cantidad_blister','articulo.cantidad_caja','articulo.venta_presentacion',
-        'articulo.ubicacion','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion') 
+        ->select(
+            'lote.id',
+            'articulo.nombre_comercial as articulo',
+            'lote.fecha_vecimiento',
+            'lote.cantidad as stock',
+            'proveedor.nombre as laboratorio',
+            'unidad_medida.nombre as presentacion'
+        )
         ->where('lote.cantidad', '!=', 0)
         ->where('lote.estado', '!=', 0)
         ->whereBetween('lote.fecha_vecimiento', [$fecha1, $fecha2])
-        //->whereMonth('lote.fecha_vecimiento', $mesProducto)
-        // ->whereYear('lote.fecha_vecimiento', $anio)
-
         ->orderBy('lote.fecha_vecimiento', 'asc')
         ->get();
-        //->get();
 
     return $tienda_articulo;
     }

@@ -476,6 +476,7 @@ Route::group(['middleware'=>['auth']],function(){
     Route::get('/arqueo_usuario', [ArqueoCajaController::class, 'indexArqueo']);
     Route::get('/arqueo2', [ArqueoCajaController::class, 'index2']);
     Route::get('/importacion/cantidad', [ArqueoCajaController::class, 'cantidadRegistros']);
+    Route::get('/arqueo/resumen', [ArqueoCajaController::class, 'resumenArqueo']);
     Route::post('/arqueo/guardar', [ArqueoCajaController::class, 'guardar']);
     Route::put('/arqueo/modificar', [ArqueoCajaController::class, 'modificar']);
     Route::post('/arqueo/actualizar_ventas', [ArqueoCajaController::class, 'actualizarVentasAlCerrarCaja']);
