@@ -1142,7 +1142,7 @@
                                     <tbody v-if="arrayDetalle.length">
                                         <tr v-for="detalle in arrayDetalle" :key="detalle.id">
                                             <td>
-                                                <button @click="eliminarDetalleDb(detalle.id,detalle.id_usuario)" type="button" class="btn btn-danger btn-sm"><i class="icon-trash text-white"></i></button>
+                                                <button @click="eliminarDetalleDb(detalle.id,detalle.id_usuario,$event)" type="button" class="btn btn-danger btn-sm" :disabled="eliminandoDetalle || detalleEliminandoIds.includes(detalle.id)"><i class="icon-trash text-white"></i></button>
                                             </td>
                                             <td v-text="detalle.articulo"></td>
                                             <td style="font-weight: bold" v-text="detalle.costo_venta"></td>
@@ -1421,6 +1421,8 @@
                 arrayCostoPago: [{id:1,nombre:'Unitario'},{id:2,nombre:'Mayorista'},{id:3,nombre:'Preferencial'}],
                 arrayForma: [],
                 arrayForma2: [],
+                eliminandoDetalle: false,
+                detalleEliminandoIds: [],
                 listado : 0,
                 tipoAccion : 0,
                 errorCompra : 0,
@@ -1667,8 +1669,11 @@
                 //     console.log(error)
                 // });
             },
-            eliminarDetalleDb(id,id_usuario){
+            async eliminarDetalleDb(id,id_usuario,event){
                 let me = this;
+                if(me.eliminandoDetalle || me.detalleEliminandoIds.includes(id)){
+                    return;
+                }
                 if(me.arrayDetalle.length == 1){
                     Swal.fire({
                             icon: 'error',
@@ -1677,73 +1682,83 @@
                         })
                 }else
                 {
+                    me.eliminandoDetalle = true;
+                    me.detalleEliminandoIds.push(id);
+                    if(event && event.currentTarget){
+                        event.currentTarget.disabled = true;
+                    }
 
-                    //me.arrayDetalle.splice(index,1);
-                    axios.put('/detalle/eliminar?id_detalle_venta='+id,{
-                         'id': id,
-                         'id_usuario': me.datos.id_usuario,
-                         'totalAux': me.datos.totalAux,
-                         'total': me.datos.total,
-                         'id_tipo_pago': me.datos.tipoPago,
-                         //'id_venta': me.datos.id_ventaM,
-                        // 'id_producto_compuesto': id_producto_compuesto,
-                        // 'monto': me.datos.monto,
-                    }).then(function(response){
-                        me.actualizarDetalleModificar()
-                        Swal.fire({
-                        position: 'top-end',
-                        icon: 'success',
-                        title: 'Producto eliminado...',
-                        showConfirmButton: false,
-                        timer: 500
+                    try{
+                        await axios.put('/detalle/eliminar?id_detalle_venta='+id,{
+                             'id': id,
+                             'id_usuario': me.datos.id_usuario,
+                             'totalAux': me.datos.totalAux,
+                             'total': me.datos.total,
+                             'id_tipo_pago': me.datos.tipoPago,
+                             //'id_venta': me.datos.id_ventaM,
+                            // 'id_producto_compuesto': id_producto_compuesto,
+                            // 'monto': me.datos.monto,
                         });
-
-                    })
-                    .catch(function(error){
+                        me.arrayDetalle = me.arrayDetalle.filter(detalle => detalle.id !== id);
+                        me.arrayDetalle2 = me.arrayDetalle2.filter(detalle => detalle.id !== id);
+                        await me.actualizarDetalleModificar();
+                        Swal.fire({
+                            position: 'top-end',
+                            icon: 'success',
+                            title: 'Producto eliminado...',
+                            showConfirmButton: false,
+                            timer: 500
+                        });
+                    } catch(error){
                         console.log(error);
-                    });
+                    } finally{
+                        me.eliminandoDetalle = false;
+                        me.detalleEliminandoIds = me.detalleEliminandoIds.filter(detalleId => detalleId !== id);
+                    }
                     //me.actualizarDetalleModificar(me.datos.id_ventaM)
                 }
 
             },
-            actualizarDetalleModificar()
+            async actualizarDetalleModificar()
             {
                 let me = this;
-                var url='/venta/permiso/detalle_tienda1?id=' + me.datos.id;
-                axios.get(url).then(function(response){
-                    me.arrayDetalle= response.data;
-                })
-                var url='/paquete/permiso/detalle/venta?id=' + me.datos.id;
-                axios.get(url).then(function(response){
-                    me.arrayDetalle2= response.data;
+                try{
+                    const detalleUrl='/venta/permiso/detalle_tienda1?id=' + me.datos.id;
+                    const paqueteUrl='/paquete/permiso/detalle/venta?id=' + me.datos.id;
+                    const tiendaUrl='/tienda?page=' + 1 + '&buscar=' + this.buscar + '&criterio=' + this.criterio;
+
+                    const [detalleResponse, paqueteResponse, tiendaResponse] = await Promise.all([
+                        axios.get(detalleUrl),
+                        axios.get(paqueteUrl),
+                        axios.get(tiendaUrl)
+                    ]);
+
+                    me.arrayDetalle= detalleResponse.data;
+                    me.arrayDetalle2= paqueteResponse.data;
                     if(me.arrayDetalle.length==0){
                         me.arrayDetalle = me.arrayDetalle2;
                     }else{
                         me.arrayDetalle=me.arrayDetalle.concat(me.arrayDetalle2);
                     }
-                })
-                .catch(function(error){
-                    console.log(error);
-                });
 
-                var url='/tienda?page=' + 1 + '&buscar=' + this.buscar + '&criterio=' + this.criterio;
-                axios.get(url).then(function(response){
-                    me.arrayEmpresa=response.data.data;
+                    me.arrayEmpresa=tiendaResponse.data.data;
                     me.empresa = me.arrayEmpresa.find(seg => (seg.id == me.arrayDetalle[0].id_tienda));
-                    me.datos.foto = me.empresa.foto;
-                    me.datos.empresa_nombre = me.empresa.nombre;
-                    me.datos.empresa_direccion = me.empresa.direccion;
-                    me.pagination={total:response.data.total,
-                        current_page:response.data.current_page,
-                        per_page: response.data.per_page,
-                        last_page: response.data.last_page,
-                        from: response.data.from,
-                        to: response.data.to
+                    if(me.empresa){
+                        me.datos.foto = me.empresa.foto;
+                        me.datos.empresa_nombre = me.empresa.nombre;
+                        me.datos.empresa_direccion = me.empresa.direccion;
                     }
-                })
-                .catch(function(error){
+                    me.pagination={total:tiendaResponse.data.total,
+                        current_page:tiendaResponse.data.current_page,
+                        per_page: tiendaResponse.data.per_page,
+                        last_page: tiendaResponse.data.last_page,
+                        from: tiendaResponse.data.from,
+                        to: tiendaResponse.data.to
+                    }
+                }
+                catch(error){
                     console.log(error)
-                });
+                }
             },
             modificarCantidad(){
                 let me = this;
