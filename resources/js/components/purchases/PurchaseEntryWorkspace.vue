@@ -18,13 +18,17 @@
             <div class="purchase-layout">
                 <app-data-panel title="Datos de la compra" subtitle="Información comercial y condición de pago." eyebrow="Paso 1">
                     <div class="purchase-form-grid">
-                        <label class="purchase-field purchase-field--wide">
-                            <span>Proveedor *</span>
-                            <select v-model="datos.id_proveedor">
-                                <option value="0" disabled>Seleccione un proveedor</option>
-                                <option v-for="provider in providers" :key="provider.id" :value="provider.id">{{ provider.nombre }}</option>
-                            </select>
-                        </label>
+                        <app-live-search
+                            class="purchase-field--wide"
+                            label="Proveedor"
+                            required
+                            :value="datos.id_proveedor"
+                            :items="providers"
+                            track-by="id"
+                            display-by="nombre"
+                            placeholder="Buscar proveedor…"
+                            @input="datos.id_proveedor = $event"
+                        />
                         <app-input v-model="datos.fecha" type="date" label="Fecha" />
                         <label class="purchase-field">
                             <span>Tipo de pago *</span>
@@ -52,7 +56,7 @@
                             label="Descripción"
                             placeholder="Observaciones opcionales de la compra"
                             multiline
-                            :rows="2"
+                            :rows="1"
                         />
                     </div>
                 </app-data-panel>
@@ -143,7 +147,7 @@
             <div class="modal-dialog modal-fullscreen" role="document">
                 <div class="modal-content purchase-modal">
                     <div class="modal-header">
-                        <div><small>Catálogo del proveedor</small><h5>Agregar productos</h5></div>
+                        <div><small>Laboratorio: {{ selectedProviderName }}</small><h5>Agregar productos</h5></div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                     </div>
                     <div class="modal-body">
@@ -154,10 +158,19 @@
                                 <option value="proveedor.nombre">Laboratorio</option>
                                 <option value="categoria.nombre">Categoría</option>
                             </select>
-                            <app-input :value="productSearch" placeholder="Buscar en el catálogo…" @input="$emit('update:productSearch', $event)" @keyup.enter="$emit('search-products')" />
+                            <app-input :value="productSearch" placeholder="Buscar en el catálogo…" @input="onProductSearchInput" @keyup.enter="$emit('search-products')" />
                             <app-button icon="icons/magnifying-glass.svg" @click="$emit('search-products')">Buscar</app-button>
                         </div>
-                        <app-table :columns="productColumns" :rows="products" :loading="productsLoading" min-width="850px" empty-title="Sin resultados" empty-message="Cambie el término o criterio de búsqueda.">
+                        <app-table
+                            class="purchase-product-table"
+                            :columns="productColumns"
+                            :rows="products"
+                            :loading="productsLoading"
+                            min-width="850px"
+                            fill-height
+                            empty-title="Sin resultados"
+                            empty-message="Cambie el término o criterio de búsqueda."
+                        >
                             <template #cell-costo_compra="{ value }">Bs {{ money(value) }}</template>
                             <template #cell-action="{ row }"><app-button variant="secondary" @click="$emit('select-product', row)">Agregar</app-button></template>
                         </app-table>
@@ -221,11 +234,18 @@ export default {
         mixedDeposit() {
             return Math.max(0, this.grandTotal - Number(this.datos.total_efectivo || 0));
         },
+        selectedProviderName() {
+            const provider = this.providers.find(item => String(item.id) === String(this.datos.id_proveedor));
+            return provider ? provider.nombre : 'Sin proveedor';
+        },
     },
     watch: {
         calculatedTotal: { immediate: true, handler(value) { this.syncTotals(value); } },
         'datos.descuento'() { this.syncTotals(this.calculatedTotal); },
         'datos.total_efectivo'() { this.datos.total_deposito = this.mixedDeposit; },
+    },
+    beforeDestroy() {
+        clearTimeout(this.productSearchTimer);
     },
     methods: {
         lineSubtotal(row) {
@@ -235,6 +255,11 @@ export default {
             this.datos.sub_total = Number(value || 0).toFixed(2);
             this.datos.total = this.grandTotal;
             this.datos.total_deposito = this.mixedDeposit;
+        },
+        onProductSearchInput(value) {
+            this.$emit('update:productSearch', value);
+            clearTimeout(this.productSearchTimer);
+            this.productSearchTimer = setTimeout(() => this.$emit('search-products'), 350);
         },
         money(value) {
             return Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -246,11 +271,12 @@ export default {
 <style scoped>
 .purchase-page { display: grid; gap: 1rem; padding: 1.15rem; background: #f4f8f6; }
 .purchase-page__content { display: contents; }
-.purchase-layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 1rem; align-items: stretch; }
-.purchase-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
-.purchase-field { display: flex; flex-direction: column; gap: .35rem; color: #315044; font-size: .73rem; font-weight: 800; }
-.purchase-field--wide, .purchase-field--full { grid-column: 1 / -1; }
-.purchase-field select, .purchase-search select { min-height: 40px; padding: .48rem .68rem; color: #17362b; background: #fff; border: 1px solid #bdd2c9; border-radius: 8px; outline: 0; }
+.purchase-layout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: .75rem; align-items: stretch; }
+.purchase-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem .7rem; }
+.purchase-field { display: flex; flex-direction: column; gap: .25rem; color: #315044; font-size: .7rem; font-weight: 800; }
+.purchase-field--wide { grid-column: span 2; }
+.purchase-field--full { grid-column: 1 / -1; }
+.purchase-field select, .purchase-search select { min-height: 36px; padding: .38rem .6rem; color: #17362b; background: #fff; border: 1px solid #bdd2c9; border-radius: 8px; outline: 0; }
 .purchase-field select:focus, .purchase-search select:focus { border-color: #0e93b5; box-shadow: 0 0 0 3px rgba(62, 198, 224, .18); }
 .purchase-summary { display: flex; flex-direction: column; gap: .35rem; padding: 1rem; color: #315044; background: linear-gradient(160deg, #effaf4, #fff); border: 1px solid #cfe0d8; border-top: 4px solid #3ec6e0; border-radius: 14px; box-shadow: 0 6px 18px rgba(23,54,43,.06); }
 .purchase-summary > span { margin-bottom: .35rem; color: #0e93b5; font-size: .67rem; font-weight: 900; text-transform: uppercase; letter-spacing: .07em; }
@@ -271,7 +297,10 @@ export default {
 .purchase-modal .modal-header { color: #fff; background: linear-gradient(110deg, #173f32, #1f8a4c); border-bottom: 3px solid #3ec6e0; }
 .purchase-modal .modal-header h5 { margin: .1rem 0 0; font-weight: 800; }
 .purchase-modal .modal-header small { color: #71d5e8; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
-.purchase-search { display: grid; grid-template-columns: 220px minmax(260px, 1fr) auto; gap: .55rem; margin-bottom: 1rem; }
-@media (max-width: 1000px) { .purchase-layout { grid-template-columns: 1fr; } .purchase-detail-grid { grid-template-columns: repeat(2, 1fr); } }
+.purchase-modal .modal-body { display: flex; flex-direction: column; min-height: 0; }
+.purchase-search { flex: 0 0 auto; display: grid; grid-template-columns: 220px minmax(260px, 1fr) auto; gap: .55rem; margin-bottom: 1rem; }
+.purchase-product-table { flex: 1; min-height: 0; margin-bottom: .75rem; }
+.purchase-modal .modal-body > *:last-child { flex: 0 0 auto; }
+@media (max-width: 1000px) { .purchase-layout { grid-template-columns: 1fr; } .purchase-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-detail-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 650px) { .purchase-page { padding: .75rem; } .purchase-form-grid, .purchase-detail-grid, .purchase-search { grid-template-columns: 1fr; } .purchase-field--wide, .purchase-field--full { grid-column: auto; } .purchase-footer { flex-direction: column-reverse; } }
 </style>

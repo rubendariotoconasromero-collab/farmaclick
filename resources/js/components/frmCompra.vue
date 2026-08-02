@@ -751,6 +751,10 @@
                     this.is_busy = 1;
                     let me = this;
 
+                    me.arrayDetalle.forEach(det => {
+                        det.sub_total = (det.costo_compra * det.cantidad) - det.descuento;
+                    });
+
                     axios.post('/compra/guardar', {
                         'fecha': me.datos.fecha,
                         'fecha_inicio': me.datosPago.fecha_inicio,

@@ -29,6 +29,7 @@ Vue.component('app-data-panel', require('./components/ui/AppDataPanel.vue').defa
 Vue.component('app-table', require('./components/ui/AppTable.vue').default);
 Vue.component('app-input', require('./components/ui/AppInput.vue').default);
 Vue.component('app-page-skeleton', require('./components/ui/AppPageSkeleton.vue').default);
+Vue.component('app-live-search', require('./components/ui/AppLiveSearch.vue').default);
 Vue.component('purchase-pagination', require('./components/purchases/PurchasePagination.vue').default);
 Vue.component('purchase-entry-workspace', require('./components/purchases/PurchaseEntryWorkspace.vue').default);
 Vue.component('purchase-history-workspace', require('./components/purchases/PurchaseHistoryWorkspace.vue').default);

@@ -1,5 +1,5 @@
 <template>
-    <div class="app-table" :aria-busy="loading ? 'true' : 'false'">
+    <div class="app-table" :class="{ 'app-table--fill': fillHeight }" :aria-busy="loading ? 'true' : 'false'">
         <div v-if="loading" class="app-table__loading" role="status">
             <div
                 v-for="row in 5"
@@ -11,7 +11,7 @@
             </div>
         </div>
 
-        <div v-else class="app-table__scroll">
+        <div v-else class="app-table__scroll" :style="fillHeight ? null : { maxHeight }">
             <table class="table table-hover" :style="{ minWidth }">
                 <caption v-if="caption" class="visually-hidden">{{ caption }}</caption>
                 <thead>
@@ -84,6 +84,14 @@ export default {
             type: [String, Function],
             default: '',
         },
+        maxHeight: {
+            type: String,
+            default: '330px',
+        },
+        fillHeight: {
+            type: Boolean,
+            default: false,
+        },
     },
     methods: {
         resolveRowClass(row, index) {
@@ -103,9 +111,19 @@ export default {
     background: #fff;
 }
 
+.app-table--fill {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
 .app-table__scroll {
-    max-height: 330px;
     overflow: auto;
+}
+
+.app-table--fill .app-table__scroll {
+    flex: 1;
+    min-height: 0;
 }
 
 .app-table .table {
