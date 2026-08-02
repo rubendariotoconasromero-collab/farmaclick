@@ -36,7 +36,7 @@
             @cancel="anularCompra($event.id)"
             @back="volverCompraListado"
             @save-date="modificarFecha"
-            @save-edit="modificarCantidad"
+            @save-edit="guardarModificacionCompra"
             @payment-type-change="tipoPagoChange"
             @payment-form-change="formaPagoChange"
             @search-products="listarArticulo(1, buscarP, criterioP)"
@@ -650,7 +650,7 @@
 </template>
 
 <script>
-    import Swal from 'sweetalert2';
+    import Swal, { dangerConfirm } from '../utils/appSwal';
     import moment from 'moment';
     export default {
         data(){
@@ -924,6 +924,31 @@
             // },
             seleccionarTiendaArticulo(data=[]){
                 let me = this;
+                const existente = me.arrayDetalle.find(item => Number(item.id_articulo) === Number(data['id_articulo']));
+
+                if (existente) {
+                    if (Number(existente.eliminado) === 1) {
+                        existente.eliminado = 0;
+                        existente.articulo_nuevo = 0;
+                        existente.cantidad = 1;
+                        existente.costo_compra = Number(data['costo_compra'] || existente.costo_compra);
+                        existente.descuento = 0;
+                        Swal.fire({
+                            position: 'top-end',
+                            icon: 'success',
+                            title: 'Producto reincorporado',
+                            showConfirmButton: false,
+                            timer: 700
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Producto duplicado',
+                            text: 'El producto ya forma parte de esta compra.'
+                        });
+                    }
+                    return;
+                }
                 // if(me.encuentra(data['id_articulo'])){
                 //     if(me.encuentraEliminado(data['id_articulo'])){
                 //         me.arrayDetalle.forEach(item => {
@@ -1135,6 +1160,8 @@
                     me.datos.total_deposito_aux=data['total_deposito'];
                     me.datos.id_tipo_pago=data['id_tipo_pago'];
                     me.datos.id_tipo_pago_anterior=data['id_tipo_pago'];
+                    me.datosPago.fecha_final = data['fecha_pago_final'] || data['fecha'];
+                    me.datosPago.saldo = Number(data['saldo_pago'] || 0);
 
                     const res1 = await axios.get('/compra/permiso/detalle?id=' + data['id'])
                     me.arrayDetalle=res1.data;
@@ -1289,38 +1316,33 @@
                 this.selectFormaP();
             },
             anularCompra(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
-                    title: 'Esta seguro de Anular esta Compra??',
-                    text: "No Puede revertir esta decision!",
+                dangerConfirm.fire({
+                    title: '¿Anular esta compra?',
+                    text: "Se retirarán del inventario las unidades disponibles. Esta acción no se puede revertir.",
                     icon: 'warning',
                     showCancelButton: true,
-                    confirmButtonText: 'Si, Habilitar!',
+                    confirmButtonText: 'Sí, anular',
                     cancelButtonText: 'No, cancelar!',
-                    reverseButtons: true
                 }).then((result) => {
                 if (result.isConfirmed) {
                     let me = this;
                     axios.put('/compra/anular',{'id': id}).then(function (response) {
                         me.listarCompra(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Anulado!',
                         'Este compra se ha Anulado.',
                         'success'
                         )
                         me.inventario = 1;
                     }).catch(function (error) {
-                        console.log(error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'No se pudo anular',
+                            text: me.mensajeError(error, 'Revise el stock disponible y los pagos asociados a la compra.')
+                        });
                     });
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Esta compra no ha tenido cambios :)',
                     'error'
@@ -1351,11 +1373,118 @@
                     me.limpiarDatosCompra();
                     me.listarCompra(1,'', 'users.name');
                 }).catch(function(error){
-                    console.log(error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'No se pudo modificar la fecha',
+                        text: me.mensajeError(error, 'Verifique la fecha e intente nuevamente.')
+                    });
                 }).finally(function(){
                     me.isBusy = false;
                 });
 
+            },
+            mensajeError(error, fallback) {
+                const response = error && error.response && error.response.data;
+                if (response && response.errors) {
+                    const messages = Object.keys(response.errors).reduce((all, key) => all.concat(response.errors[key]), []);
+                    if (messages.length) return messages[0];
+                }
+                return (response && (response.message || response.error)) || fallback;
+            },
+            guardarModificacionCompra() {
+                const activos = this.arrayDetalle.filter(item => Number(item.eliminado || 0) === 0);
+
+                if (!activos.length) {
+                    Swal.fire({ icon: 'error', title: 'La compra debe conservar al menos un producto' });
+                    return;
+                }
+
+                const lineaInvalida = activos.find(item => {
+                    const cantidad = Number(item.cantidad);
+                    const costo = Number(item.costo_compra);
+                    const descuento = Number(item.descuento || 0);
+                    return cantidad <= 0 || costo <= 0 || descuento < 0 || descuento > cantidad * costo;
+                });
+                if (lineaInvalida) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Revise los productos',
+                        text: 'Cantidad y costo deben ser mayores a cero, y el descuento no puede superar el importe de la línea.'
+                    });
+                    return;
+                }
+
+                const retiroSinStock = activos.find(item => {
+                    if (Number(item.articulo_nuevo || 0) === 1) return false;
+                    return Number(item.cantidad) < Number(item.cantidad_auxiliar || 0);
+                });
+                if (retiroSinStock) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Stock insuficiente',
+                        text: `No quedan suficientes unidades disponibles de ${retiroSinStock.articulo}.`
+                    });
+                    return;
+                }
+
+                const subtotal = activos.reduce((total, item) => {
+                    return total + Number(item.costo_compra) * Number(item.cantidad) - Number(item.descuento || 0);
+                }, 0);
+                if (Number(this.datos.descuento || 0) > subtotal) {
+                    Swal.fire({ icon: 'error', title: 'El descuento general supera el subtotal' });
+                    return;
+                }
+
+                if (Number(this.datos.id_tipo_pago) === 2 && !this.datosPago.fecha_final) {
+                    Swal.fire({ icon: 'error', title: 'Indique el vencimiento del crédito' });
+                    return;
+                }
+
+                const total = subtotal - Number(this.datos.descuento || 0);
+                if (Number(this.datos.id_forma_pago) === 6) {
+                    const efectivo = Number(this.datos.total_efectivo || 0);
+                    if (efectivo < 0 || efectivo > total) {
+                        Swal.fire({ icon: 'error', title: 'El efectivo del pago mixto no es válido' });
+                        return;
+                    }
+                }
+
+                if (this.isBusy) return;
+                this.isBusy = true;
+
+                axios.put('/compra/modificarCantidad', {
+                    id: this.datos.id,
+                    fecha: this.datos.fecha,
+                    descripcion: this.datos.descripcion,
+                    id_proveedor: this.datos.id_proveedor,
+                    id_tipo_pago: this.datos.id_tipo_pago,
+                    id_forma_pago: this.datos.id_forma_pago,
+                    descuento: Number(this.datos.descuento || 0),
+                    total_efectivo: Number(this.datos.total_efectivo || 0),
+                    datosPago: this.datosPago,
+                    detalle: this.arrayDetalle,
+                }).then(response => {
+                    this.arrayDetalle = [];
+                    this.arrayArticulo = [];
+                    this.listado = 0;
+                    return this.listarCompra(1, this.buscar, this.criterio).then(() => {
+                        Swal.fire({
+                            position: 'top-end',
+                            icon: 'success',
+                            title: response.data.message || 'Compra modificada correctamente',
+                            showConfirmButton: false,
+                            timer: 1200
+                        });
+                    });
+                }).catch(error => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'No se pudo modificar la compra',
+                        text: this.mensajeError(error, 'Revise los datos, el stock y los pagos asociados.')
+                    });
+                }).finally(() => {
+                    this.isBusy = false;
+                });
             },
             modificarCantidad(){
                 let me = this;

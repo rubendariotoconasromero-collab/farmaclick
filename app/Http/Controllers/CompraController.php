@@ -14,6 +14,7 @@ use App\Models\Control;
 use App\Models\ArqueoCaja;
 use App\Models\PagoCompra;
 use App\Models\CXPagar;
+use Illuminate\Validation\ValidationException;
 use DB;
 use DateTime;
 
@@ -28,8 +29,9 @@ class CompraController extends BitacoraController
             ->join('proveedor','compra.id_proveedor','=','proveedor.id')
             ->join('forma_pago','compra.id_forma_pago','=','forma_pago.id')
             ->join('tipo_pago','compra.id_tipo_pago','=','tipo_pago.id')
+            ->leftJoin('pago_compra','pago_compra.id_compra','=','compra.id')
             ->select('compra.id','compra.fecha','compra.descripcion','compra.sub_total','compra.descuento',
-            'compra.total','compra.estado','users.name','proveedor.nombre as proveedor','forma_pago.nombre as formaP','tipo_pago.nombre as tipo','compra.total_efectivo','compra.total_deposito','compra.id_forma_pago','compra.id_proveedor','compra.id_tipo_pago')
+            'compra.total','compra.estado','users.name','proveedor.nombre as proveedor','forma_pago.nombre as formaP','tipo_pago.nombre as tipo','compra.total_efectivo','compra.total_deposito','compra.id_forma_pago','compra.id_proveedor','compra.id_tipo_pago','pago_compra.fecha_final as fecha_pago_final','pago_compra.saldo as saldo_pago')
             ->where('compra.estado','!=','Anulado')
             ->orderBy('compra.id','desc')->paginate(15);
         }
@@ -38,8 +40,9 @@ class CompraController extends BitacoraController
             ->join('proveedor','compra.id_proveedor','=','proveedor.id')
             ->join('forma_pago','compra.id_forma_pago','=','forma_pago.id')
             ->join('tipo_pago','compra.id_tipo_pago','=','tipo_pago.id')
+            ->leftJoin('pago_compra','pago_compra.id_compra','=','compra.id')
             ->select('compra.id','compra.fecha','compra.descripcion','compra.sub_total','compra.descuento',
-            'compra.total','compra.estado','users.name','proveedor.nombre as proveedor','forma_pago.nombre as formaP','tipo_pago.nombre as tipo','compra.total_efectivo','compra.total_deposito','compra.id_forma_pago','compra.id_proveedor','compra.id_tipo_pago')
+            'compra.total','compra.estado','users.name','proveedor.nombre as proveedor','forma_pago.nombre as formaP','tipo_pago.nombre as tipo','compra.total_efectivo','compra.total_deposito','compra.id_forma_pago','compra.id_proveedor','compra.id_tipo_pago','pago_compra.fecha_final as fecha_pago_final','pago_compra.saldo as saldo_pago')
             ->where($criterio, 'like', '%'.$buscar.'%')
             ->where('compra.estado','!=','Anulado')
             ->orderBy('compra.id','desc')->paginate(15);
@@ -425,7 +428,149 @@ class CompraController extends BitacoraController
 
     }*/
 
+    private function registrarAjusteCompra($compra, $detalle, $lote, $cantidad, $stockLoteAnterior, $stockLoteActual, $stockGeneralAnterior, $stockGeneralActual, $motivo, $observacion, $idUsuario)
+    {
+        $ajuste = new Ajuste();
+        $ajuste->stock = abs((int) $cantidad);
+        $ajuste->costo_compra = (float) $detalle->costo_compra;
+        $ajuste->costo_venta = 0;
+        $ajuste->costo_unitario = 0;
+        $ajuste->costo_mayorista = 0;
+        $ajuste->costo_preferencial = 0;
+        $ajuste->stock_anterior = $stockLoteAnterior;
+        $ajuste->stock_actual = $stockLoteActual;
+        $ajuste->stock_general_anterior = $stockGeneralAnterior;
+        $ajuste->stock_general = $stockGeneralActual;
+        $ajuste->observacion = mb_substr($observacion, 0, 100);
+        $ajuste->id_lote = $lote->id;
+        $ajuste->fecha = now()->format('Y-m-d');
+        $ajuste->id_usuario = $idUsuario;
+        $ajuste->id_venta = 0;
+        $ajuste->id_compra = $compra->id;
+        $ajuste->id_motivo_ajuste = $motivo;
+        $ajuste->id_transaccion = $compra->id;
+        $ajuste->hora = now()->format('H:i:s');
+        $ajuste->descuento = (float) ($detalle->descuento ?: 0);
+        $ajuste->save();
+    }
+
     public function anular(Request $request)
+    {
+        $request->validate(['id' => 'required|integer|exists:compra,id']);
+
+        try {
+            return DB::transaction(function () use ($request) {
+                $idUsuario = \Auth::id();
+                $compra = Compra::where('id', $request->id)->lockForUpdate()->firstOrFail();
+
+                if ($compra->estado === 'Anulado') {
+                    throw ValidationException::withMessages(['id' => ['La compra ya se encuentra anulada.']]);
+                }
+
+                if ($compra->estado !== 'Registrado') {
+                    throw ValidationException::withMessages(['id' => ['Solo se pueden anular compras con estado Registrado.']]);
+                }
+
+                $pago = PagoCompra::where('id_compra', $compra->id)->lockForUpdate()->first();
+                $movimientosCredito = $pago
+                    ? CXPagar::where('id_pago', $pago->id)->orderBy('id')->lockForUpdate()->get()
+                    : collect();
+                $totalAmortizado = (float) $movimientosCredito->sum('amortizacion');
+
+                if ($totalAmortizado > 0) {
+                    throw ValidationException::withMessages([
+                        'id' => ['La compra tiene abonos registrados. Debe revertirlos contablemente antes de anularla.'],
+                    ]);
+                }
+
+                $detalles = DetalleCompra::where('id_compra', $compra->id)
+                    ->where(function ($query) {
+                        $query->where('eliminado', 0)->orWhereNull('eliminado');
+                    })
+                    ->where('cantidad', '>', 0)
+                    ->orderBy('id_lote')
+                    ->lockForUpdate()
+                    ->get();
+
+                $lotes = Lote::whereIn('id', $detalles->pluck('id_lote')->unique()->values())
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                foreach ($detalles as $detalle) {
+                    $lote = $lotes->get($detalle->id_lote);
+
+                    if (!$lote || (float) $lote->cantidad < (float) $detalle->cantidad) {
+                        throw ValidationException::withMessages([
+                            'id' => [sprintf(
+                                'No se puede anular: el lote %s dispone de %s unidades y la compra ingresó %s.',
+                                $lote ? ($lote->lote ?: 'S/L') : $detalle->id_lote,
+                                $lote ? $lote->cantidad : 0,
+                                $detalle->cantidad
+                            )],
+                        ]);
+                    }
+                }
+
+                foreach ($detalles as $detalle) {
+                    $lote = $lotes->get($detalle->id_lote);
+                    $stockLoteAnterior = (float) $lote->cantidad;
+                    $tiendaArticulo = DB::table('tienda_articulo')
+                        ->where('id', $detalle->id_producto)
+                        ->lockForUpdate()
+                        ->first();
+                    $stockGeneralAnterior = $tiendaArticulo ? (float) $tiendaArticulo->stock : 0;
+
+                    $lote->cantidad = $stockLoteAnterior - (float) $detalle->cantidad;
+                    $lote->estado = $lote->cantidad > 0 ? 1 : 0;
+                    $lote->save();
+
+                    DB::statement('CALL stock(?)', [$detalle->id_producto]);
+                    $tiendaArticuloActual = DB::table('tienda_articulo')->where('id', $detalle->id_producto)->first();
+                    $stockGeneralActual = $tiendaArticuloActual ? (float) $tiendaArticuloActual->stock : 0;
+
+                    $this->registrarAjusteCompra(
+                        $compra,
+                        $detalle,
+                        $lote,
+                        $detalle->cantidad,
+                        $stockLoteAnterior,
+                        (float) $lote->cantidad,
+                        $stockGeneralAnterior,
+                        $stockGeneralActual,
+                        9,
+                        'Anulación de compra Nro. ' . $compra->id,
+                        $idUsuario
+                    );
+                }
+
+                $compra->estado = 'Anulado';
+                $compra->save();
+
+                if ($pago) {
+                    $pago->estado = 0;
+                    $pago->saldo = 0;
+                    $pago->save();
+                }
+
+                $this->guardarBitacora([
+                    'tabla' => 'compra',
+                    'codigo_tabla' => $compra->id,
+                    'transaccion' => 'anular',
+                ]);
+
+                return response()->json(['message' => 'Compra anulada y existencias recalculadas correctamente.']);
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['message' => 'No se pudo anular la compra.'], 500);
+        }
+    }
+
+    private function anularLegacy(Request $request)
     {
         try {
             DB::beginTransaction();
@@ -625,11 +770,38 @@ class CompraController extends BitacoraController
         return $compra;
     }
     public function modificar(Request $request){
-       // dd($request->id);
-        $compra= Compra::findOrFail($request->id);
-        $compra->fecha=$request->fecha;
-        $compra->save();
+        $datos = $request->validate([
+            'id' => 'required|integer|exists:compra,id',
+            'fecha' => 'required|date',
+        ]);
 
+        return DB::transaction(function () use ($datos) {
+            $compra = Compra::where('id', $datos['id'])->lockForUpdate()->firstOrFail();
+
+            if ($compra->estado === 'Anulado') {
+                throw ValidationException::withMessages(['id' => ['No se puede modificar una compra anulada.']]);
+            }
+
+            $compra->fecha = $datos['fecha'];
+            $compra->save();
+
+            PagoCompra::where('id_compra', $compra->id)->update(['fecha' => $datos['fecha']]);
+
+            $pago = PagoCompra::where('id_compra', $compra->id)->first();
+            if ($pago) {
+                CXPagar::where('id_pago', $pago->id)
+                    ->where('amortizacion', 0)
+                    ->update(['fecha' => $datos['fecha']]);
+            }
+
+            $this->guardarBitacora([
+                'tabla' => 'compra',
+                'codigo_tabla' => $compra->id,
+                'transaccion' => 'modificar fecha',
+            ]);
+
+            return response()->json(['message' => 'Fecha de compra actualizada correctamente.']);
+        });
     }
     // public function modificarCantidad(Request $request){
     //     try{
@@ -1212,7 +1384,376 @@ class CompraController extends BitacoraController
     //         DB::rollBack();
     //     }
     // }
-    public function modificarCantidad(Request $request){
+    private function sincronizarPagoCompra($compra, Request $request, $total)
+    {
+        $tipoAnterior = (int) $compra->id_tipo_pago;
+        $tipoNuevo = (int) $request->id_tipo_pago;
+        $formaNueva = $tipoNuevo === 2 ? 1 : (int) $request->id_forma_pago;
+        $pago = PagoCompra::where('id_compra', $compra->id)->lockForUpdate()->first();
+
+        if (!$pago) {
+            $pago = new PagoCompra();
+            $pago->id = $compra->id;
+            $pago->id_compra = $compra->id;
+        }
+
+        $movimientos = $pago->exists
+            ? CXPagar::where('id_pago', $pago->id)->orderBy('id')->lockForUpdate()->get()
+            : collect();
+        $totalAmortizado = (float) $movimientos->sum('amortizacion');
+
+        if ($tipoAnterior === 2 && $tipoNuevo !== 2 && $totalAmortizado > 0) {
+            throw ValidationException::withMessages([
+                'id_tipo_pago' => ['No puede cambiar a contado porque la compra tiene abonos registrados.'],
+            ]);
+        }
+
+        if ($tipoNuevo === 2 && $total + 0.001 < $totalAmortizado) {
+            throw ValidationException::withMessages([
+                'total' => ['El total actualizado no puede ser menor al importe ya amortizado.'],
+            ]);
+        }
+
+        $pago->fecha = $request->fecha;
+        $pago->fecha_final = $tipoNuevo === 2
+            ? data_get($request->datosPago, 'fecha_final')
+            : $request->fecha;
+        $pago->monto = $total;
+        $pago->id_tipo_pago = $tipoNuevo;
+        $pago->estado = 1;
+
+        if ($tipoNuevo === 2) {
+            if (!$pago->fecha_final) {
+                throw ValidationException::withMessages([
+                    'datosPago.fecha_final' => ['Debe indicar la fecha de vencimiento del crédito.'],
+                ]);
+            }
+
+            $pago->saldo = round($total - $totalAmortizado, 2);
+            $pago->save();
+
+            if ($movimientos->isEmpty()) {
+                $movimiento = new CXPagar();
+                $movimiento->id_pago = $pago->id;
+                $movimiento->fecha = $request->fecha;
+                $movimiento->monto_total = $total;
+                $movimiento->amortizacion = 0;
+                $movimiento->saldo = $total;
+                $movimiento->descripcion = '';
+                $movimiento->id_forma_pago = 0;
+                $movimiento->id_usuario = \Auth::id();
+                $movimiento->save();
+            } else {
+                $acumulado = 0;
+                foreach ($movimientos as $movimiento) {
+                    $acumulado += (float) $movimiento->amortizacion;
+                    $movimiento->monto_total = $total;
+                    $movimiento->saldo = max(0, round($total - $acumulado, 2));
+                    if ((float) $movimiento->amortizacion === 0.0) {
+                        $movimiento->fecha = $request->fecha;
+                    }
+                    $movimiento->save();
+                }
+            }
+
+            return [
+                'id_forma_pago' => 1,
+                'total_efectivo' => 0,
+                'total_deposito' => 0,
+                'estado' => $pago->saldo <= 0 ? 'Cancelado' : 'Registrado',
+            ];
+        }
+
+        if (!in_array($formaNueva, [2, 3, 4, 5, 6], true)) {
+            throw ValidationException::withMessages([
+                'id_forma_pago' => ['Seleccione una forma de pago válida.'],
+            ]);
+        }
+
+        if ($totalAmortizado <= 0) {
+            CXPagar::where('id_pago', $pago->id)->delete();
+        }
+
+        $pago->saldo = 0;
+        $pago->save();
+
+        if ($formaNueva === 2) {
+            $efectivo = $total;
+            $deposito = 0;
+        } elseif (in_array($formaNueva, [3, 4, 5], true)) {
+            $efectivo = 0;
+            $deposito = $total;
+        } else {
+            $efectivo = round((float) $request->total_efectivo, 2);
+            if ($efectivo < 0 || $efectivo > $total) {
+                throw ValidationException::withMessages([
+                    'total_efectivo' => ['El efectivo del pago mixto debe estar entre cero y el total.'],
+                ]);
+            }
+            $deposito = round($total - $efectivo, 2);
+        }
+
+        return [
+            'id_forma_pago' => $formaNueva,
+            'total_efectivo' => $efectivo,
+            'total_deposito' => $deposito,
+            'estado' => 'Registrado',
+        ];
+    }
+
+    public function modificarCantidad(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:compra,id',
+            'fecha' => 'required|date',
+            'descripcion' => 'nullable|string|max:100',
+            'id_proveedor' => 'required|integer|exists:proveedor,id',
+            'id_tipo_pago' => 'required|integer|in:1,2',
+            'id_forma_pago' => 'required|integer|exists:forma_pago,id',
+            'descuento' => 'required|numeric|min:0',
+            'total_efectivo' => 'nullable|numeric|min:0',
+            'datosPago.fecha_final' => 'nullable|date|after_or_equal:fecha',
+            'detalle' => 'required|array|min:1',
+            'detalle.*.id_producto' => 'nullable|integer',
+            'detalle.*.id_tienda_articulo' => 'nullable|integer',
+            'detalle.*.cantidad' => 'required|integer|min:0',
+            'detalle.*.costo_compra' => 'required|numeric|min:0.01',
+            'detalle.*.descuento' => 'nullable|numeric|min:0',
+            'detalle.*.fecha_vecimiento' => 'required|date',
+            'detalle.*.lote' => 'nullable|string|max:500',
+            'detalle.*.eliminado' => 'nullable|boolean',
+            'detalle.*.articulo_nuevo' => 'nullable|boolean',
+        ]);
+
+        try {
+            return DB::transaction(function () use ($request) {
+                $idUsuario = \Auth::id();
+                $compra = Compra::where('id', $request->id)->lockForUpdate()->firstOrFail();
+
+                if ($compra->estado !== 'Registrado') {
+                    throw ValidationException::withMessages([
+                        'id' => ['Solo se pueden modificar compras con estado Registrado.'],
+                    ]);
+                }
+
+                if ((int) $request->id_proveedor !== (int) $compra->id_proveedor) {
+                    throw ValidationException::withMessages([
+                        'id_proveedor' => ['No se puede cambiar el proveedor de una compra registrada.'],
+                    ]);
+                }
+
+                $detallesActuales = DetalleCompra::where('id_compra', $compra->id)
+                    ->orderBy('id_producto')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id_producto');
+                $vistos = [];
+                $subtotal = 0;
+                $cantidadActivos = 0;
+
+                foreach ($request->detalle as $indice => $linea) {
+                    $esNuevo = (int) data_get($linea, 'articulo_nuevo', 0) === 1;
+                    $idProducto = (int) ($esNuevo
+                        ? data_get($linea, 'id_tienda_articulo')
+                        : data_get($linea, 'id_producto'));
+
+                    if ($idProducto <= 0 || !DB::table('tienda_articulo')->where('id', $idProducto)->exists()) {
+                        throw ValidationException::withMessages([
+                            "detalle.$indice.id_producto" => ['El producto seleccionado no es válido.'],
+                        ]);
+                    }
+
+                    if (isset($vistos[$idProducto])) {
+                        throw ValidationException::withMessages([
+                            "detalle.$indice.id_producto" => ['El producto está repetido en la compra.'],
+                        ]);
+                    }
+                    $vistos[$idProducto] = true;
+
+                    $detalleActual = $detallesActuales->get($idProducto);
+                    $eliminado = (int) data_get($linea, 'eliminado', 0) === 1;
+                    $cantidadNueva = $eliminado ? 0 : (int) data_get($linea, 'cantidad');
+                    $costo = round((float) data_get($linea, 'costo_compra'), 2);
+                    $descuentoLinea = $eliminado ? 0 : round((float) data_get($linea, 'descuento', 0), 2);
+
+                    if (!$eliminado && $cantidadNueva < 1) {
+                        throw ValidationException::withMessages([
+                            "detalle.$indice.cantidad" => ['La cantidad debe ser mayor a cero.'],
+                        ]);
+                    }
+
+                    $bruto = round($cantidadNueva * $costo, 2);
+                    if ($descuentoLinea > $bruto) {
+                        throw ValidationException::withMessages([
+                            "detalle.$indice.descuento" => ['El descuento no puede superar el importe del producto.'],
+                        ]);
+                    }
+                    $subtotalLinea = round($bruto - $descuentoLinea, 2);
+
+                    if ($detalleActual) {
+                        $lote = Lote::where('id', $detalleActual->id_lote)->lockForUpdate()->firstOrFail();
+                        $cantidadAnterior = (int) $detalleActual->eliminado === 1 ? 0 : (int) $detalleActual->cantidad;
+                    } else {
+                        if ($eliminado) {
+                            continue;
+                        }
+
+                        $lote = Lote::where('id_producto', $idProducto)
+                            ->where('lote', data_get($linea, 'lote'))
+                            ->lockForUpdate()
+                            ->first();
+                        $cantidadAnterior = 0;
+
+                        if (!$lote) {
+                            $lote = new Lote();
+                            $lote->id_producto = $idProducto;
+                            $lote->cantidad = 0;
+                        }
+                    }
+
+                    $diferencia = $cantidadNueva - $cantidadAnterior;
+                    $stockLoteAnterior = (float) $lote->cantidad;
+
+                    if ($diferencia < 0 && $stockLoteAnterior < abs($diferencia)) {
+                        throw ValidationException::withMessages([
+                            "detalle.$indice.cantidad" => [sprintf(
+                                'No puede retirar %s unidades; el lote solo dispone de %s.',
+                                abs($diferencia),
+                                $stockLoteAnterior
+                            )],
+                        ]);
+                    }
+
+                    $tiendaArticulo = DB::table('tienda_articulo')->where('id', $idProducto)->lockForUpdate()->first();
+                    $stockGeneralAnterior = $tiendaArticulo ? (float) $tiendaArticulo->stock : 0;
+                    $lote->cantidad = $stockLoteAnterior + $diferencia;
+                    $lote->fecha_vecimiento = data_get($linea, 'fecha_vecimiento');
+                    $lote->lote = data_get($linea, 'lote');
+                    $lote->estado = $lote->cantidad > 0 ? 1 : 0;
+                    $lote->save();
+
+                    if ($detalleActual) {
+                        DB::table('detalle_compra')
+                            ->where('id_compra', $compra->id)
+                            ->where('id_producto', $idProducto)
+                            ->update([
+                                'id_lote' => $lote->id,
+                                'cantidad' => $cantidadNueva,
+                                'costo_compra' => $costo,
+                                'descuento' => $descuentoLinea,
+                                'sub_total' => $subtotalLinea,
+                                'eliminado' => $eliminado ? 1 : 0,
+                            ]);
+                    } else {
+                        DB::table('detalle_compra')->insert([
+                            'id_compra' => $compra->id,
+                            'id_producto' => $idProducto,
+                            'id_lote' => $lote->id,
+                            'cantidad' => $cantidadNueva,
+                            'costo_compra' => $costo,
+                            'descuento' => $descuentoLinea,
+                            'sub_total' => $subtotalLinea,
+                            'eliminado' => 0,
+                        ]);
+                    }
+
+                    $articuloTienda = TiendaArticulo::findOrFail($idProducto);
+                    Articulo::where('id', $articuloTienda->id_articulo)->update(['costo_compra' => $costo]);
+
+                    DB::statement('CALL stock(?)', [$idProducto]);
+                    $tiendaArticuloActual = DB::table('tienda_articulo')->where('id', $idProducto)->first();
+                    $stockGeneralActual = $tiendaArticuloActual ? (float) $tiendaArticuloActual->stock : 0;
+
+                    if ($diferencia !== 0) {
+                        $detalleAjuste = (object) [
+                            'costo_compra' => $costo,
+                            'descuento' => $descuentoLinea,
+                        ];
+                        $this->registrarAjusteCompra(
+                            $compra,
+                            $detalleAjuste,
+                            $lote,
+                            $diferencia,
+                            $stockLoteAnterior,
+                            (float) $lote->cantidad,
+                            $stockGeneralAnterior,
+                            $stockGeneralActual,
+                            8,
+                            'Modificación de compra Nro. ' . $compra->id,
+                            $idUsuario
+                        );
+                    }
+
+                    if (!$eliminado) {
+                        $cantidadActivos++;
+                        $subtotal += $subtotalLinea;
+                    }
+                }
+
+                $faltantes = $detallesActuales->keys()->filter(function ($idProducto) use ($vistos) {
+                    return !isset($vistos[(int) $idProducto]);
+                });
+                if ($faltantes->isNotEmpty()) {
+                    throw ValidationException::withMessages([
+                        'detalle' => ['La solicitud no contiene todos los productos originales de la compra.'],
+                    ]);
+                }
+
+                if ($cantidadActivos === 0) {
+                    throw ValidationException::withMessages([
+                        'detalle' => ['La compra debe conservar al menos un producto activo.'],
+                    ]);
+                }
+
+                $subtotal = round($subtotal, 2);
+                $descuento = round((float) $request->descuento, 2);
+                if ($descuento > $subtotal) {
+                    throw ValidationException::withMessages([
+                        'descuento' => ['El descuento general no puede superar el subtotal.'],
+                    ]);
+                }
+                $total = round($subtotal - $descuento, 2);
+                $pago = $this->sincronizarPagoCompra($compra, $request, $total);
+
+                $compra->fecha = $request->fecha;
+                $compra->descripcion = $request->descripcion;
+                $compra->id_proveedor = $request->id_proveedor;
+                $compra->id_tipo_pago = $request->id_tipo_pago;
+                $compra->id_forma_pago = $pago['id_forma_pago'];
+                $compra->sub_total = $subtotal;
+                $compra->descuento = $descuento;
+                $compra->total = $total;
+                $compra->total_efectivo = $pago['total_efectivo'];
+                $compra->total_deposito = $pago['total_deposito'];
+                $compra->estado = $pago['estado'];
+                $compra->save();
+
+                $this->guardarBitacora([
+                    'tabla' => 'compra',
+                    'codigo_tabla' => $compra->id,
+                    'transaccion' => 'modificar',
+                ]);
+
+                return response()->json([
+                    'message' => 'Compra modificada correctamente.',
+                    'data' => [
+                        'id' => $compra->id,
+                        'sub_total' => $subtotal,
+                        'descuento' => $descuento,
+                        'total' => $total,
+                        'estado' => $compra->estado,
+                    ],
+                ]);
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['message' => 'No se pudo modificar la compra.'], 500);
+        }
+    }
+
+    private function modificarCantidadLegacy(Request $request){
         try{
             DB::beginTransaction();
             //dd($request->total);

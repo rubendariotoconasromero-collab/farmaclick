@@ -15,7 +15,7 @@
         <template v-if="listado === 0">
             <section class="history-overview">
                 <app-metric-card label="Compras registradas" :value="pagination.total || rows.length" hint="Total según la consulta" icon="img/menu/compra.png" :loading="recordsLoading" />
-                <app-metric-card label="Pendientes en página" :value="pendingCount" hint="Compras aún por cancelar" icon="icons/wallet.svg" tone="cyan" :loading="recordsLoading" />
+                <app-metric-card label="Compras activas en página" :value="pendingCount" hint="Operaciones con estado Registrado" icon="icons/wallet.svg" tone="cyan" :loading="recordsLoading" />
                 <app-metric-card label="Importe de la página" :value="`Bs ${money(pageAmount)}`" hint="Suma de los resultados visibles" icon="icons/money.svg" tone="neutral" :loading="recordsLoading" />
             </section>
             <app-data-panel
@@ -58,7 +58,7 @@
                     <template #cell-actions="{ row }">
                         <div class="history-actions">
                             <app-icon-button icon="icons/eye.svg" label="Ver detalle" @click="$emit('view', row)" />
-                            <app-icon-button v-if="row.estado !== 'Cancelado'" icon="icons/pencil.svg" label="Modificar" @click="$emit('edit', row)" />
+                            <app-icon-button v-if="row.estado === 'Registrado'" icon="icons/pencil.svg" label="Modificar" @click="$emit('edit', row)" />
                             <app-icon-button icon="icons/print.svg" label="Imprimir" @click="$emit('print', row)" />
                             <app-icon-button v-if="row.estado === 'Registrado'" variant="danger" icon="icons/ban.svg" label="Anular" @click="$emit('cancel', row)" />
                         </div>
@@ -272,7 +272,7 @@ export default {
         lineSubtotal(row) { return Number(row.costo_compra || 0) * Number(row.cantidad || 0) - Number(row.descuento || 0); },
         money(value) { return Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
         paymentLabel(value) { return value === 'Cuenta por Cobrar' ? 'Cuenta por pagar' : (value || '—'); },
-        statusLabel(row) { return row.estado === 'Registrado' && Number(row.id_tipo_pago) === 1 ? 'Cancelado' : row.estado; },
+        statusLabel(row) { return row.estado; },
         statusClass(row) { const value = this.statusLabel(row); return value === 'Anulado' ? 'is-cancelled' : value === 'Cancelado' ? 'is-paid' : 'is-open'; },
     },
 };
