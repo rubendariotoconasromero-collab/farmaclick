@@ -1,5 +1,7 @@
 <template>
     <main class="main">
+        <users-workspace />
+        <div v-if="false">
         <!-- Templates -->
         <div class="row">
             <div class="col">
@@ -467,6 +469,7 @@
             <!-- /.modal-dialog -->
         </div>
         <!--Fin modal Formulario Grupo-->
+        </div>
     </main>
 </template>
 

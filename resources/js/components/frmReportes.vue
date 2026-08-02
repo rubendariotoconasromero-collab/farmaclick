@@ -1,5 +1,27 @@
 <template>
     <main class="main">
+        <report-center-workspace
+            :loading="catalogLoading"
+            :dates="datos"
+            :cash-filters="filtros"
+            :base-sections="reportSections"
+            :dated-sections="reportSectionsFecha"
+            :user-reports="userReports"
+            :client-reports="clienteReports"
+            :laboratory-reports="proveedorReports"
+            :users="arrayUsuario"
+            :clients="arrayCliente"
+            :laboratories="arrayLaboratorio"
+            :selected-user="usuarioSeleccionado"
+            :selected-client="clienteSeleccionado"
+            :selected-laboratory="laboratorioSeleccionado"
+            :cash-records="arqueos"
+            :cash-loading="arqueosLoading"
+            @select-entity="seleccionarEntidadReporte"
+            @load-cash="cargarArqueos"
+            @download-cash="downloadArqueoReport($event.id, $event.type)"
+        />
+        <div v-if="false">
         <div class="my-4">
             <div class="card shadow-lg">
                 <div class="card-header bg-info text-white text-center">
@@ -412,8 +434,7 @@
                 </div>
             </div>
         </div>
-
-
+        </div>
     </main>
 </template>
 
@@ -438,6 +459,8 @@ export default {
 
             resultadosClientes: [],
             debounceTimer: null,
+            catalogLoading: true,
+            arqueosLoading: true,
 
             filtros: {
                 fecha_inicio: moment().subtract(7, 'days').format('YYYY-MM-DD'),
@@ -576,6 +599,18 @@ export default {
     },
 
     methods: {
+        seleccionarEntidadReporte({ type, item }) {
+            if (type === 'user') {
+                this.usuarioSeleccionado = item;
+                this.datos.id_usuario = item.id;
+            } else if (type === 'client') {
+                this.clienteSeleccionado = item;
+                this.datos.id_cliente = item.id;
+            } else if (type === 'laboratory') {
+                this.laboratorioSeleccionado = item;
+                this.datos.id_proveedor = item.id;
+            }
+        },
         abrirModal(tipo) {
             this.tipoModal = tipo;
             this.busqueda = '';
@@ -733,11 +768,18 @@ export default {
         },
 
         cargarArqueos() {
-            axios.get('/listado_arqueos', { params: this.filtros })
+            this.arqueosLoading = true;
+            return axios.get('/listado_arqueos', { params: this.filtros })
                 .then(response => {
                     this.arqueos = response.data;
                 })
-                .catch(console.error);
+                .catch(error => {
+                    console.error(error);
+                    this.$toaster.error('No fue posible cargar los arqueos.');
+                })
+                .finally(() => {
+                    this.arqueosLoading = false;
+                });
         },
         getUrlReporte(arqueoId, tipo) {
             const baseUrl = '/reportes/arqueo';
@@ -1005,7 +1047,7 @@ export default {
         },
 
         selectUsuario() {
-            axios.get('/usuario/selectUsuario')
+            return axios.get('/usuario/selectUsuario')
                 .then(response => {
                     this.arrayUsuario = response.data;
                 })
@@ -1015,7 +1057,7 @@ export default {
         },
 
         selectCliente() {
-            axios.get('/cliente/selectCliente')
+            return axios.get('/cliente/selectCliente')
                 .then(response => {
                     this.arrayCliente = response.data;
                 })
@@ -1025,7 +1067,7 @@ export default {
         },
 
         selectLaboratorio() {
-            axios.get('/proveedor/selectProveedor')
+            return axios.get('/proveedor/selectProveedor')
                 .then(response => {
                     this.arrayLaboratorio = response.data;
                 })
@@ -1035,12 +1077,15 @@ export default {
         },
     },
 
-    mounted() {
-        this.selectUsuario();
-        this.selectCliente();
-        this.selectLaboratorio();
-        //this.cargarUsuarios();
-        this.cargarArqueos();
+    async mounted() {
+        this.catalogLoading = true;
+        await Promise.all([
+            this.selectUsuario(),
+            this.selectCliente(),
+            this.selectLaboratorio(),
+            this.cargarArqueos(),
+        ]);
+        this.catalogLoading = false;
     }
 }
 </script>

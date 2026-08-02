@@ -1,143 +1,134 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
-    <meta name="author" content="Łukasz Holeczek">
-    <meta name="keyword" content="Bootstrap,Admin,Template,Open,Source,jQuery,CSS,HTML,RWD,Dashboard">
-    <title>Farmacia Suarez</title>
-    <link rel="apple-touch-icon" sizes="57x57" href="img/favicon/apple-icon-57x57.png">
-    <link rel="apple-touch-icon" sizes="60x60" href="img/favicon/apple-icon-60x60.png">
-    <link rel="apple-touch-icon" sizes="72x72" href="img/favicon/apple-icon-72x72.png">
-    <link rel="apple-touch-icon" sizes="76x76" href="img/favicon/apple-icon-76x76.png">
-    <link rel="apple-touch-icon" sizes="114x114" href="img/favicon/apple-icon-114x114.png">
-    <link rel="apple-touch-icon" sizes="120x120" href="img/favicon/apple-icon-120x120.png">
-    <link rel="apple-touch-icon" sizes="144x144" href="img/favicon/apple-icon-144x144.png">
-    <link rel="apple-touch-icon" sizes="152x152" href="img/favicon/apple-icon-152x152.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-icon-180x180.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="img/favicon/android-icon-192x192.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="96x96" href="img/favicon/favicon-96x96.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
-    <link rel="manifest" href="assets/favicon/manifest.json">
-    <meta name="theme-color" content="#ffffff">
-    <link href="css/plantilla.css" rel="stylesheet">
-  </head>
-  <body class="bg-dark">
-    @php
-      $mi_empresa = DB::select("SELECT id, nombre, foto, logo_login, logo_sistema, fondo_login, color_login FROM mi_empresa WHERE id=1");
-    @endphp
-    <div class=" min-vh-100 d-flex flex-row align-items-center">
-      <div class="container">
-        <div class="row justify-content-center">
-          <div class="col-lg-8">
-            <div class="card-group d-block d-md-flex row">
-              <div class="card col-md-7 p-4 mb-0" style="background: url('img/sit_norte/negro40.png'); fondo" >
-                <div class="card-body">
-                  <form role="form" method="POST" action="{{ route('usuario') }}">
-                    @csrf
-                    <h1 style="color:#001843">INICIO DE SESION</h1>
-                    <h6 style="color:#001843">Ingrese sus Datos</h6>
-                    <div class="mb-3">
-                    <div class="input-group ">
-                        <input style="background-color: transparent;border: none;border-bottom: #001843 thin solid;color:#001843" class="form-control{{ $errors->has('name') ? ' is-invalid' : '' }}" placeholder="{{ __('Usuario') }}" type="text" name="name" value="{{ old('name') }}" required autofocus>
-                    </div>
-                      @error('name')
-                      <div class="text-danger">
-                         {{$message}}
-                      </div>
-                      @enderror
-                    </div>
-
-                    <div class="mb-3">
-                    <div class="input-group ">
-                        <input style="background-color: transparent;border: none;border-bottom: #001843 thin solid;color:#001843;" class="form-control{{ $errors->has('password') ? ' is-invalid' : '' }}" name="password" placeholder="{{ __('Contraseña') }}" type="password" required>
-                    </div>
-                    @error('password')
-                      <div class="text-danger">
-                         {{$message}}
-                      </div>
-                      @enderror
-                    </div>
-                    <div class="row">
-                      <div class="col-6">
-                        <button class="btn btn-warning color-primary border-light px-4" style="color:white" type="submit">Acceder</button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-              </div>
-              <div class="card col-md-5 text-white bg-blue p-0 m-0 center">
-                @if(file_exists('img/logo/'.$mi_empresa[0]->logo_login))
-                    <img src="{{asset('img/logo/'.$mi_empresa[0]->logo_login)}}" style="height: 310px;">
-                @else
-                  <img src="{{asset('img/logo_default/logo_login_default.png')}}" style="height: 310px;">
-                @endif
-              </div>
-            </div>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+  <meta name="author" content="FarmaClick">
+  <meta name="description" content="Acceso al sistema de gestión FarmaClick">
+  <title>Acceso | FarmaClick</title>
+  <link rel="icon" type="image/png" href="{{ asset('img/FarmaClick_logo_cuadrado.png') }}">
+  <meta name="theme-color" content="#1f8a4c">
+  <link href="{{ asset('css/plantilla.css') }}" rel="stylesheet">
+  <link href="{{ asset('css/farmaclick-theme.css') }}" rel="stylesheet">
+</head>
+<body class="login-page">
+  <main class="login-layout">
+    <section class="login-shell" aria-label="Acceso a FarmaClick">
+      <div class="login-brand-panel">
+        <div class="login-brand-content">
+          <img
+            class="login-brand-logo"
+            src="{{ asset('img/FarmaClick_logo_cuadrado.png') }}"
+            alt="FarmaClick"
+          >
+          <div class="login-brand-copy">
+            <span class="login-brand-kicker">Gestión farmacéutica</span>
+            <h2>Tu farmacia, siempre conectada.</h2>
+            <p>Ventas, inventario y administración en un solo lugar.</p>
           </div>
         </div>
+        <span class="login-brand-status">
+          <i class="fa fa-circle" aria-hidden="true"></i>
+          Acceso seguro
+        </span>
       </div>
-    </div>
-    <!-- CoreUI and necessary plugins-->
-    <script src="js/plantilla.js"></script>
-  </body>
+
+      <div class="login-form-panel">
+        <div class="login-form-header">
+          <span class="login-form-eyebrow">Bienvenido</span>
+          <h1 class="login-title">Iniciar sesión</h1>
+          <p class="login-subtitle">Ingresa tus credenciales para continuar.</p>
+        </div>
+
+        <form class="login-form" role="form" method="POST" action="{{ route('usuario') }}">
+          @csrf
+          <div class="login-field">
+            <label for="login-name">Usuario</label>
+            <div class="login-control{{ $errors->has('name') ? ' is-invalid' : '' }}">
+              <i class="fa fa-user-o login-control-icon" aria-hidden="true"></i>
+              <input
+                id="login-name"
+                class="login-input"
+                type="text"
+                name="name"
+                value="{{ old('name') }}"
+                placeholder="Nombre de usuario"
+                autocomplete="username"
+                required
+                autofocus
+              >
+            </div>
+            @error('name')
+              <p class="login-error" role="alert">
+                <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+                {{ $message }}
+              </p>
+            @enderror
+          </div>
+
+          <div class="login-field">
+            <label for="login-password">Contraseña</label>
+            <div class="login-control{{ $errors->has('password') ? ' is-invalid' : '' }}">
+              <i class="fa fa-lock login-control-icon" aria-hidden="true"></i>
+              <input
+                id="login-password"
+                class="login-input"
+                name="password"
+                placeholder="Ingresa tu contraseña"
+                type="password"
+                autocomplete="current-password"
+                required
+              >
+              <button
+                id="toggle-password"
+                class="login-password-toggle"
+                type="button"
+                aria-label="Mostrar contraseña"
+                aria-pressed="false"
+                title="Mostrar contraseña"
+              >
+                <i class="fa fa-eye" aria-hidden="true"></i>
+              </button>
+            </div>
+            @error('password')
+              <p class="login-error" role="alert">
+                <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+                {{ $message }}
+              </p>
+            @enderror
+          </div>
+
+          <button class="login-submit" type="submit">
+            <span>Acceder al sistema</span>
+            <i class="fa fa-arrow-right" aria-hidden="true"></i>
+          </button>
+        </form>
+
+        <p class="login-footer-copy">&copy; {{ date('Y') }} FarmaClick</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var toggle = document.getElementById('toggle-password');
+      var password = document.getElementById('login-password');
+
+      if (!toggle || !password) {
+        return;
+      }
+
+      toggle.addEventListener('click', function () {
+        var isVisible = password.type === 'text';
+        password.type = isVisible ? 'password' : 'text';
+        toggle.setAttribute('aria-pressed', isVisible ? 'false' : 'true');
+        toggle.setAttribute('aria-label', isVisible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+        toggle.setAttribute('title', isVisible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+        toggle.querySelector('i').className = isVisible ? 'fa fa-eye' : 'fa fa-eye-slash';
+        password.focus();
+      });
+    }());
+  </script>
+</body>
 </html>
-
-<style>
-
-body{
-    margin: 0;
-    padding: 0;
-    background: url(<?php echo file_exists('img/logo/'.$mi_empresa[0]->logo_login) ? "img/logo/".$mi_empresa[0]->fondo_login : "img/logo_default/fondo_login_default.png" ?>) no-repeat;
-    background-size: cover;
-    background-position: center;
-    font-family: sans-serif;
-    background-attachment: relative;
-
-}
-
-.bg-blue{
-     background-color: 	<?php echo $mi_empresa[0]->color_login ?> !important;
-    }
-
-.formulario input {
-    width: 70%;
-    display: block;
-    margin: auto;
-    margin-bottom: 2rem;
-    background-color: transparent;
-    border: none;
-    border-bottom: #5A007F thin solid;
-    text-align: center;
-    outline: none;
-    padding: .2rem 0;
-    font-size: .9rem;
-    color: #5A007F;
-
-}
-.fondo{
-  z-index: -1;
-}
-.color-primary{
-  background-color: #001843;
-}
-.color-secondary{
-  background-color: #001843;
-}
-.color-tertiary{
-  background-color: #03329D;
-}
-.color-cuaternary{
-  background-color: #A6D9FF;
-}
-.center{
- display: flex;
- justify-content: center;
-}
-
-.btn-info{
-    background-color: #001843;
-}
-</style>

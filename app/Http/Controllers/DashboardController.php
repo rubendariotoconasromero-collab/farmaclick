@@ -32,29 +32,31 @@ class DashboardController extends Controller
         ->groupBy(DB::raw('YEAR(nv.fecha)'),'nv.id_tienda')
         ->get();
 
-        $venta_directa=DB::table('venta as nv')
-        ->join('tienda as tn','nv.id_tienda','=','tn.id')
-        ->select(DB::raw('YEAR(nv.fecha) as año'),
-        DB::raw('SUM(nv.total) as total'),
-        'nv.id_tienda','tn.nombre as tienda')
-        ->whereYear('nv.fecha', $año)
-        ->where('nv.tipo_venta','=','Venta Directa')
-        ->where('nv.estado','!=','Anulado')
-        ->groupBy(DB::raw('YEAR(nv.fecha)'),'nv.id_tienda')
-        ->get();
+        $resumen = DB::selectOne(
+            "SELECT
+                (SELECT COALESCE(SUM(total), 0) FROM venta WHERE estado != ?) AS total_venta,
+                (SELECT COALESCE(SUM(total), 0) FROM compra WHERE estado != ?) AS total_compra,
+                (SELECT COUNT(id) FROM users WHERE id_grupo = 1 AND estado = 1 AND id_personal > 1) AS administradores,
+                (SELECT COUNT(id) FROM users WHERE id_grupo = 2 AND estado = 1) AS cajeros",
+            ['Anulado', 'Anulado']
+        );
 
-        $venta_servicio=DB::table('venta as nv')
-        ->join('tienda as tn','nv.id_tienda','=','tn.id')
-        ->select(DB::raw('YEAR(nv.fecha) as año'),
-        DB::raw('SUM(nv.total) as total'),
-        'nv.id_tienda','tn.nombre as tienda')
-        ->whereYear('nv.fecha', $año)
-        ->where('nv.tipo_venta','=','Venta Servicio')
-        ->where('nv.estado','!=','Anulado')
-        ->groupBy(DB::raw('YEAR(nv.fecha)'),'nv.id_tienda')
-        ->get();
+        $productosAnuales = $this->listarProductoMesDashboad($request);
+        $limiteTrimestre = now()->addDays(90)->toDateString();
+        $productosTrimestre = $productosAnuales
+            ->where('fecha_vecimiento', '<=', $limiteTrimestre)
+            ->values();
 
-        return ['compra'=>$compra,'venta'=>$venta, 'venta_directa'=>$venta_directa, 'venta_servicio'=>$venta_servicio,'año'=>$año];
+        return [
+            'compra' => $compra,
+            'venta' => $venta,
+            'año' => $año,
+            'resumen' => $resumen,
+            'vencimientos' => [
+                'anuales' => $productosAnuales,
+                'trimestre' => $productosTrimestre,
+            ],
+        ];
     }
 
     public function listarProductoMesDashboad(Request $request){
@@ -69,6 +71,7 @@ class DashboardController extends Controller
             'lote.id',
             'articulo.nombre_comercial as articulo',
             'lote.fecha_vecimiento',
+            'lote.cantidad as stock',
             'proveedor.nombre as laboratorio',
             'unidad_medida.nombre as presentacion'
         )

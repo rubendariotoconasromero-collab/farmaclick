@@ -1,5 +1,45 @@
 <template>
-    <main class="main">
+    <main class="main warehouse-legacy warehouse-legacy--inventory">
+        <warehouse-inventory-workspace
+            :product-rows="arrayTienda2"
+            :lot-rows="arrayTienda"
+            :details="arrayDetalleLote"
+            :data="datos"
+            :product-pagination="pagination"
+            :lot-pagination="paginationProducto"
+            :product-pages="pagesNumber"
+            :lot-pages="pagesNumberProducto"
+            :product-search="buscarT"
+            :lot-search="buscar"
+            :criterion="criterio"
+            :view="listado == 1 ? 'detail' : 'list'"
+            :loading="loading"
+            :table-loading="tableLoading"
+            @update:product-search="buscarT = $event"
+            @update:lot-search="buscar = $event"
+            @update:criterion="criterio = $event"
+            @search-products="refreshProductInventory(1)"
+            @search-lots="refreshLotInventory(1)"
+            @product-page="refreshProductInventory($event)"
+            @lot-page="refreshLotInventory($event)"
+            @view-lots="MostrarLotes"
+            @back="listado = 0"
+            @remove-lot="anularLote"
+        />
+        <div v-if="false">
+        <warehouse-module-intro
+            title="Inventario"
+            subtitle="Consulta existencias por producto y lote, identifica vencimientos y controla el stock disponible."
+            primary-label="Productos"
+            :primary-value="paginationProducto.total || arrayProductoLote.length"
+            primary-hint="Productos en la consulta"
+            secondary-label="Lotes"
+            :secondary-value="pagination.total || arrayTienda.length"
+            secondary-hint="Lotes en la consulta"
+            tertiary-label="Vista"
+            tertiary-value="Stock actual"
+            tertiary-hint="Información operativa"
+        />
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -260,6 +300,7 @@
 
         <!-- </div> -->
 
+        </div>
     </main>
 </template>
 
@@ -329,6 +370,8 @@
                 inventario :0,
                 setTimeoutBuscador: '',
                 anio : moment().format('YYYY'),
+                loading: true,
+                tableLoading: false,
 
             }
         },
@@ -379,6 +422,22 @@
             }
         },
         methods : {
+            async refreshProductInventory(page){
+                this.tableLoading = true;
+                try {
+                    await this.listarInventario2(page, this.buscarT, this.criterio);
+                } finally {
+                    this.tableLoading = false;
+                }
+            },
+            async refreshLotInventory(page){
+                this.tableLoading = true;
+                try {
+                    await this.listarInventario(page, this.buscar, this.criterio);
+                } finally {
+                    this.tableLoading = false;
+                }
+            },
             listarPaquete(){
                 let me=this;
 
@@ -844,10 +903,16 @@
                 })   
             } 
         },
-        mounted() {
+        async mounted() {
             this.listarPaquete();
-            this.listarInventario(1, this.buscar, this.criterio);
-            this.listarInventario2(1, this.buscarT, this.criterio);
+            try {
+                await Promise.all([
+                    this.listarInventario(1, this.buscar, this.criterio),
+                    this.listarInventario2(1, this.buscarT, this.criterio),
+                ]);
+            } finally {
+                this.loading = false;
+            }
         }
     }
 </script>

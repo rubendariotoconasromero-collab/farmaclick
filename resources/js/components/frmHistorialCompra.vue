@@ -1,5 +1,50 @@
 <template>
     <main class="main">
+        <purchase-history-workspace
+            v-if="vista === 0"
+            :listado="listado"
+            :rows="arrayCompra"
+            :details="arrayDetalle"
+            :products="arrayArticulo"
+            :providers="arrayProveedor"
+            :payment-types="arrayPago"
+            :payment-forms="arrayForma2"
+            :datos="datos"
+            :datos-pago="datosPago"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :search="buscar"
+            :criterion="criterio"
+            :product-search="buscarP"
+            :product-criterion="criterioP"
+            :calculated-total="calcularTotal"
+            :initial-loading="initialLoading"
+            :records-loading="recordsLoading"
+            :details-loading="detailsLoading"
+            :products-loading="productsLoading"
+            :is-busy="isBusy"
+            @update:search="buscar = $event"
+            @update:criterion="criterio = $event"
+            @update:productSearch="buscarP = $event"
+            @update:productCriterion="criterioP = $event"
+            @search="listarCompra(1, buscar, criterio)"
+            @typing="BuscandoCompra"
+            @page="cambiarPagina($event, buscar, criterio)"
+            @view="verCompra"
+            @edit="verModificar"
+            @print="cargarPdf($event.id, $event.foto)"
+            @cancel="anularCompra($event.id)"
+            @back="volverCompraListado"
+            @save-date="modificarFecha"
+            @save-edit="modificarCantidad"
+            @payment-type-change="tipoPagoChange"
+            @payment-form-change="formaPagoChange"
+            @search-products="listarArticulo(1, buscarP, criterioP)"
+            @product-page="listarArticulo($event, buscarP, criterioP)"
+            @select-product="seleccionarTiendaArticulo"
+            @remove-line="eliminarDetalle($event.index, $event.newItem, $event.articleId)"
+        />
+        <template v-if="false">
         <!-- <div class="container"> -->
             <template v-if="vista==0">
                 <div class="row">
@@ -600,6 +645,7 @@
             <template v-if="vista==4">
                 <frm-historialcompra></frm-historialcompra>
             </template>
+        </template>
     </main>
 </template>
 
@@ -678,6 +724,12 @@
                 criterioP : 'articulo.nombre_comercial',
                 vista: 0,
                 setTimeoutBuscador: '',
+                purchaseSearchTimer: '',
+                initialLoading: true,
+                recordsLoading: false,
+                detailsLoading: false,
+                productsLoading: false,
+                isBusy: false,
 
             }
         },
@@ -738,8 +790,9 @@
             },
             listarCompra(page, buscar, criterio){
                 let me=this;
+                me.recordsLoading = true;
                 var url='/compra?page=' + page + '&buscar=' + buscar + '&criterio=' + criterio;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayCompra=response.data.data;
                     me.pagination={total:response.data.total,
                         current_page:response.data.current_page,
@@ -751,7 +804,15 @@
                 })
                 .catch(function(error){
                     console.log(error)
+                }).finally(function(){
+                    me.recordsLoading = false;
                 });
+            },
+            BuscandoCompra(){
+                clearTimeout(this.purchaseSearchTimer);
+                this.purchaseSearchTimer = setTimeout(() => {
+                    this.listarCompra(1, this.buscar, this.criterio);
+                }, 350);
             },
             cambiarPagina(page, buscar, criterio){
                 let me=this;
@@ -760,9 +821,9 @@
             },
             listarArticulo(page,buscarP, criterioP){
                 let me = this;
-                this.isBusy=1;
+                me.productsLoading = true;
                 var url='/tienda/listarSinPaginate?id_proveedor='+me.datos.id_proveedor+'&page=' + page +'&buscar=' + buscarP + '&criterio=' + criterioP;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayArticulo=response.data.data;
                     me.pagination={total:response.data.total,
                         current_page:response.data.current_page,
@@ -774,12 +835,15 @@
                 })
                 .catch(function(error){
                     console.log(error);
+                }).finally(function(){
+                    me.productsLoading = false;
                 });
             },
             listarArticuloBusquedaRapida(){
                 let me=this;
+                me.productsLoading = true;
                 var url='/tienda/listarSinPaginate?id_proveedor='+me.datos.id_proveedor+'&page=' + 1 +'&buscar=' + me.buscarP + '&criterio=' + me.criterioP;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayArticulo=response.data.data;
                     me.pagination={total:response.data.total,
                         current_page:response.data.current_page,
@@ -791,6 +855,8 @@
                 })
                 .catch(function(error){
                     console.log(error)
+                }).finally(function(){
+                    me.productsLoading = false;
                 });
             },
             BuscandoArticulo(){
@@ -927,7 +993,7 @@
             selectProveedor(){
                 let me=this;
                 var url='/proveedor/selectProveedor';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayProveedor=response.data;
                 })
                 .catch(function(error){
@@ -937,7 +1003,7 @@
             selectFormaP(){
                 let me=this;
                 var url='/formaPago/selectFormaP';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayFormaPago=response.data;
                     me.arrayForma2 = response.data;
                     me.arrayForma2 = me.arrayForma2.filter((item) => item.id !== 1);
@@ -968,6 +1034,7 @@
             },
             async verCompra(data=[]){
                 let me = this;
+                me.detailsLoading = true;
                 try {
                     const res = await axios.get('/compra?page=' + 1 + '&buscar=' + me.buscar + '&criterio=' + me.criterio)
                     me.arrayCompra=res.data.data;
@@ -993,9 +1060,11 @@
                     me.arrayDetalle=res1.data;
 
                 } catch (error) {
-                    if(error.response.data){
+                    if(error.response && error.response.data){
                         me.errores=error.response.data.errors;
                     }
+                } finally {
+                    me.detailsLoading = false;
                 }
 
 
@@ -1035,6 +1104,7 @@
             },
             async verModificar(data=[]){
                 let me = this;
+                me.detailsLoading = true;
                 try {
                     const res = await axios.get('/compra?page=' + 1 + '&buscar=' + me.buscar + '&criterio=' + me.criterio)
                     me.arrayCompra=res.data.data;
@@ -1045,9 +1115,7 @@
                         from: res.data.from,
                         to: res.data.to
                     }
-                    me.selectProveedor();
-                    me.selectFormaP();
-                    me.selectTipoP();
+                    await Promise.all([me.selectProveedor(), me.selectFormaP(), me.selectTipoP()]);
                     me.listado = 3;
                     me.datos.id=data['id'];
                     me.datos.proveedor=data['proveedor'];
@@ -1074,9 +1142,11 @@
                     me.arrayDetalle.forEach(item => {item.cantidad_auxiliar = parseFloat(item.cantidad) - parseFloat(item.stock), item.eliminar_temporal = 0, item.articulo_nuevo = 0})
 
                 } catch (error) {
-                    if(error.response.data){
+                    if(error.response && error.response.data){
                         me.errores=error.response.data.errors;
                     }
+                } finally {
+                    me.detailsLoading = false;
                 }
 
 
@@ -1260,9 +1330,11 @@
             },
             modificarFecha(){
                 let me = this;
+                if (me.isBusy) return;
+                me.isBusy = true;
                 //me.arrayVenta.id= id;
                 //me.listado = 4;
-                axios.put('/compra/modificar/fecha',this.datos).then(function(response){
+                return axios.put('/compra/modificar/fecha',this.datos).then(function(response){
                     Swal.fire({
                         position: 'top-end',
                         icon: 'success',
@@ -1280,6 +1352,8 @@
                     me.listarCompra(1,'', 'users.name');
                 }).catch(function(error){
                     console.log(error);
+                }).finally(function(){
+                    me.isBusy = false;
                 });
 
             },
@@ -1323,7 +1397,9 @@
                                         text: 'No hay stock para el producto!'
                                     })
                                 } else {
-                                axios.put('/compra/modificarCantidad',{
+                                if (me.isBusy) return;
+                                me.isBusy = true;
+                                return axios.put('/compra/modificarCantidad',{
                                     'id': me.datos.id,
                                     'total_aux': me.datos.total_aux,
                                     'total': me.datos.total,
@@ -1365,6 +1441,8 @@
                                 })
                                 .catch(function(error){
                                     console.log(error);
+                                }).finally(function(){
+                                    me.isBusy = false;
                                 });
                                 }
                             }
@@ -1375,7 +1453,7 @@
             selectTipoP(){
                 let me=this;
                 var url='/tipoPago/selectTipoP';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayPago=response.data;
                 })
                 .catch(function(error){
@@ -1442,14 +1520,19 @@
                 }
             }
         },
-        mounted() {
-            this.listarCompra(1, this.buscar, this.criterio);
-            this.listarArticulo(1,'', 'nombre_comercial');
+        async mounted() {
+            this.initialLoading = true;
+            await this.listarCompra(1, this.buscar, this.criterio);
+            this.initialLoading = false;
+        },
+        beforeDestroy() {
+            clearTimeout(this.purchaseSearchTimer);
+            clearTimeout(this.setTimeoutBuscador);
 
         }
     }
 </script>
-<style>
+<style scoped>
     .modal-content{
         width: 100% !important;
         position: absolute !important;

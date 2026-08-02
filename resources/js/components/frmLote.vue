@@ -1,5 +1,39 @@
 <template>
-    <main class="main">
+    <main class="main warehouse-legacy warehouse-legacy--lots">
+        <warehouse-lot-workspace
+            :products="arrayArticulo"
+            :details="arrayDetalle"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :search="buscarP"
+            :criterion="criterioP"
+            :loading="loading"
+            :product-loading="productLoading"
+            :saving="saving"
+            @update:search="buscarP = $event"
+            @update:criterion="criterioP = $event"
+            @open-products="openLotProducts"
+            @search="refreshLotProducts(1)"
+            @page="refreshLotProducts($event)"
+            @select-product="seleccionarTiendaArticulo"
+            @remove-detail="eliminarDetalle"
+            @clear="cancelarCompra"
+            @save="guardarLote"
+        />
+        <div v-if="false">
+        <warehouse-module-intro
+            title="Lotes"
+            subtitle="Carga existencias por lote y fecha de vencimiento para mantener la trazabilidad de cada producto."
+            primary-label="Productos seleccionados"
+            :primary-value="arrayDetalle.length"
+            primary-hint="Detalle listo para registrar"
+            secondary-label="Resultados"
+            :secondary-value="arrayArticulo.length"
+            secondary-hint="Productos disponibles"
+            tertiary-label="Control"
+            tertiary-value="Vencimientos"
+            tertiary-hint="Seguimiento por lote"
+        />
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -349,6 +383,7 @@
             <!-- /.modal-dialog -->
         </div>
         <!--Fin modal Formulario Pago al credito-->
+        </div>
     </main>
 </template>
 
@@ -416,6 +451,9 @@
                 buscarP : '',
                 criterioP : 'articulo.nombre_comercial',
                 setTimeoutBuscador: '',
+                loading: true,
+                productLoading: false,
+                saving: false,
             }
         },
         computed : {
@@ -450,6 +488,18 @@
             }
         },
         methods : {
+            openLotProducts(){
+                this.buscarP = '';
+                this.refreshLotProducts(1);
+            },
+            async refreshLotProducts(page){
+                this.productLoading = true;
+                try {
+                    await this.listarArticulo(page, this.buscarP, this.criterioP);
+                } finally {
+                    this.productLoading = false;
+                }
+            },
             // listarCompra(page, buscar, criterio){
             //     let me=this;
             //     var url='/compra?page=' + page + '&buscar=' + buscar + '&criterio=' + criterio;
@@ -486,7 +536,7 @@
                 let me = this;
                 
                 var url='/tienda/listarSinPaginateLote?page=' + page + '&buscar=' + buscarP + '&criterio=' + criterioP;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayArticulo= response.data.data;
                     me.pagination={total:response.data.total, 
                         current_page:response.data.current_page,
@@ -585,7 +635,7 @@
             selectProveedor(){
                 let me=this;
                 var url='/proveedor/selectProveedor';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayProveedor=response.data;
                 })
                 .catch(function(error){
@@ -595,7 +645,7 @@
             selectTipoP(){
                 let me=this;
                 var url='/tipoPago/selectTipoP';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayPago=response.data;
                 })
                 .catch(function(error){
@@ -605,7 +655,7 @@
             selectFormaP(){
                 let me=this;
                 var url='/formaPago/selectFormaP';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayForma=response.data;
                     //me.arrayFormaPago=response.data;
                     me.arrayForma2 = response.data;
@@ -706,6 +756,7 @@
                 this.validarCompra();
                 if(this.errorCompra==3){
                         let me = this;
+                        me.saving = true;
                         axios.post('/lote/guardar',{
                             'detalle': me.arrayDetalle,
                         }).then(function(response){
@@ -718,11 +769,13 @@
                                 timer: 1500
                             });
                             me.volverCompraListado();
-                            me.listarCompra(1,'', 'nombre');
                             me.limpiarDatosCompra();
                         })
                         .catch(function(error){
                             console.log(error);
+                        })
+                        .finally(function(){
+                            me.saving = false;
                         });
                 }       
             },
@@ -803,11 +856,16 @@
                 })   
             } 
         },
-        mounted() {
-            // this.listarCompra(1, this.buscar, this.criterio);
-             this.selectProveedor();
-             this.selectFormaP();    
-             this.selectTipoP();
+        async mounted() {
+            try {
+                await Promise.all([
+                    this.selectProveedor(),
+                    this.selectFormaP(),
+                    this.selectTipoP(),
+                ]);
+            } finally {
+                this.loading = false;
+            }
         }
     }
 </script>

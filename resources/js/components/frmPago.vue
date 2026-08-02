@@ -1,5 +1,31 @@
 <template>
     <main class="main">
+        <sales-payments-workspace
+            :rows="arrayVenta"
+            :details="arrayDetalle"
+            :datos="datos"
+            :payment="datosPago"
+            :payment-history="arrayCXCobrar"
+            :last-payment="ultimoPago"
+            :payment-forms="arrayForma"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :listado="listado"
+            :search="buscar"
+            :criterion="criterio"
+            :saving="isSaving"
+            @update:search="buscar = $event"
+            @update:criterion="criterio = $event"
+            @search="listarVenta(1, buscar, criterio)"
+            @page="cambiarPagina($event, buscar, criterio)"
+            @pay="realizarPagos"
+            @clear-payment="limpiarCXCobrar"
+            @save-payment="guardarAmortizacion"
+            @view="verVenta"
+            @back="volverVentaListado"
+            @print="cargarPdf(datos.id, datos.foto)"
+        />
+        <template v-if="false">
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -605,6 +631,7 @@
             <!-- /.modal-dialog -->
         </div>
         <!--Fin modal Formulario Pago al credito-->
+        </template>
     </main>
 </template>
 
@@ -641,6 +668,7 @@
                     amortizacion : '',
                     descripcion: '',
                     id_pago: '',
+                    id_forma_pago: 2,
                 },  
                           
                 arrayVenta : [],
@@ -685,7 +713,8 @@
                 numero : 0,
                 imagenMiniatura : '',
                 empresa : {},
-                setTimeoutBuscador : ''
+                setTimeoutBuscador : '',
+                isSaving: false
             }
         },
         computed : {
@@ -933,7 +962,7 @@
                     console.log(error)
                 });
             },
-            verVenta(data=[]){
+            async verVenta(data=[]){
                 let me = this;
                 me.listado = 2;
                 me.datos.id=data['id'];
@@ -946,32 +975,20 @@
                 me.datos.total=data['total'];
                 me.datos.sub_total=data['sub_total'];
 
-                var url='/venta/permiso/detalle_tienda1?id=' + data['id'];
-                axios.get(url).then(function(response){
-                    me.arrayDetalle= response.data;
-                })
-                .catch(function(error){
-                    console.log(error);
-                });
-
-                var url='/tienda?page=' + 1 + '&buscar=' + this.buscar + '&criterio=' + this.criterio;
-                axios.get(url).then(function(response){
-                    me.arrayEmpresa=response.data.data;
-                    me.empresa = me.arrayEmpresa.find(seg => (seg.id == me.arrayDetalle[0].id_tienda));
-                    me.datos.foto = me.empresa.foto;
-                    me.datos.empresa_nombre = me.empresa.nombre;
-                    me.datos.empresa_direccion = me.empresa.direccion;
-                    me.pagination={total:response.data.total, 
-                        current_page:response.data.current_page,
-                        per_page: response.data.per_page,
-                        last_page: response.data.last_page,
-                        from: response.data.from,
-                        to: response.data.to
+                try {
+                    const detailResponse = await axios.get('/venta/permiso/detalle_tienda1?id=' + data['id']);
+                    me.arrayDetalle = detailResponse.data;
+                    if (me.arrayDetalle.length) {
+                        const companyResponse = await axios.get('/tienda?page=1&buscar=&criterio=nombre');
+                        me.arrayEmpresa = companyResponse.data.data || [];
+                        me.empresa = me.arrayEmpresa.find(item => item.id == me.arrayDetalle[0].id_tienda) || {};
+                        me.datos.foto = me.empresa.foto || '';
+                        me.datos.empresa_nombre = me.empresa.nombre || '';
+                        me.datos.empresa_direccion = me.empresa.direccion || '';
                     }
-                })
-                .catch(function(error){
-                    console.log(error)
-                });
+                } catch (error) {
+                    console.log(error);
+                }
             },
             cargarPdf(id,foto,empresa_nombre) {
                 axios.get('/venta/pdfVentasGeneral?id='
@@ -1022,30 +1039,37 @@
             },  
             guardarAmortizacion(){
                 let me = this;
-                if(me.datosPago.amortizacion == 0){
+                const amount = Number(me.datosPago.amortizacion || 0);
+                const balance = Number((me.ultimoPago && me.ultimoPago.saldo) || me.datosPago.saldo || 0);
+                if(amount <= 0){
                     Swal.fire({
                         icon: 'error',
                         title: 'Error...',
                         text: 'Ingrese un monto!'
-                    })
-                    me.limpiarCXCobrar();
-                }else {
-                    console.log(me.ultimoPago.amortizacion);
-                    if(me.datosPago.amortizacion > parseFloat(me.ultimoPago.saldo)) {
+                    });
+                    return;
+                }
+                if (!me.datosPago.id_forma_pago) {
+                    Swal.fire({ icon: 'error', title: 'Error...', text: 'Seleccione una forma de pago!' });
+                    return;
+                }
+                if(amount > balance) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Error...',
                             text: 'Monto Mayor al Saldo!'
-                        })
-                        me.limpiarPago();
-                    } else {
+                        });
+                        return;
+                }
+                me.isSaving = true;
                         axios.post('/c_x_cobrar/guardar',{
                             'fecha': me.datosPago.fecha,
-                            'monto_total': parseFloat(me.ultimoPago.monto_total).toFixed(2),
-                            'amortizacion': parseFloat(me.datosPago.amortizacion).toFixed(2),
-                            'saldo': me.ultimoPago.saldo,
+                            'monto_total': Number((me.ultimoPago && me.ultimoPago.monto_total) || me.datosPago.monto_total).toFixed(2),
+                            'amortizacion': amount.toFixed(2),
+                            'saldo': balance,
                             'descripcion': me.datosPago.descripcion,
                             'id_pago': me.datosPago.id_pago,
+                            'id_forma_pago': me.datosPago.id_forma_pago,
                         }).then(function(response){
                             Swal.fire({
                                 position: 'top-end',
@@ -1054,18 +1078,16 @@
                                 showConfirmButton: false,
                                 timer: 1500
                             });
-                            console.log('datosPago', me.datosPago);
-                            me.volverVentaListado();
-                            me.listarVenta(1,'', 'nombre');
                             me.listarCXCobrar(me.datosPago.id_pago);
-                            me.limpiarDatosCategoria();
+                            me.listarVenta(me.pagination.current_page || 1, me.buscar, me.criterio);
+                            me.limpiarPago();
+                            me.isSaving = false;
                         })
                         .catch(function(error){
+                            me.isSaving = false;
                             console.log(error);
+                            Swal.fire({ icon: 'error', title: 'No se pudo registrar el pago', text: 'Revise los datos e intente nuevamente.' });
                         });
-                    }
-                    
-                }
             },         
             validarCompra(){
                 this.errorCompra = 0;
@@ -1142,7 +1164,7 @@
                 var url='/pagos?buscar=' + buscarP;
                 axios.get(url).then(function(response){
                     me.arrayListaPagos= response.data;
-                    me.datosPago.fecha_final=me.arrayListaPagos[0].fecha_final;
+                    me.datosPago.fecha_final=me.arrayListaPagos.length ? me.arrayListaPagos[0].fecha_final : moment().format('YYYY-MM-DD');
                 })
                 .catch(function(error){
                     console.log(error);
@@ -1161,6 +1183,7 @@
                 });
             },
             realizarPagos(venta) {
+                this.limpiarCXCobrar();
                 this.listarPagos(venta.id);
                 this.datosPago.id_pago = venta.id;
                 this.listarCXCobrar(this.datosPago.id_pago);
@@ -1170,7 +1193,11 @@
             },
             cargarUltimoPago(){
                 const array = this.CXCobrar;
-                this.ultimoPago=array[array.length-1]; 
+                this.ultimoPago=array.length ? array[array.length-1] : {
+                    monto_total: this.datosPago.monto_total,
+                    amortizacion: 0,
+                    saldo: this.datosPago.saldo,
+                };
                 //this.tipoFecha = this.tipoFechas.find(f => f.id > 0);
                 // this.ultimoPago = this.CXCobrar.pop();
                 // console.log(this.CXCobrar.length)
@@ -1187,6 +1214,7 @@
                     descripcion: '',
                     amortizacion: 0,
                     id_pago: 0,
+                    id_forma_pago: 2,
                 },
                 
                 this.ultimoPago = {
@@ -1219,12 +1247,13 @@
         mounted() {
             this.listarVenta(1, this.buscar, this.criterio);
             this.listarVentaServicio(1, this.buscar, this.criterio);
+            this.selectFormaP();
             //this.listarEmpresa(1, this.buscar, this.criterio);
              
         }
     }
 </script>
-<style>
+<style scoped>
     .modal-content{
         width: 100% !important;
         position: absolute !important;

@@ -9,6 +9,7 @@ require('./bootstrap');
 window.Vue = require('vue').default;
 
 import Vue from 'vue'
+import router from './router'
  
 import Toaster from 'v-toaster'
 import VueNumeric from 'vue-numeric'
@@ -20,6 +21,38 @@ import 'v-toaster/dist/v-toaster.css'
 // optional set default imeout, the default is 10000 (10 seconds).
 Vue.use(Toaster, {timeout: 3500})
 Vue.use(VueNumeric)
+
+Vue.component('app-module-header', require('./components/ui/AppModuleHeader.vue').default);
+Vue.component('app-button', require('./components/ui/AppButton.vue').default);
+Vue.component('app-metric-card', require('./components/ui/AppMetricCard.vue').default);
+Vue.component('app-data-panel', require('./components/ui/AppDataPanel.vue').default);
+Vue.component('app-table', require('./components/ui/AppTable.vue').default);
+Vue.component('app-input', require('./components/ui/AppInput.vue').default);
+Vue.component('app-page-skeleton', require('./components/ui/AppPageSkeleton.vue').default);
+Vue.component('purchase-pagination', require('./components/purchases/PurchasePagination.vue').default);
+Vue.component('purchase-entry-workspace', require('./components/purchases/PurchaseEntryWorkspace.vue').default);
+Vue.component('purchase-history-workspace', require('./components/purchases/PurchaseHistoryWorkspace.vue').default);
+Vue.component('purchase-payments-workspace', require('./components/purchases/PurchasePaymentsWorkspace.vue').default);
+Vue.component('expense-reasons-workspace', require('./components/expenses/ExpenseReasonsWorkspace.vue').default);
+Vue.component('expense-registry-workspace', require('./components/expenses/ExpenseRegistryWorkspace.vue').default);
+Vue.component('sales-entry-workspace', require('./components/sales/SalesEntryWorkspace.vue').default);
+Vue.component('sales-history-workspace', require('./components/sales/SalesHistoryWorkspace.vue').default);
+Vue.component('sales-payments-workspace', require('./components/sales/SalesPaymentsWorkspace.vue').default);
+Vue.component('warehouse-module-intro', require('./components/warehouse/WarehouseModuleIntro.vue').default);
+Vue.component('warehouse-page-skeleton', require('./components/warehouse/WarehousePageSkeleton.vue').default);
+Vue.component('warehouse-inventory-workspace', require('./components/warehouse/WarehouseInventoryWorkspace.vue').default);
+Vue.component('warehouse-adjustment-workspace', require('./components/warehouse/WarehouseAdjustmentWorkspace.vue').default);
+Vue.component('warehouse-lot-workspace', require('./components/warehouse/WarehouseLotWorkspace.vue').default);
+Vue.component('warehouse-products-workspace', require('./components/warehouse/WarehouseProductsWorkspace.vue').default);
+Vue.component('company-settings-workspace', require('./components/master-data/CompanySettingsWorkspace.vue').default);
+Vue.component('access-summary', require('./components/access/AccessSummary.vue').default);
+Vue.component('access-toolbar', require('./components/access/AccessToolbar.vue').default);
+Vue.component('permission-editor', require('./components/access/PermissionEditor.vue').default);
+Vue.component('group-users-workspace', require('./components/access/GroupUsersWorkspace.vue').default);
+Vue.component('users-workspace', require('./components/access/UsersWorkspace.vue').default);
+Vue.component('permissions-workspace', require('./components/access/PermissionsWorkspace.vue').default);
+Vue.component('report-group-card', require('./components/reports/ReportGroupCard.vue').default);
+Vue.component('report-center-workspace', require('./components/reports/ReportCenterWorkspace.vue').default);
 
 /**
  * The following block of code may be used to automatically register your
@@ -129,7 +162,71 @@ Vue.component('frm-toast', require('./components/frmToast.vue').default);
 
 const app = new Vue({
     el: '#app',
+    router,
     data : {
         menu : 0
+    },
+    mounted() {
+        this.syncRouteState(this.$route);
+    },
+    watch: {
+        $route: {
+            immediate: true,
+            handler(route) {
+                this.syncRouteState(route);
+            },
+        },
+    },
+    methods: {
+        syncRouteState(route) {
+            this.menu = route.meta && Number.isInteger(route.meta.menu)
+                ? route.meta.menu
+                : 0;
+
+            if (route.meta && route.meta.title) {
+                document.title = `${route.meta.title} | FarmaClick`;
+            }
+
+            this.$nextTick(() => {
+                const sidebar = this.$el.querySelector('#sidebar');
+
+                if (!sidebar) {
+                    return;
+                }
+
+                sidebar.querySelectorAll('.nav-item.is-menu-active')
+                    .forEach(item => item.classList.remove('is-menu-active'));
+
+                sidebar.querySelectorAll('.nav-group.show')
+                    .forEach(group => {
+                        group.classList.remove('show');
+                        group.setAttribute('aria-expanded', 'false');
+                    });
+
+                const activeRouteName = route.name === 'inicio'
+                    ? 'dashboard'
+                    : route.name;
+                const activeLink = sidebar.querySelector(
+                    `[data-route-name="${activeRouteName || ''}"]`
+                );
+
+                if (!activeLink) {
+                    return;
+                }
+
+                const activeItem = activeLink.closest('.nav-item');
+
+                if (activeItem) {
+                    activeItem.classList.add('is-menu-active');
+                }
+
+                const parentGroup = activeLink.closest('.nav-group');
+
+                if (parentGroup) {
+                    parentGroup.classList.add('show');
+                    parentGroup.setAttribute('aria-expanded', 'true');
+                }
+            });
+        },
     }
 });

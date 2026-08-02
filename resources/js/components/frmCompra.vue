@@ -1,5 +1,34 @@
 <template>
     <main class="main">
+        <purchase-entry-workspace
+            :datos="datos"
+            :datos-pago="datosPago"
+            :providers="arrayProveedor"
+            :payment-types="arrayPago"
+            :payment-forms="arrayForma2"
+            :details="arrayDetalle"
+            :products="arrayArticulo"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :product-search="buscarP"
+            :product-criterion="criterioP"
+            :listado="listado"
+            :calculated-total="calcularTotal"
+            :errors="errorMostrarMsjCompra"
+            :is-busy="is_busy === 1"
+            :initial-loading="initialLoading"
+            :products-loading="productsLoading"
+            :details-loading="detailsLoading"
+            @update:productSearch="buscarP = $event"
+            @update:productCriterion="criterioP = $event"
+            @search-products="listarArticulo(1, buscarP, criterioP)"
+            @product-page="listarArticulo($event, buscarP, criterioP)"
+            @select-product="seleccionarTiendaArticulo"
+            @remove-line="eliminarDetalle"
+            @save="guardarCompra"
+            @cancel="volverCompraListado"
+        />
+        <template v-if="false">
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -394,6 +423,7 @@
             <!-- /.modal-dialog -->
         </div>
         <!--Fin modal Formulario Pago al credito-->
+        </template>
     </main>
 </template>
 
@@ -465,6 +495,9 @@
                 criterioP : 'articulo.nombre_comercial',
                 setTimeoutBuscador: '',
                 is_busy:0,
+                initialLoading: true,
+                productsLoading: false,
+                detailsLoading: false,
 
             }
         },
@@ -525,8 +558,9 @@
 
             listarArticulo(page,buscarP, criterioP){
                 let me = this;
+                me.productsLoading = true;
                 var url='/tienda/listarSinPaginate?id_proveedor='+me.datos.id_proveedor+'&page=' + page +'&buscar=' + buscarP + '&criterio=' + criterioP;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayArticulo=response.data.data;
                     me.pagination={total:response.data.total, 
                         current_page:response.data.current_page,
@@ -538,12 +572,15 @@
                 })
                 .catch(function(error){
                     console.log(error);
+                }).finally(function(){
+                    me.productsLoading = false;
                 });
             },
             listarArticuloBusquedaRapida(){
                 let me=this;
+                me.productsLoading = true;
                 var url='/tienda/listarSinPaginate?id_proveedor='+me.datos.id_proveedor+'&page=' + 1 +'&buscar=' + me.buscarP + '&criterio=' + me.criterioP;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayArticulo=response.data.data;
                     me.pagination={total:response.data.total, 
                         current_page:response.data.current_page,
@@ -555,6 +592,8 @@
                 })
                 .catch(function(error){
                     console.log(error)
+                }).finally(function(){
+                    me.productsLoading = false;
                 });                
             },
             BuscandoArticulo(){
@@ -649,7 +688,7 @@
             selectProveedor(){
                 let me=this;
                 var url='/proveedor/selectProveedor';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayProveedor=response.data;
                 })
                 .catch(function(error){
@@ -659,7 +698,7 @@
             selectTipoP(){
                 let me=this;
                 var url='/tipoPago/selectTipoP';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayPago=response.data;
                 })
                 .catch(function(error){
@@ -669,7 +708,7 @@
             selectFormaP(){
                 let me=this;
                 var url='/formaPago/selectFormaP';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayForma=response.data;
                     //me.arrayFormaPago=response.data;
                     me.arrayForma2 = response.data;
@@ -681,6 +720,7 @@
             },
             verCompra(data=[]){
                 let me = this;
+                me.detailsLoading = true;
                 me.listado = 2;
                 me.datos.id=data['id'];
                 me.datos.proveedor=data['proveedor'];
@@ -691,11 +731,13 @@
                 me.datos.formaPago=data['formaP'];
 
                 var url='/compra/permiso/detalle?id=' + data['id'];
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayDetalle= response.data;
                 })
                 .catch(function(error){
                     console.log(error);
+                }).finally(function(){
+                    me.detailsLoading = false;
                 });
             },
         
@@ -759,7 +801,7 @@
 
             validarCompra() {
                 this.errorCompra = 0;
-                if (this.datos.id_proveedor == "") {
+                if (!this.datos.id_proveedor || Number(this.datos.id_proveedor) === 0) {
                     Swal.fire({ icon: 'error', title: 'Seleccione un Proveedor' });
                     return this.errorCompra;
                 } 
@@ -893,15 +935,18 @@
                 })   
             } 
         },
-        mounted() {
-            // this.listarCompra(1, this.buscar, this.criterio);
-             this.selectProveedor();
-             this.selectFormaP();    
-             this.selectTipoP();
+        async mounted() {
+            this.initialLoading = true;
+            await Promise.all([
+                this.selectProveedor(),
+                this.selectFormaP(),
+                this.selectTipoP(),
+            ]);
+            this.initialLoading = false;
         }
     }
 </script>
-<style>
+<style scoped>
     .modal-content{
         width: 100% !important;
         position: absolute !important;

@@ -1,5 +1,7 @@
 <template>
     <main class="main">
+        <group-users-workspace />
+        <div v-if="false">
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -108,6 +110,7 @@
         <!-- </div> -->
          
 
+        </div>
     </main>
 </template>
 

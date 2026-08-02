@@ -94,9 +94,9 @@ Route::group(['middleware'=>['auth']],function(){
     Route::get('/dashboard/Producto',[DashboardController::class,'listarProductoMesDashboad']);
     Route::get('/dashboard/Producto/Meses',[DashboardController::class,'listarProductoMesesDashboad']);
 
-    Route::get('/main', function () {
+    Route::get('/main/{path?}', function () {
         return view('contenido/contenido');
-    })->name('main');
+    })->where('path', '.*')->name('main');
 
     //Rutas Cliente
     Route::get('/cliente', [ClienteController::class, 'index']);

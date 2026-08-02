@@ -1,5 +1,49 @@
 <template>
-    <main class="main">
+    <main class="main warehouse-legacy warehouse-legacy--products">
+        <warehouse-products-workspace
+            :rows="arrayArticulo"
+            :data="datos"
+            :errors="errores"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :categories="arrayTipoCategoria"
+            :units="arrayUnidad"
+            :providers="arrayProveedor"
+            :lines="arrayLinea"
+            :product-count="producto_registro"
+            :category-count="categoria_registro"
+            :provider-count="proveedor_registro"
+            :search="buscar"
+            :criterion="criterio"
+            :view="listado == 1 ? 'form' : 'list'"
+            :editing="tipoAccion == 2"
+            :loading="loading"
+            :table-loading="tableLoading"
+            :saving="saving"
+            @update:search="buscar = $event"
+            @update:criterion="criterio = $event"
+            @search="refreshProducts(1)"
+            @page="refreshProducts($event)"
+            @create="btnNuevoArticulo"
+            @edit="editarArticulo"
+            @toggle="toggleProductStatus"
+            @cancel="ocultarListado1"
+            @save="saveProduct"
+        />
+        <div v-if="false">
+        <warehouse-module-intro
+            title="Productos"
+            subtitle="Administra la ficha comercial, clasificación, presentación, costos y condiciones de conservación de cada producto."
+            primary-label="Productos registrados"
+            :primary-value="pagination.total || producto_registro"
+            primary-hint="Catálogo disponible"
+            secondary-label="Categorías"
+            :secondary-value="categoria_registro"
+            secondary-hint="Clasificaciones configuradas"
+            tertiary-label="Líneas"
+            :tertiary-value="linea_registro"
+            tertiary-hint="Líneas comerciales"
+        />
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -618,6 +662,7 @@
         <!--Fin modal Formulario Marca-->
 
 
+        </div>
     </main>
 </template>
 
@@ -715,6 +760,9 @@
                 arrayProveedor : [],
                 listado: 0,
                 setTimeoutBuscador: '',
+                loading: true,
+                tableLoading: false,
+                saving: false,
             }
         },
         computed : {
@@ -742,6 +790,28 @@
             }
         },
         methods : {
+            async refreshProducts(page){
+                this.tableLoading = true;
+                try {
+                    await this.listarArticulo(page, this.buscar, this.criterio);
+                } finally {
+                    this.tableLoading = false;
+                }
+            },
+            toggleProductStatus(row){
+                if(Number(row.estado) === 1){
+                    this.desactivarArticulo(row.id);
+                } else {
+                    this.activarArticulo(row.id);
+                }
+            },
+            saveProduct(){
+                if(this.tipoAccion === 2){
+                    this.modificarArticulo();
+                } else {
+                    this.guardarArticulo();
+                }
+            },
             cambiarVenta()
             {
                 if(this.datos.tipo == '0')
@@ -756,7 +826,7 @@
             listarArticulo(page, buscar, criterio){
                 let me=this;
                 var url='/articulo?page=' + page + '&buscar=' + buscar + '&criterio=' + criterio;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayArticulo=response.data.data;
                     me.pagination={total:response.data.total, 
                         current_page:response.data.current_page,
@@ -887,7 +957,7 @@
                 };
             },
            async guardarArticulo(){
- 
+                this.saving = true;
                 try {
                     let me = this;
                     let data = {
@@ -968,9 +1038,12 @@
                     if(error.response.data){
                         this.errores=error.response.data.errors;
                     }
+                } finally {
+                    this.saving = false;
                 }
             },
             async modificarArticulo(){
+                this.saving = true;
                 try {
                     let me = this;
                     const res = await axios.put('/articulo/modificar',me.datos);
@@ -1000,6 +1073,8 @@
                     if(error.response.data){
                         this.errores=error.response.data.errors;
                     }
+                } finally {
+                    this.saving = false;
                 }
             },
             registrosCategoria(){
@@ -1375,8 +1450,12 @@
                 });
             }
         },
-        mounted() {
-            this.listarArticulo(1, this.buscar, this.criterio);
+        async mounted() {
+            try {
+                await this.listarArticulo(1, this.buscar, this.criterio);
+            } finally {
+                this.loading = false;
+            }
             //this.listar2(1, this.buscar, this.criterio);
             this.registrosCategoria();
             this.registrosUnidad();

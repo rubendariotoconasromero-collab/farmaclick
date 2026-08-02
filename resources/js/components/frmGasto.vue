@@ -1,5 +1,38 @@
 <template>
     <main class="main">
+        <expense-registry-workspace
+            :rows="arrayGasto"
+            :reasons="arrayTipoMotivoGasto"
+            :payment-forms="arrayForma"
+            :datos="datos"
+            :reason-data="datosMotivoGasto"
+            :expense-count="gasto_registro"
+            :reason-count="motivo_registro"
+            :modal="modal"
+            :reason-modal="quickReasonModal"
+            :action="tipoAccion"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :search="buscar"
+            :criterion="criterio"
+            :server-errors="errores"
+            :validation-errors="errorMostrarMsjGasto"
+            :saving="isSaving"
+            @update:search="buscar = $event"
+            @update:criterion="criterio = $event"
+            @search="listarGasto(1, buscar, criterio)"
+            @page="cambiarPagina($event, buscar, criterio)"
+            @create="abrirModal('gasto', 'registrar')"
+            @edit="abrirModal('gasto', 'modificar', $event)"
+            @close="cerrarModal"
+            @save="guardarGasto"
+            @update="modificarGasto"
+            @calculate-deposit="cambiarDeposito"
+            @create-reason="quickReasonModal = true"
+            @close-reason="quickReasonModal = false"
+            @save-reason="guardarMotivoGasto"
+        />
+        <template v-if="false">
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -245,6 +278,7 @@
             <!-- /.modal-dialog -->
         </div>
         <!--Fin modal Formulario Cargo-->
+        </template>
     </main>
 </template>
 
@@ -296,6 +330,8 @@
                 buscar : '',
                 arrayTipoMotivoGasto : [],
                 setTimeoutBuscador: '',
+                quickReasonModal: false,
+                isSaving: false,
             }
         },
         computed : {
@@ -433,6 +469,8 @@
                 });
             }, */
             async guardarGasto(){
+                if (this.validarGasto()) return;
+                this.isSaving = true;
                 try {
                     let me = this;
                     console.log(this.datos);
@@ -449,7 +487,7 @@
                     const res = await axios.post('/gasto/guardar',data);
                     me.cerrarModal();
                     me.registrosGasto();
-                    me.listarGasto(1, '', 'nombre');   
+                    me.listarGasto(1, '', 'motivo_gasto.nombre');
                     Swal.fire({
                         position: 'top-end',
                         icon: 'success',
@@ -458,9 +496,11 @@
                         timer: 1500
                     })
                 } catch (error) {
-                    if(error.response.data){
+                    if(error.response && error.response.data){
                         this.errores=error.response.data.errors;
                     }
+                } finally {
+                    this.isSaving = false;
                 }
                 
             },
@@ -478,7 +518,9 @@
                         timer: 1500
                     }) 
                     me.registrosMotivoGasto();  
-                    me.limpiarDatosMotivo();    
+                    me.limpiarDatosMotivo();
+                    me.selectMotivoGasto();
+                    me.quickReasonModal = false;
                 })
                 .catch(function(error){
                     console.log(error);
@@ -497,6 +539,7 @@
                     return;
                 }
                 let me = this;
+                me.isSaving = true;
                 axios.put('/gasto/modificar',this.datos).then(function(response){
                      Swal.fire({
                         position: 'top-end',
@@ -506,8 +549,10 @@
                         timer: 1500
                     }) 
                     me.cerrarModal();
-                    me.listarGasto(1,'', 'motivo_gasto.nombre');                    
+                    me.listarGasto(1,'', 'motivo_gasto.nombre');
+                    me.isSaving = false;
                 }).catch(function(error){
+                    me.isSaving = false;
                     console.log(error);
                 });
             },         
@@ -515,7 +560,10 @@
                 this.errorGasto = 0;
                 this.errorMostrarMsjGasto = [];
 
-                if(!this.datos.monto) this.errorMostrarMsjGasto.push("El monto  no puede estar vacio ");
+                if(!this.datos.id_motivo_gasto || Number(this.datos.id_motivo_gasto) === 0) this.errorMostrarMsjGasto.push("Seleccione un motivo de gasto");
+                if(!this.datos.id_forma_pago || Number(this.datos.id_forma_pago) === 0) this.errorMostrarMsjGasto.push("Seleccione una forma de pago");
+                if(!this.datos.monto || Number(this.datos.monto) <= 0) this.errorMostrarMsjGasto.push("El monto debe ser mayor a cero");
+                if(Number(this.datos.id_forma_pago) === 6 && Number(this.datos.efectivo) > Number(this.datos.monto)) this.errorMostrarMsjGasto.push("El efectivo no puede superar el monto total");
                 if(this.errorMostrarMsjGasto.length) this.errorGasto=1;
                 return this.errorGasto;
             },
@@ -595,7 +643,7 @@
         }
     }
 </script>
-<style>
+<style scoped>
     .modal-content{
         width: 100% !important;
         position: absolute !important;

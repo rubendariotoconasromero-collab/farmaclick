@@ -1,5 +1,72 @@
 <template>
-    <main class="main">
+    <main class="main master-company">
+        <company-settings-workspace
+            :data="datosEmpresa"
+            :user="usuario"
+            :report-logo="imagenMinEmpresa"
+            :system-logo="imagenMinEmpresaLogo"
+            :user-logo="imagenMinEmpresaLogoUsuario"
+            :login-logo="imagenMinEmpresaLogoLogin"
+            :login-background="imagenMinEmpresaFondoLogin"
+            :disabled="isDisabled"
+            :loading="loading"
+            :saving="saving"
+            @edit="modificarEmpresa"
+            @cancel="cancelarModificarEmpresa"
+            @save="guardarEmpresa"
+            @report-logo="obtenerImagenTienda"
+            @system-logo="obtenerLogo"
+            @user-logo="obtenerLogoUsuario"
+            @login-logo="obtenerLogoLogin"
+            @login-background="obtenerFondoLogin"
+            @preview-system-logo="verLogo"
+            @preview-user-logo="verLogoUsuario"
+            @preview-login-logo="verLogoLogin"
+            @preview-login-background="verFondoLogin"
+        />
+        <div v-if="false">
+        <app-module-header
+            eyebrow="Datos maestros · Configuración"
+            title="Mi empresa"
+            subtitle="Gestiona la identidad comercial y los recursos visuales utilizados en reportes, menú y acceso al sistema."
+        >
+            <template #actions>
+                <app-button
+                    v-if="tipoAccionEmpresa == 1"
+                    icon="img/menu/configuracion.png"
+                    @click="modificarEmpresa"
+                >
+                    Editar configuración
+                </app-button>
+                <template v-else>
+                    <app-button variant="ghost" @click="cancelarModificarEmpresa">Cancelar</app-button>
+                    <app-button @click="guardarEmpresa">Guardar cambios</app-button>
+                </template>
+            </template>
+        </app-module-header>
+
+        <section class="master-company__metrics">
+            <app-metric-card
+                label="Empresa"
+                :value="datosEmpresa.nombre || 'Sin configurar'"
+                hint="Identidad principal"
+                icon="img/menu/tienda.png"
+            />
+            <app-metric-card
+                label="NIT"
+                :value="datosEmpresa.nit || 'Sin registrar'"
+                hint="Identificación tributaria"
+                icon="img/menu/configuracion.png"
+                tone="cyan"
+            />
+            <app-metric-card
+                label="Configuración"
+                :value="isDisabled ? 'Protegida' : 'En edición'"
+                :hint="isDisabled ? 'Activa edición para realizar cambios' : 'Revisa antes de guardar'"
+                icon="img/menu/control.png"
+                tone="neutral"
+            />
+        </section>
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -17,6 +84,12 @@
                                         NOMBRE DE LA EMPRESA
                                     </label>
                                     <input type="text" class="form-control" v-model="datosEmpresa.nombre" :disabled="isDisabled">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">
+                                        NIT
+                                    </label>
+                                    <input type="text" class="form-control" v-model="datosEmpresa.nit" :disabled="isDisabled">
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="exampleInputPassword1" class="form-label">
@@ -285,6 +358,7 @@
         </div>
         <!--Fin del modal-->
 
+        </div>
     </main>
 </template>
 
@@ -380,6 +454,8 @@
                 imagenMiniaturaFondoLogin : '',
 
                 usuario : {},
+                loading: true,
+                saving: false,
             }
         },
         created(){
@@ -448,6 +524,7 @@
             datosMiEmpresa(){
                 let me=this;
                 me.imagenMiniaturaTienda = 'img/logo_default/cargando.gif';
+                return new Promise(function(resolve){
                 setTimeout(function(){
 
                     var url='/mi_empresa/datos';
@@ -483,8 +560,10 @@
                     })
                     .catch(function(error){
                         console.log(error, 'PRUEBA ERROR')
-                    });
+                    })
+                    .finally(resolve);
                 }, 300);
+                });
             },
             listarEmpresa(page, buscar, criterio){
                 let me=this;
@@ -615,6 +694,7 @@
 
             guardarEmpresa(){
                 let me = this;
+                me.saving = true;
                 if(me.datosEmpresa.imagenActual != me.datosEmpresa.foto){
                     axios.delete('/tienda/delete/' + me.datosEmpresa.imagenActual).then(function(response){
                     }).catch(function(error){
@@ -649,7 +729,7 @@
                         console.log(error);
                     });
                 }
-                axios.put('/mi_empresa/modificar',this.datosEmpresa).then(function(response){
+                return axios.put('/mi_empresa/modificar',this.datosEmpresa).then(function(response){
                      Swal.fire({
                         position: 'top-end',
                         icon: 'success',
@@ -664,6 +744,8 @@
                     location.reload();
                 }).catch(function(error){
                     console.log(error);
+                }).finally(function(){
+                    me.saving = false;
                 });
             },
             verLogo(){
@@ -783,15 +865,129 @@
                 me.datosMiEmpresa();
             },
         },
-        mounted() {
+        async mounted() {
             this.listarEmpresa(1, this.buscar, this.criterio);
             this.cantidadTiendas();
-            this.datosMiEmpresa();
             this.usuarioAuth();
+            try {
+                await this.datosMiEmpresa();
+            } finally {
+                this.loading = false;
+            }
         }
     }
 </script>
 <style>
+    .master-company {
+        display: grid;
+        gap: 1rem;
+        padding: 1.25rem !important;
+        background: #f4f8f6;
+    }
+    .master-company__metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+    }
+    .master-company > .row {
+        margin: 0;
+    }
+    .master-company > .row > .col {
+        padding: 0;
+    }
+    .master-company > .row > .col > .card {
+        overflow: hidden;
+        margin: 0;
+        background: #fff;
+        border: 1px solid #d8e5df;
+        border-radius: 14px;
+        box-shadow: 0 6px 18px rgba(23, 54, 43, .065);
+    }
+    .master-company > .row > .col > .card > .card-header {
+        display: none;
+    }
+    .master-company > .row > .col > .card > .row {
+        margin: 0 !important;
+    }
+    .master-company > .row > .col > .card > .row > .row {
+        width: 100%;
+        margin: 0 !important;
+        padding: 1.25rem;
+    }
+    .master-company .form-label {
+        color: #315044;
+        font-size: .72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .025em;
+    }
+    .master-company .form-control {
+        min-height: 40px;
+        color: #17362b;
+        border-color: #bdd2c9;
+        border-radius: 8px;
+    }
+    .master-company .form-control:focus {
+        border-color: #0e93b5;
+        box-shadow: 0 0 0 3px rgba(62, 198, 224, .18);
+    }
+    .master-company .form-control:disabled {
+        color: #60746b;
+        background: #f2f6f4;
+        border-color: #d8e5df;
+    }
+    .master-company .card.mb-4 {
+        overflow: hidden;
+        border: 1px solid #d8e5df;
+        border-radius: 14px;
+        box-shadow: none;
+    }
+    .master-company .card.mb-4 .card-header {
+        color: #17362b !important;
+        background: #edf7f1 !important;
+        border-color: #d8e5df;
+    }
+    .master-company figure {
+        display: grid;
+        min-height: 160px;
+        margin: 0;
+        padding: 1rem;
+        place-items: center;
+        background: #f8fbf9;
+        border: 1px dashed #b9d6ca;
+        border-radius: 12px;
+    }
+    .master-company figure img {
+        max-width: 100%;
+        object-fit: contain;
+        border-radius: 10px;
+    }
+    .master-company input[type="color"] {
+        width: 64px;
+        height: 42px;
+        padding: .2rem;
+        background: #fff;
+        border: 1px solid #bdd2c9 !important;
+        border-radius: 8px;
+    }
+    .master-company .button {
+        display: none !important;
+    }
+    .master-company .btn-success {
+        color: #17693c !important;
+        background: #effaf4 !important;
+        border-color: #b9d6ca !important;
+    }
+    @media (max-width: 820px) {
+        .master-company__metrics {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (max-width: 640px) {
+        .master-company {
+            padding: .75rem !important;
+        }
+    }
     .modal-content{
         width: 100% !important;
         position: absolute !important;

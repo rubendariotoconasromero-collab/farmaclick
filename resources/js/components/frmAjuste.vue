@@ -1,5 +1,54 @@
 <template>
-    <main class="main">
+    <main class="main warehouse-legacy warehouse-legacy--adjustments">
+        <warehouse-adjustment-workspace
+            :rows="arrayAjuste"
+            :products="arrayArticulo"
+            :details="arrayDetalle"
+            :reasons="arrayMotivo"
+            :data="datos"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :product-pagination="productPagination"
+            :product-pages="productPagesNumber"
+            :search="buscar"
+            :criterion="criterio"
+            :product-search="buscarP"
+            :product-criterion="criterioP"
+            :view="listado == 1 ? 'form' : 'list'"
+            :loading="loading"
+            :table-loading="tableLoading"
+            :product-loading="productLoading"
+            :saving="saving"
+            @update:search="buscar = $event"
+            @update:criterion="criterio = $event"
+            @update:product-search="buscarP = $event"
+            @update:product-criterion="criterioP = $event"
+            @update:reason="updateAdjustmentReason"
+            @search="refreshAdjustments(1)"
+            @page="refreshAdjustments($event)"
+            @create="btnNuevoAjuste"
+            @cancel="ocultarListado1"
+            @open-products="openAdjustmentProducts"
+            @search-products="refreshAdjustmentProducts(1)"
+            @product-page="refreshAdjustmentProducts($event)"
+            @select-product="selectAdjustmentProduct"
+            @remove-detail="eliminarDetalle"
+            @save="guardarAjuste"
+        />
+        <div v-if="false">
+        <warehouse-module-intro
+            title="Ajustes de inventario"
+            subtitle="Registra entradas o salidas justificadas y revisa el historial de movimientos aplicados al stock."
+            primary-label="Ajustes"
+            :primary-value="pagination.total || arrayAjuste.length"
+            primary-hint="Movimientos registrados"
+            secondary-label="Detalle actual"
+            :secondary-value="arrayDetalle.length"
+            secondary-hint="Productos por procesar"
+            tertiary-label="Control"
+            tertiary-value="Trazable"
+            tertiary-hint="Movimiento y motivo asociados"
+        />
         <!-- <div class="container"> -->
         <div class="row">
             <div class="col">
@@ -353,6 +402,7 @@
             </div>
         </div>
         <!--Fin modal Formulario Producto-->
+        </div>
     </main>
 </template>
 
@@ -401,6 +451,14 @@
                     'from' : 0,
                     'to' : 0,
                 },
+                productPagination : {
+                    'total' : 0,
+                    'current_page' : 1,
+                    'per_page' : 0,
+                    'last_page' : 1,
+                    'from' : 0,
+                    'to' : 0,
+                },
                 offset : 3,
                 criterio : 'articulo.nombre_comercial',
                 buscar : '',
@@ -409,10 +467,27 @@
                 listado: 0,
                 setTimeoutBuscador: '',
                 errores:{},
-                criterioP : 'articulo.nombre_comercial'
+                criterioP : 'articulo.nombre_comercial',
+                loading: true,
+                tableLoading: false,
+                productLoading: false,
+                saving: false,
             }
         },
         computed : {
+            productPagesNumber: function(){
+                if(!this.productPagination.to){
+                    return [];
+                }
+                var from = Math.max(1, this.productPagination.current_page - this.offset);
+                var to = Math.min(this.productPagination.last_page, from + (this.offset * 2));
+                var pagesArray = [];
+                while(from <= to){
+                    pagesArray.push(from);
+                    from++;
+                }
+                return pagesArray;
+            },
             isActived: function(){
                 return this.pagination.current_page;
             },
@@ -437,10 +512,37 @@
             }
         },
         methods : {
+            updateAdjustmentReason(value){
+                this.datos.id_motivo_ajuste = value;
+                this.seleccionarMotivo();
+            },
+            async refreshAdjustments(page){
+                this.tableLoading = true;
+                try {
+                    await this.listarAjuste(page, this.buscar, this.criterio);
+                } finally {
+                    this.tableLoading = false;
+                }
+            },
+            openAdjustmentProducts(){
+                this.buscarP = '';
+                this.refreshAdjustmentProducts(1);
+            },
+            async refreshAdjustmentProducts(page){
+                this.productLoading = true;
+                try {
+                    await this.listarArticulo(page, this.buscarP, this.criterioP);
+                } finally {
+                    this.productLoading = false;
+                }
+            },
+            selectAdjustmentProduct(row){
+                this.seleccionarArticulo(row, this.arrayArticulo.indexOf(row));
+            },
             listarAjuste(page, buscar, criterio){
                 let me=this;
                 var url='/ajuste?page=' + page + '&buscar=' + buscar + '&criterio=' + criterio;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayAjuste=response.data.data;
                     me.pagination={total:response.data.total, 
                         current_page:response.data.current_page,
@@ -480,9 +582,9 @@
             listarArticulo(page,buscarP,criterioP){
                 let me = this;
                 var url='/tienda/listarSinPaginateAjuste?page=' + page + '&buscar=' + buscarP+ '&criterio=' + criterioP;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayArticulo= response.data.data;
-                      me.pagination={total:response.data.total, 
+                      me.productPagination={total:response.data.total,
                         current_page:response.data.current_page,
                         per_page: response.data.per_page,
                         last_page: response.data.last_page,
@@ -499,7 +601,7 @@
                 var url='/tienda/listarSinPaginateAjuste?page=' + 1 + '&buscar=' + me.buscarP+ '&criterio=' + me.criterioP;
                 axios.get(url).then(function(response){
                     me.arrayArticulo=response.data.data;
-                    me.pagination={total:response.data.total, 
+                    me.productPagination={total:response.data.total,
                         current_page:response.data.current_page,
                         per_page: response.data.per_page,
                         last_page: response.data.last_page,
@@ -664,6 +766,7 @@
 
 
             async ajuste(){
+                this.saving = true;
                 try {
                     let me = this;
                     const res = await axios.post('/ajuste/guardar',{
@@ -702,6 +805,8 @@
                     if(error.response.data){
                         this.errores=error.response.data.errors;
                     }
+                } finally {
+                    this.saving = false;
                 }
             },
             seleccionarMotivo(){
@@ -751,19 +856,25 @@
                             title: 'Error...',
                             text: 'Debe Seleccionar algun Producto!'
                         })
-                }else{
-                    if(me.datos.id_motivo_ajuste == 0){
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error...',
-                            text: 'Debe Seleccionar un Motivo de Ajuste!'
-                        })
-                    }
+                    return true;
                 }
+                if(me.datos.id_motivo_ajuste == 0){
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error...',
+                        text: 'Debe Seleccionar un Motivo de Ajuste!'
+                    })
+                    return true;
+                }
+                return false;
             }           
         },
-        mounted() {
-            this.listarAjuste(1, this.buscar, this.criterio);
+        async mounted() {
+            try {
+                await this.listarAjuste(1, this.buscar, this.criterio);
+            } finally {
+                this.loading = false;
+            }
             this.registrosAjuste();
 
         }

@@ -1,5 +1,35 @@
 <template>
     <main class="main">
+        <purchase-payments-workspace
+            :listado="listado"
+            :providers="arrayProveedor"
+            :accounts="arrayDetalleCliente"
+            :payment-forms="arrayForma"
+            :payment-history="arrayCXCobrar"
+            :datos="datos"
+            :datos-pago="datosPago"
+            :ultimo-pago="ultimoPago"
+            :estado-caja="estadoCaja"
+            :search="buscar"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :calculated-balance="calcularSaldo"
+            :is-busy="is_busy === 1"
+            :initial-loading="initialLoading"
+            :providers-loading="providersLoading"
+            :accounts-loading="accountsLoading"
+            :payment-history-loading="paymentHistoryLoading"
+            @update:search="buscar = $event"
+            @search="listarProveedor(buscar)"
+            @typing="BuscandoProveedor"
+            @page="cambiarPagina($event, buscar, criterio)"
+            @select-provider="PasarPago"
+            @back="volverPagoVenta"
+            @pay="realizarPagos"
+            @save-payment="guardarAmortizacion"
+            @clear-payment="limpiarCXCobrar"
+        />
+        <template v-if="false">
         
         <!-- <div class="container"> -->
             <div class="row">
@@ -233,6 +263,7 @@
 
 
 
+        </template>
     </main>
 </template>
 
@@ -264,6 +295,7 @@
                 },    
                 id_compra_aux:0, 
                 arrayCXCobrar : [],
+                arrayListaPagos: [],
                 ultimoPago : {},
                 CXCobrar: [],                            
                 arrayTienda : [],
@@ -292,6 +324,10 @@
                 tipo_producto: 'Venta Directa',
                 estadoCaja: '',
                 is_busy:0,
+                initialLoading: true,
+                providersLoading: false,
+                accountsLoading: false,
+                paymentHistoryLoading: false,
             }
         },
         computed : {
@@ -328,7 +364,7 @@
             selectForma(){
                 let me=this;
                 var url='/formaPago/selectFormaPago2';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayForma=response.data;
                 })
                 .catch(function(error){
@@ -338,22 +374,25 @@
             verificarCaja(){
                 let me = this;
                 var url='/arqueo_caja/estado_caja';
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.estadoCaja= response.data.estado;
                 })
                 .catch(function(error){
                     console.log(error);
                 });
             },
-            realizarPagos(pago) {
+            async realizarPagos(pago) {
                 this.is_busy=0;
-                this.selectForma();
-                this.listarPagos(pago.id);
+                this.paymentHistoryLoading = true;
                 this.id_compra_aux=pago.id;
-                this.listarCXCobrar(pago.id);
                 this.datosPago.monto_total = pago.total;
                 this.datosPago.saldo = pago.saldo;
                 this.datosPago.amortizacion = this.datosPago.amortizacion;
+                await Promise.all([
+                    this.selectForma(),
+                    this.listarPagos(pago.id),
+                    this.listarCXCobrar(pago.id),
+                ]);
             },
             limpiarCXCobrar(){
                 this.datosPago ={
@@ -376,27 +415,34 @@
             },
             listarCXCobrar(pago){
                 let me = this;
+                me.paymentHistoryLoading = true;
                 var url='/detalle_pago_creditoC?id_pago=' + pago;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayCXCobrar= response.data;
                     me.CXCobrar = response.data;
                     me.cargarUltimoPago();
                 })
                 .catch(function(error){
                     console.log(error);
+                }).finally(function(){
+                    me.paymentHistoryLoading = false;
                 });
             },
             cargarUltimoPago(){
                 const array = this.CXCobrar;
-                this.ultimoPago=array[array.length-1]; 
+                this.ultimoPago = array.length
+                    ? array[array.length - 1]
+                    : { monto_total: 0, amortizacion: 0, saldo: 0 };
             },
             listarPagos(buscarP){
                 let me = this;
                 var url='/pago_compra?buscar=' + buscarP + '&id_tienda=' + me.id_tienda +  '&tipo_producto=' + me.tipo_producto;
-                axios.get(url).then(function(response){
-                    me.arrayListaPagos= response.data;
-                    me.datosPago.fecha_final=me.arrayListaPagos[0].fecha_final;
-                    me.datosPago.id_pago=me.arrayListaPagos[0].id;
+                return axios.get(url).then(function(response){
+                    me.arrayListaPagos = response.data || [];
+                    if (me.arrayListaPagos.length) {
+                        me.datosPago.fecha_final = me.arrayListaPagos[0].fecha_final;
+                        me.datosPago.id_pago = me.arrayListaPagos[0].id;
+                    }
                     
                 })
                 .catch(function(error){
@@ -405,23 +451,19 @@
             },
             listarProveedor(buscar){
                 let me = this;
+                me.providersLoading = true;
                 var url='/proveedor_pago?buscar=' + buscar;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayProveedor= response.data;
                 })
                 .catch(function(error){
                     console.log(error);
+                }).finally(function(){
+                    me.providersLoading = false;
                 });
             },
             listarClienteBusquedaRapida(){
-                let me = this;
-                var url='/proveedor_pago?buscar=' + me.buscar;
-                axios.get(url).then(function(response){
-                    me.arrayProveedor= response.data;
-                })
-                .catch(function(error){
-                    console.log(error);
-                });
+                return this.listarProveedor(this.buscar);
             },
             BuscandoProveedor(){
                 let me = this;
@@ -446,7 +488,12 @@
                   title: "Error...",
                   text: "Ingrese un monto!",
                 });
-                me.limpiarCXCobrar();
+                me.limpiarPago();
+              } else if (!me.datosPago.id_forma_pago || Number(me.datosPago.id_forma_pago) === 0) {
+                Swal.fire({
+                  icon: "error",
+                  title: "Seleccione una forma de pago",
+                });
               } else {
                 console.log(me.ultimoPago.amortizacion);
                 if (me.datosPago.amortizacion > parseFloat(me.ultimoPago.saldo)) {
@@ -482,9 +529,16 @@
                             me.listarCXCobrar(me.datosPago.id_pago);
                             // me.listarPagosArticulos();
                             me.datosPago.id_forma_pago = 2;
+                            me.is_busy = 0;
                             })
                             .catch(function (error) {
-                            console.log(error);
+                                me.is_busy = 0;
+                                console.log(error);
+                                Swal.fire({
+                                    icon: "error",
+                                    title: "No se pudo registrar el pago",
+                                    text: "Intente nuevamente.",
+                                });
                             });
                         }
                         me.is_busy=1;
@@ -503,12 +557,15 @@
             },
             cargarDetalle(){
                 let me = this;
+                me.accountsLoading = true;
                 var url='/pagos_proveedor?buscar=' + me.datos.cliente ;
-                axios.get(url).then(function(response){
+                return axios.get(url).then(function(response){
                     me.arrayDetalleCliente= response.data;
                 })
                 .catch(function(error){
                     console.log(error);
+                }).finally(function(){
+                    me.accountsLoading = false;
                 });
             },
             limpiarPago(){
@@ -521,13 +578,20 @@
                 me.listarProveedor( buscar);
             }
         },
-        mounted() {
-            this.listarProveedor(this.buscar);
-            this.verificarCaja();
+        async mounted() {
+            this.initialLoading = true;
+            await Promise.all([
+                this.listarProveedor(this.buscar),
+                this.verificarCaja(),
+            ]);
+            this.initialLoading = false;
+        },
+        beforeDestroy() {
+            clearTimeout(this.setTimeoutBuscador);
         }
     }
 </script>
-<style>
+<style scoped>
     .modal-content{
         width: 100% !important;
         position: absolute !important;

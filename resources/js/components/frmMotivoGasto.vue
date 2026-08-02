@@ -1,5 +1,27 @@
 <template>
     <main class="main">
+        <expense-reasons-workspace
+            :rows="arrayMotivoGasto"
+            :datos="datos"
+            :count="cargo_registro"
+            :modal="modal"
+            :action="tipoAccion"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :search="buscar"
+            :server-errors="errores"
+            :validation-errors="errorMostrarMsjMotivoGasto"
+            :saving="isSaving"
+            @update:search="buscar = $event"
+            @search="listarMotivoGasto(1, buscar, criterio)"
+            @page="cambiarPagina($event, buscar, criterio)"
+            @create="abrirModal('motivo_gasto', 'registrar')"
+            @edit="abrirModal('motivo_gasto', 'modificar', $event)"
+            @close="cerrarModal"
+            @save="guardarMotivoGasto"
+            @update="modificarMotivoGasto"
+        />
+        <template v-if="false">
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -142,6 +164,7 @@
             <!-- /.modal-dialog -->
         </div>
         <!--Fin del modal-->   
+        </template>
     </main>
 </template>
 
@@ -175,6 +198,7 @@
                 criterio : 'nombre',
                 buscar : '',
                 setTimeoutBuscador: '',
+                isSaving: false,
             }
         },
         computed : {
@@ -257,6 +281,8 @@
                 });                
             },  
             async guardarMotivoGasto(){
+                if (this.validarMotivoGasto()) return;
+                this.isSaving = true;
                 try {
                     let me = this;
                     const res = await axios.post('/motivo_gasto/guardar',this.datos);
@@ -283,12 +309,16 @@
                     }  
                     
                 } catch (error) {
-                    if(error.response.data){
+                    if(error.response && error.response.data){
                         this.errores=error.response.data.errors;
                     }
+                } finally {
+                    this.isSaving = false;
                 }
             }, 
             async modificarMotivoGasto(){
+                if (this.validarMotivoGasto()) return;
+                this.isSaving = true;
                 try {
                     let me = this;
                     const res = await axios.put('/motivo_gasto/modificar',this.datos);
@@ -315,10 +345,12 @@
                     }  
                     
                 } catch (error) {
-                    if(error.response.data){
+                    if(error.response && error.response.data){
                         this.errores=error.response.data.errors;
                         console.log(this.datos);
                     }
+                } finally {
+                    this.isSaving = false;
                 }
             },         
             validarMotivoGasto(){
@@ -381,7 +413,7 @@
         }
     }
 </script>
-<style>
+<style scoped>
     .modal-content{
         width: 100% !important;
         position: absolute !important;

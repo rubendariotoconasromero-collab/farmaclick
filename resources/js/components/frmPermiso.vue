@@ -1,5 +1,7 @@
 <template>
     <main class="main">
+        <permissions-workspace />
+        <div v-if="false">
         <!-- <div class="container"> -->
         <div class="row">
             <div class="col">
@@ -502,6 +504,7 @@
             <!-- /.modal-dialog -->
         </div>
         <!--Fin modal Formulario Grupo-->
+        </div>
     </main>
 </template>
 

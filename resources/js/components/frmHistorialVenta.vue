@@ -1,5 +1,23 @@
 <template>
     <main class="main">
+        <sales-history-workspace
+            :rows="arrayVenta"
+            :details="arrayDetalle"
+            :datos="datos"
+            :pagination="pagination"
+            :pages="pagesNumber"
+            :listado="listado"
+            :search="buscar"
+            :criterion="criterio"
+            @update:search="buscar = $event"
+            @update:criterion="criterio = $event"
+            @search="listarVenta(1, buscar, criterio)"
+            @page="cambiarPagina($event, buscar, criterio)"
+            @view="verVenta"
+            @back="volverVentaListado"
+            @print="cargarPdf(datos.id, datos.foto, datos.empresa_nombre)"
+        />
+        <template v-if="false">
         <!-- <div class="container"> -->
             <div class="row">
                 <div class="col">
@@ -617,6 +635,7 @@
             <!-- /.modal-dialog -->
         </div>
         <!--Fin modal Formulario Pago al credito-->
+        </template>
     </main>
 </template>
 
@@ -945,43 +964,33 @@
                     console.log(error)
                 });
             },
-            verVenta(data=[]){
+            async verVenta(data=[]){
                 let me = this;
                 me.listado = 2;
                 me.datos.id=data['id'];
                 me.datos.cliente=data['cliente'];
                 me.datos.fecha=data['fecha'];
+                me.datos.sub_total=data['sub_total'];
                 me.datos.descuento=data['descuento'];
+                me.datos.total=data['total'];
                 me.datos.tipoPago=data['tipoP'];
                 me.datos.formaPago=data['formaP'];
                 me.datos.id_descuento=data['id_descuento'];
 
-                var url='/venta/permiso/detalle?id=' + data['id'];
-                axios.get(url).then(function(response){
-                    me.arrayDetalle= response.data;
-                })
-                .catch(function(error){
-                    console.log(error);
-                });
-
-                var url='/tienda?page=' + 1 + '&buscar=' + this.buscar + '&criterio=' + this.criterio;
-                axios.get(url).then(function(response){
-                    me.arrayEmpresa=response.data.data;
-                    me.empresa = me.arrayEmpresa.find(seg => (seg.id == me.arrayDetalle[0].id_tienda));
-                    me.datos.foto = me.empresa.foto;
-                    me.datos.empresa_nombre = me.empresa.nombre;
-                    me.datos.empresa_direccion = me.empresa.direccion;
-                    me.pagination={total:response.data.total, 
-                        current_page:response.data.current_page,
-                        per_page: response.data.per_page,
-                        last_page: response.data.last_page,
-                        from: response.data.from,
-                        to: response.data.to
+                try {
+                    const detailResponse = await axios.get('/venta/permiso/detalle?id=' + data['id']);
+                    me.arrayDetalle = detailResponse.data;
+                    if (me.arrayDetalle.length) {
+                        const companyResponse = await axios.get('/tienda?page=1&buscar=&criterio=nombre');
+                        me.arrayEmpresa = companyResponse.data.data || [];
+                        me.empresa = me.arrayEmpresa.find(item => item.id == me.arrayDetalle[0].id_tienda) || {};
+                        me.datos.foto = me.empresa.foto || '';
+                        me.datos.empresa_nombre = me.empresa.nombre || '';
+                        me.datos.empresa_direccion = me.empresa.direccion || '';
                     }
-                })
-                .catch(function(error){
-                    console.log(error)
-                });
+                } catch (error) {
+                    console.log(error);
+                }
             },
             cargarPdf(id,foto,empresa_nombre) {
                 axios.get('/venta/pdfVentasGeneral?id='
@@ -1233,7 +1242,7 @@
         }
     }
 </script>
-<style>
+<style scoped>
     .modal-content{
         width: 100% !important;
         position: absolute !important;
