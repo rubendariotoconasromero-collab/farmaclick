@@ -130,21 +130,21 @@ class CompraController extends BitacoraController
             }else if($request->id_forma_pago == 2)
             {
                 $compra->total_efectivo =$request->total;
-                $compra->total_deposito = $request->total_deposito == '' ? '0' : $request->total_deposito;
+                $compra->total_deposito = 0;
 
             }else if($request->id_forma_pago == 3)
             {
-                $compra->total_efectivo = $request->total_efectivo == '' ? '0' : $request->total_efectivo;
+                $compra->total_efectivo = 0;
                 $compra->total_deposito =$request->total;
 
             }else if($request->id_forma_pago == 4)
             {
-                $compra->total_efectivo = $request->total_efectivo == '' ? '0' : $request->total_efectivo;
+                $compra->total_efectivo = 0;
                 $compra->total_deposito =$request->total;
 
             }else if($request->id_forma_pago == 5)
             {
-                $compra->total_efectivo = $request->total_efectivo == '' ? '0' : $request->total_efectivo;
+                $compra->total_efectivo = 0;
                 $compra->total_deposito =$request->total;
             }else
             {
@@ -296,8 +296,17 @@ class CompraController extends BitacoraController
             $this->guardarBitacora($datos);
 
             DB::commit();
-        } catch (Exception $e){
+            return response()->json([
+                'message' => 'Compra registrada exitosamente.',
+                'id' => $compra->id,
+            ], 201);
+        } catch (\Throwable $e){
             DB::rollBack();
+            report($e);
+
+            return response()->json([
+                'message' => 'No se pudo registrar la compra.',
+            ], 500);
         }
     }
 
@@ -508,145 +517,107 @@ class CompraController extends BitacoraController
         $mayor = DB::table('control')->where('control.tabla','=','Compra')->count();
          return $mayor;
     }
-    public function pdfComprasGeneral(Request $request){
+    private function datosNotaCompra($id)
+    {
+        $compra = Compra::join('users', 'compra.id_usuario', '=', 'users.id')
+            ->join('proveedor', 'compra.id_proveedor', '=', 'proveedor.id')
+            ->join('forma_pago', 'compra.id_forma_pago', '=', 'forma_pago.id')
+            ->join('tipo_pago', 'compra.id_tipo_pago', '=', 'tipo_pago.id')
+            ->select(
+                'compra.id', 'compra.fecha', 'compra.descripcion', 'compra.sub_total',
+                'compra.descuento', 'compra.total', 'compra.estado',
+                'compra.total_efectivo', 'compra.total_deposito',
+                'users.name as usuario', 'proveedor.nombre as proveedor',
+                'forma_pago.nombre as forma_pago', 'tipo_pago.nombre as tipo_pago'
+            )
+            ->where('compra.id', $id)
+            ->firstOrFail();
 
-        $id = $request->id;
-        $foto = $request->foto;
+        $detalles = DetalleCompra::join('tienda_articulo', 'detalle_compra.id_producto', '=', 'tienda_articulo.id')
+            ->join('articulo', 'tienda_articulo.id_articulo', '=', 'articulo.id')
+            ->join('tienda', 'tienda_articulo.id_tienda', '=', 'tienda.id')
+            ->leftJoin('categoria', 'articulo.id_categoria', '=', 'categoria.id')
+            ->leftJoin('lote', 'detalle_compra.id_lote', '=', 'lote.id')
+            ->select(
+                'detalle_compra.costo_compra', 'detalle_compra.cantidad',
+                'detalle_compra.sub_total', 'detalle_compra.descuento',
+                'articulo.nombre_comercial as articulo', 'tienda.nombre as tienda',
+                'categoria.nombre as categoria', 'lote.lote', 'lote.fecha_vecimiento'
+            )
+            ->where('detalle_compra.id_compra', $id)
+            ->orderBy('detalle_compra.id_producto')
+            ->get();
 
-        $compra= Compra::join('users','compra.id_usuario','=','users.id')
-        ->join('proveedor','compra.id_proveedor','=','proveedor.id')
-        ->join('forma_pago','compra.id_forma_pago','=','forma_pago.id')
-        ->join('tipo_pago','compra.id_tipo_pago','=','tipo_pago.id')
-        ->select('compra.id','compra.fecha','compra.sub_total','compra.descuento',
-        'compra.total','compra.estado','users.name','proveedor.nombre as proveedor','forma_pago.nombre as formaP','tipo_pago.nombre as tipo','compra.total_efectivo','compra.total_deposito')
-        ->where('compra.id',$id)
-        ->orderBy('compra.id','desc')->get();
+        $empresa = MiEmpresa::select(
+            'nombre', 'nit', 'representante', 'direccion', 'telefono',
+            'localidad', 'Correo as correo', 'sitio_web', 'foto'
+        )->first();
 
-        $detalleCompra= detalleCompra::join('tienda_articulo','detalle_compra.id_producto','=','tienda_articulo.id')
-        ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-        ->join('tienda','tienda_articulo.id_tienda','=','tienda.id')
-        ->join('categoria','articulo.id_categoria','=','categoria.id')
-        ->select('detalle_compra.id_compra','detalle_compra.costo_compra','articulo.costo_unitario as costo_unitario',
-        'articulo.costo_mayorista as costo_mayorista','articulo.costo_preferencial as costo_preferencial','articulo.nombre_comercial as articulo',
-        'detalle_compra.cantidad','detalle_compra.sub_total','tienda.nombre as tienda','categoria.nombre as categoria','detalle_compra.descuento')
-        ->where('detalle_compra.id_compra','=',$id)
-        ->get();
-
-        $mi_empresa= MiEmpresa::select('mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
-
-
-        $usuario = \Auth::user()->name;
-        $objdate = new DateTime();
-        $fecha_impresion=$objdate->format('d/m/Y');
-        $proveedor=$compra[0]->proveedor;
-        $fecha=$compra[0]->fecha;
-        $forma_pago=$compra[0]->formaP;
-        $tipo_pago=$compra[0]->tipo;
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $detalles=$detalleCompra;
-        $total=$compra[0]->total;
-        $descuento=$compra[0]->descuento;
-        $sub_total=$compra[0]->sub_total;
-        $total_efectivo=$compra[0]->total_efectivo;
-        $total_deposito=$compra[0]->total_deposito;
-        $foto_empresa=$mi_empresa[0]->foto;
-
-        $cont=Compra::count();
-        $pdf = \PDF::loadView('pdf.compra.compra-general', [
-            'foto_empresa'=>$foto_empresa,
-            'compras'=>$compra,
-            'fecha'=>$fecha,
-            'proveedor'=>$proveedor,
-            'forma_pago'=>$forma_pago,
-            'tipo_pago'=>$tipo_pago,
-            'detalles'=>$detalles,
-            'total'=>$total,
-            'id'=>$id,
-            'descuento'=>$descuento,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'sub_total'=>$sub_total,
-            'foto'=>$foto,
-            'fecha_impresion'=>$fecha_impresion,
-            'usuario'=>$usuario,
-            'total_efectivo'=>$total_efectivo,
-            'total_deposito'=>$total_deposito,
-        ]);
-        return $pdf->setPaper('letter', 'portrait')->stream('Compras.pdf');
+        return [
+            'compra' => $compra,
+            'detalles' => $detalles,
+            'empresa' => $empresa,
+            'logo' => $this->logoNotaCompra($empresa),
+            'fecha_impresion' => now()->format('d/m/Y H:i'),
+        ];
     }
-    public function pdfComprasGeneral2(Request $request){
 
-        $var2=DB::select("SELECT  MAX(id) as compra from compra");
-        $id=$var2[0]->compra;
-        //dd($id);
-        //$foto = $request->foto;
+    private function logoNotaCompra($empresa)
+    {
+        $candidatos = [];
 
-        $compra= Compra::join('users','compra.id_usuario','=','users.id')
-        ->join('proveedor','compra.id_proveedor','=','proveedor.id')
-        ->join('forma_pago','compra.id_forma_pago','=','forma_pago.id')
-        ->join('tipo_pago','compra.id_tipo_pago','=','tipo_pago.id')
-        ->select('compra.id','compra.fecha','compra.sub_total','compra.descuento',
-        'compra.total','compra.estado','users.name','proveedor.nombre as proveedor','forma_pago.nombre as formaP','tipo_pago.nombre as tipo','compra.total_efectivo','compra.total_deposito')
-        ->where('compra.id',$id)
-        ->orderBy('compra.id','desc')->get();
+        if ($empresa && $empresa->foto) {
+            $archivo = basename(str_replace('\\', '/', $empresa->foto));
+            $candidatos[] = public_path('img/logo/' . $archivo);
+            $candidatos[] = public_path('img/mi_empresa/' . $archivo);
+        }
 
-        $detalleCompra= detalleCompra::join('tienda_articulo','detalle_compra.id_producto','=','tienda_articulo.id')
-        ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-        ->join('tienda','tienda_articulo.id_tienda','=','tienda.id')
-        ->join('categoria','articulo.id_categoria','=','categoria.id')
-        ->select('detalle_compra.id_compra','detalle_compra.costo_compra','articulo.costo_unitario as costo_unitario',
-        'articulo.costo_mayorista as costo_mayorista','articulo.costo_preferencial as costo_preferencial','articulo.nombre_comercial as articulo',
-        'detalle_compra.cantidad','detalle_compra.sub_total','tienda.nombre as tienda','categoria.nombre as categoria','detalle_compra.descuento')
-        ->where('detalle_compra.id_compra','=',$id)
-        ->get();
+        $candidatos[] = public_path('img/FarmaClick_logo_horizontal.png');
 
-        $mi_empresa= MiEmpresa::select('mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
+        foreach ($candidatos as $ruta) {
+            if (is_file($ruta) && is_readable($ruta)) {
+                $mime = function_exists('mime_content_type') ? mime_content_type($ruta) : 'image/png';
+                return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($ruta));
+            }
+        }
 
+        return null;
+    }
 
-        $usuario = \Auth::user()->name;
-        $objdate = new DateTime();
-        $fecha_impresion=$objdate->format('d/m/Y');
-        $proveedor=$compra[0]->proveedor;
-        $fecha=$compra[0]->fecha;
-        $forma_pago=$compra[0]->formaP;
-        $tipo_pago=$compra[0]->tipo;
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $tipo_pago=$compra[0]->tipo;
-        $detalles=$detalleCompra;
-        $total=$compra[0]->total;
-        $total_efectivo=$compra[0]->total_efectivo;
-        $total_deposito=$compra[0]->total_deposito;
-        $descuento=$compra[0]->descuento;
-        $sub_total=$compra[0]->sub_total;
+    private function renderNotaCompra($id, $formato = 'carta')
+    {
+        abort_unless(in_array($formato, ['carta', 'ticket'], true), 404);
 
-        $cont=Compra::count();
-        $pdf = \PDF::loadView('pdf.compra.compra-general', [
-            'compras'=>$compra,
-            'fecha'=>$fecha,
-            'proveedor'=>$proveedor,
-            'forma_pago'=>$forma_pago,
-            'tipo_pago'=>$tipo_pago,
-            'detalles'=>$detalles,
-            'total'=>$total,
-            'id'=>$id,
-            'descuento'=>$descuento,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'sub_total'=>$sub_total,
-            'foto_empresa'=>$foto_empresa,
-            'fecha_impresion'=>$fecha_impresion,
-            'usuario'=>$usuario,
-            'total_efectivo'=>$total_efectivo,
-            'total_deposito'=>$total_deposito,
-        ]);
-        return $pdf->setPaper('letter', 'portrait')->stream('Compras.pdf');
+        $datos = $this->datosNotaCompra($id);
+        $vista = $formato === 'ticket' ? 'pdf.compra.nota-ticket' : 'pdf.compra.nota-carta';
+        $pdf = \PDF::loadView($vista, $datos);
+
+        if ($formato === 'ticket') {
+            $alto = max(360, 285 + ($datos['detalles']->count() * 42));
+            $pdf->setPaper([0, 0, 226.77, $alto], 'portrait');
+        } else {
+            $pdf->setPaper('letter', 'portrait');
+        }
+
+        return $pdf->stream(sprintf('nota-compra-%s-%06d.pdf', $formato, $id));
+    }
+
+    public function notaCompra($id, $formato)
+    {
+        return $this->renderNotaCompra((int) $id, $formato);
+    }
+
+    public function pdfComprasGeneral(Request $request)
+    {
+        return $this->renderNotaCompra((int) $request->id, 'carta');
+    }
+
+    public function pdfComprasGeneral2(Request $request)
+    {
+        $id = Compra::max('id');
+        abort_if(!$id, 404);
+
+        return $this->renderNotaCompra((int) $id, 'carta');
     }
     public function montoT(){
         //$compra=compra::sum('compra.total');

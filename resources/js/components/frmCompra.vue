@@ -19,6 +19,9 @@
             :initial-loading="initialLoading"
             :products-loading="productsLoading"
             :details-loading="detailsLoading"
+            :last-purchase-id="lastPurchaseId"
+            :report-modal-open="reportModalOpen"
+            :report-loading-format="reportLoadingFormat"
             @update:productSearch="buscarP = $event"
             @update:productCriterion="criterioP = $event"
             @search-products="listarArticulo(1, buscarP, criterioP)"
@@ -27,6 +30,9 @@
             @remove-line="eliminarDetalle"
             @save="guardarCompra"
             @cancel="volverCompraListado"
+            @open-report-modal="reportModalOpen = true"
+            @close-report-modal="cerrarModalReporte"
+            @generate-report="generarNotaCompra"
         />
         <template v-if="false">
         <!-- <div class="container"> -->
@@ -498,6 +504,9 @@
                 initialLoading: true,
                 productsLoading: false,
                 detailsLoading: false,
+                lastPurchaseId: 0,
+                reportModalOpen: false,
+                reportLoadingFormat: '',
 
             }
         },
@@ -773,7 +782,7 @@
                         'descripcion_pago': me.datosPago.descripcion,
                         'saldo': me.datosPago.saldo,
                     }).then(function(response) {
-                        console.log(me.arrayDetalle);
+                        me.lastPurchaseId = Number(response.data.id);
                         Swal.fire({
                             position: 'top-end',
                             icon: 'success',
@@ -786,8 +795,7 @@
                         
                         me.volverCompraListado();
                         me.listarCompra(1, '', 'nombre');
-                        me.cargarPdf2();
-                        me.limpiarDatosCompra();
+                        me.reportModalOpen = true;
 
                     }).catch(function(error) {
                         console.log(error);
@@ -888,16 +896,47 @@
                 this.selectProveedor();
                 this.selectFormaP();       
             },
-            cargarPdf2() {
-            axios.get('/compra/pdfCompraGeneral2',{responseType: 'blob'})
-                .then(response => {
-                    var blob = new Blob([response.data], {type: 'application/pdf'});
-                    var downloadUrl = URL.createObjectURL(blob);
-                    window.open(downloadUrl, '_blank');
-                })
-                .catch(error => {
-                    console.log(error);
-                })
+            cerrarModalReporte() {
+                if (!this.reportLoadingFormat) {
+                    this.reportModalOpen = false;
+                }
+            },
+            generarNotaCompra(formato) {
+                if (!this.lastPurchaseId || !['carta', 'ticket'].includes(formato) || this.reportLoadingFormat) {
+                    return;
+                }
+
+                const reportWindow = window.open('', '_blank');
+                this.reportLoadingFormat = formato;
+
+                axios.get(`/compra/${this.lastPurchaseId}/nota/${formato}`, { responseType: 'blob' })
+                    .then(response => {
+                        const blob = new Blob([response.data], { type: 'application/pdf' });
+                        const reportUrl = URL.createObjectURL(blob);
+
+                        if (reportWindow) {
+                            reportWindow.location.href = reportUrl;
+                        } else {
+                            window.open(reportUrl, '_blank');
+                        }
+
+                        this.reportModalOpen = false;
+                        window.setTimeout(() => URL.revokeObjectURL(reportUrl), 60000);
+                    })
+                    .catch(error => {
+                        if (reportWindow) {
+                            reportWindow.close();
+                        }
+                        console.error(error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'No se pudo generar la nota',
+                            text: 'Intente nuevamente o seleccione el otro formato.'
+                        });
+                    })
+                    .finally(() => {
+                        this.reportLoadingFormat = '';
+                    });
             },
             anularCompra(id){
                 const swalWithBootstrapButtons = Swal.mixin({

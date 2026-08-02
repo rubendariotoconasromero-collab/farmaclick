@@ -15,7 +15,7 @@
             </template>
         </app-module-header>
 
-        <section class="company-settings__metrics">
+        <section v-if="false" class="company-settings__metrics">
             <app-metric-card label="Empresa" :value="data.nombre || 'Sin configurar'" hint="Identidad principal" icon="img/menu/tienda.png" />
             <app-metric-card label="NIT" :value="data.nit || 'Sin registrar'" hint="Identificación tributaria" icon="img/menu/configuracion.png" tone="cyan" />
             <app-metric-card label="Modo" :value="disabled ? 'Solo lectura' : 'Edición activa'" :hint="disabled ? 'Activa edición para cambiar datos' : 'Revisa los cambios antes de guardar'" icon="img/menu/control.png" tone="neutral" />
@@ -56,7 +56,7 @@
             </div>
         </app-data-panel>
 
-        <app-data-panel v-if="isAdministrator" eyebrow="Apariencia" title="Colores del sistema" subtitle="Mantén estos tonos compatibles con la identidad FarmaClick.">
+        <app-data-panel v-if="false" eyebrow="Apariencia" title="Colores del sistema" subtitle="Mantén estos tonos compatibles con la identidad FarmaClick.">
             <div class="company-settings__colors">
                 <label>
                     <span>Color del acceso</span>

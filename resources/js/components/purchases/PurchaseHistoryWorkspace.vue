@@ -57,10 +57,10 @@
                     <template #cell-formaP="{ row }">{{ paymentLabel(row.formaP) }}</template>
                     <template #cell-actions="{ row }">
                         <div class="history-actions">
-                            <button type="button" title="Ver detalle" @click="$emit('view', row)"><img :src="asset('icons/eye.svg')" alt="Ver"></button>
-                            <button v-if="row.estado !== 'Cancelado'" type="button" title="Modificar" @click="$emit('edit', row)"><img :src="asset('icons/pencil.svg')" alt="Modificar"></button>
-                            <button type="button" title="Imprimir" @click="$emit('print', row)"><img :src="asset('icons/print.svg')" alt="Imprimir"></button>
-                            <button v-if="row.estado === 'Registrado'" class="is-danger" type="button" title="Anular" @click="$emit('cancel', row)"><img :src="asset('icons/ban.svg')" alt="Anular"></button>
+                            <app-icon-button icon="icons/eye.svg" label="Ver detalle" @click="$emit('view', row)" />
+                            <app-icon-button v-if="row.estado !== 'Cancelado'" icon="icons/pencil.svg" label="Modificar" @click="$emit('edit', row)" />
+                            <app-icon-button icon="icons/print.svg" label="Imprimir" @click="$emit('print', row)" />
+                            <app-icon-button v-if="row.estado === 'Registrado'" variant="danger" icon="icons/ban.svg" label="Anular" @click="$emit('cancel', row)" />
                         </div>
                     </template>
                 </app-table>
@@ -274,7 +274,6 @@ export default {
         paymentLabel(value) { return value === 'Cuenta por Cobrar' ? 'Cuenta por pagar' : (value || '—'); },
         statusLabel(row) { return row.estado === 'Registrado' && Number(row.id_tipo_pago) === 1 ? 'Cancelado' : row.estado; },
         statusClass(row) { const value = this.statusLabel(row); return value === 'Anulado' ? 'is-cancelled' : value === 'Cancelado' ? 'is-paid' : 'is-open'; },
-        asset(path) { const index = window.location.pathname.indexOf('/main'); const base = index >= 0 ? window.location.pathname.substring(0, index) : ''; return `${base}/${path}`; },
     },
 };
 </script>
@@ -293,10 +292,6 @@ export default {
 .history-badge.is-paid { color: #17693c; background: #dff4e7; }
 .history-badge.is-cancelled { color: #a52b2b; background: #fff0f0; }
 .history-actions { display: flex; gap: .25rem; }
-.history-actions button { display: grid; width: 30px; height: 30px; place-items: center; background: #fff; border: 1px solid #cbdcd4; border-radius: 6px; }
-.history-actions button:hover { background: #effaf4; border-color: #2fae66; }
-.history-actions button.is-danger:hover { background: #fff0f0; border-color: #d63c3c; }
-.history-actions img { width: 15px; height: 15px; filter: invert(37%) sepia(13%) saturate(621%) hue-rotate(101deg); }
 .history-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 .history-detail-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; }
 .history-inline-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }

@@ -459,7 +459,7 @@
             }
         },
         created(){
-                this.imagenMiniaturaTienda = 'img/logo_default/cargando.gif'
+                this.imagenMiniaturaTienda = this.resolveAsset('img/logo_default/cargando.gif')
         },
         computed : {
             isActived: function(){
@@ -511,6 +511,13 @@
         },
 
         methods : {
+            resolveAsset(path){
+                const mainPathIndex = window.location.pathname.indexOf('/main');
+                const applicationBase = mainPathIndex >= 0
+                    ? window.location.pathname.substring(0, mainPathIndex)
+                    : '';
+                return `${applicationBase}/${path.replace(/^\/+/, '')}`;
+            },
             usuarioAuth(){
                 let me=this;
                 var url='/usuario_auth';
@@ -536,23 +543,23 @@
                         me.datosEmpresa.direccion=response.data[0].direccion;
 
                         me.datosEmpresa.foto = response.data[0].foto;
-                        me.imagenMiniaturaTienda = 'img/logo/' + me.datosEmpresa.foto;
+                        me.imagenMiniaturaTienda = me.resolveAsset('img/logo/' + me.datosEmpresa.foto);
                         me.datosEmpresa.imagenActual = me.datosEmpresa.foto;
 
                         me.datosEmpresa.logo = response.data[0].logo_sistema;
-                        me.imagenMiniaturaL = 'img/logo/' + me.datosEmpresa.logo;
+                        me.imagenMiniaturaL = me.resolveAsset('img/logo/' + me.datosEmpresa.logo);
                         me.datosEmpresa.imagenActualLogo = me.datosEmpresa.logo;
 
                         me.datosEmpresa.logo_login = response.data[0].logo_login;
-                        me.imagenMiniaturaLL = 'img/logo/' + me.datosEmpresa.logo_login;
+                        me.imagenMiniaturaLL = me.resolveAsset('img/logo/' + me.datosEmpresa.logo_login);
                         me.datosEmpresa.imagenActualLogoLogin = me.datosEmpresa.logo_login;
 
                         me.datosEmpresa.logo_usuario = response.data[0].logo_usuario;
-                        me.imagenMiniaturaU = 'img/logo/' + me.datosEmpresa.logo_usuario;
+                        me.imagenMiniaturaU = me.resolveAsset('img/logo/' + me.datosEmpresa.logo_usuario);
                         me.datosEmpresa.imagenActualLogoUsuario = me.datosEmpresa.logo_usuario;
 
                         me.datosEmpresa.fondo_login = response.data[0].fondo_login;
-                        me.imagenMiniaturaFL = 'img/logo/' + me.datosEmpresa.fondo_login;
+                        me.imagenMiniaturaFL = me.resolveAsset('img/logo/' + me.datosEmpresa.fondo_login);
                         me.datosEmpresa.imagenActualFondoLogin = me.datosEmpresa.fondo_login;
 
                         me.datosEmpresa.colorLogin = response.data[0].color_login;

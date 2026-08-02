@@ -1,7 +1,7 @@
 <template>
     <article class="company-asset" :class="{ 'company-asset--wide': wide }">
         <div class="company-asset__preview">
-            <img :src="src || fallback" :alt="title" @error="$event.target.src = fallback">
+            <img :src="src || resolvedFallback" :alt="title" @error="$event.target.src = resolvedFallback">
         </div>
         <div class="company-asset__copy">
             <strong>{{ title }}</strong>
@@ -29,6 +29,15 @@ export default {
     },
     data() {
         return { fallback: 'img/logo_default/logo.png' };
+    },
+    computed: {
+        resolvedFallback() {
+            const mainPathIndex = window.location.pathname.indexOf('/main');
+            const applicationBase = mainPathIndex >= 0
+                ? window.location.pathname.substring(0, mainPathIndex)
+                : '';
+            return `${applicationBase}/${this.fallback}`;
+        },
     },
 };
 </script>

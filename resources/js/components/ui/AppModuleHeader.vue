@@ -82,6 +82,22 @@ export default {
     gap: 0.5rem;
 }
 
+.app-module-header__actions ::v-deep .app-button--ghost {
+    color: #eafff5;
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.app-module-header__actions ::v-deep .app-button--ghost:hover:not(:disabled) {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.24);
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
+.app-module-header__actions ::v-deep .app-button--ghost .app-button__icon {
+    filter: brightness(0) invert(1);
+}
+
 @media (max-width: 640px) {
     .app-module-header {
         flex-direction: column;

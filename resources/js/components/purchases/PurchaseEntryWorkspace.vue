@@ -9,8 +9,9 @@
                 ? 'Consulta la información y los productos registrados.'
                 : 'Registra proveedor, condiciones de pago y productos en un solo flujo.'"
         >
-            <template v-if="listado === 2" #actions>
-                <app-button variant="ghost" icon="icons/arrow-left.svg" @click="$emit('cancel')">Volver</app-button>
+            <template #actions>
+                <app-button v-if="listado === 2" variant="ghost" icon="icons/arrow-left.svg" @click="$emit('cancel')">Volver</app-button>
+                <app-button v-else-if="lastPurchaseId" variant="secondary" icon="icons/print.svg" @click="$emit('open-report-modal')">Imprimir última nota</app-button>
             </template>
         </app-module-header>
 
@@ -180,6 +181,12 @@
                 </div>
             </div>
         </div>
+        <purchase-report-format-modal
+            :open="reportModalOpen"
+            :loading-format="reportLoadingFormat"
+            @select="$emit('generate-report', $event)"
+            @close="$emit('close-report-modal')"
+        />
         </div>
     </section>
 </template>
@@ -206,6 +213,9 @@ export default {
         initialLoading: { type: Boolean, default: false },
         productsLoading: { type: Boolean, default: false },
         detailsLoading: { type: Boolean, default: false },
+        lastPurchaseId: { type: Number, default: 0 },
+        reportModalOpen: { type: Boolean, default: false },
+        reportLoadingFormat: { type: String, default: '' },
     },
     data() {
         return {

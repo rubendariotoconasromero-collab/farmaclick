@@ -268,6 +268,8 @@ Route::group(['middleware'=>['auth']],function(){
     Route::get('/compra/pdfCompra',[CompraController::class, 'pdfCompras']);
     Route::get('/compra/pdfCompraGeneral',[CompraController::class, 'pdfComprasGeneral']);
     Route::get('/compra/pdfCompraGeneral2',[CompraController::class, 'pdfComprasGeneral2']);
+    Route::get('/compra/{id}/nota/{formato}', [CompraController::class, 'notaCompra'])
+        ->where(['id' => '[0-9]+', 'formato' => 'carta|ticket']);
     Route::get('/notacompra/montoT', [CompraController::class, 'montoT']);
 
     Route::get('/compra/CompraArqueoEfectivo', [CompraController::class, 'CompraArqueoEfectivo']);
