@@ -9,6 +9,8 @@
             :providers="arrayProveedor"
             :payment-types="arrayPago"
             :payment-forms="arrayForma2"
+            :filter-payment-forms="arrayFormaPago"
+            :filters="filters"
             :datos="datos"
             :datos-pago="datosPago"
             :pagination="pagination"
@@ -27,9 +29,11 @@
             @update:criterion="criterio = $event"
             @update:productSearch="buscarP = $event"
             @update:productCriterion="criterioP = $event"
-            @search="listarCompra(1, buscar, criterio)"
-            @typing="BuscandoCompra"
-            @page="cambiarPagina($event, buscar, criterio)"
+            @apply-filters="aplicarFiltros"
+            @clear-filters="limpiarFiltros"
+            @remove-filter="quitarFiltro"
+            @update-filter="actualizarFiltro"
+            @page="cambiarPagina($event)"
             @view="verCompra"
             @edit="verModificar"
             @print="cargarPdf($event.id, $event.foto)"
@@ -730,6 +734,13 @@
                 detailsLoading: false,
                 productsLoading: false,
                 isBusy: false,
+                filters: {
+                    fecha_desde: '',
+                    fecha_hasta: '',
+                    proveedor_id: '',
+                    estado: '',
+                    formas_pago: [],
+                },
 
             }
         },
@@ -788,11 +799,81 @@
                 this.listarArticulo(1,this.buscarP, this.criterioP);
                 //this.arrayDetalle.forEach(item => item.saldoStock = 0);
             },
-            listarCompra(page, buscar, criterio){
+            filtrosConsulta(page) {
+                const params = { page };
+                if (this.filters.fecha_desde) params.fecha_desde = this.filters.fecha_desde;
+                if (this.filters.fecha_hasta) params.fecha_hasta = this.filters.fecha_hasta;
+                if (this.filters.proveedor_id) params.proveedor_id = this.filters.proveedor_id;
+                if (this.filters.estado) params.estado = this.filters.estado;
+                if (this.filters.formas_pago.length) params.formas_pago = this.filters.formas_pago;
+                return params;
+            },
+            consultaRouter(page) {
+                const query = {};
+                if (this.filters.fecha_desde) query.desde = this.filters.fecha_desde;
+                if (this.filters.fecha_hasta) query.hasta = this.filters.fecha_hasta;
+                if (this.filters.proveedor_id) query.proveedor = String(this.filters.proveedor_id);
+                if (this.filters.estado) query.estado = this.filters.estado;
+                if (this.filters.formas_pago.length) query.formas = this.filters.formas_pago.join(',');
+                if (Number(page) > 1) query.page = String(page);
+                return query;
+            },
+            sincronizarFiltrosRouter(page) {
+                if (!this.$router || !this.$route) return;
+                this.$router.replace({ name: this.$route.name, query: this.consultaRouter(page) }).catch(() => {});
+            },
+            cargarFiltrosRouter() {
+                const query = this.$route ? this.$route.query : {};
+                this.filters.fecha_desde = query.desde || '';
+                this.filters.fecha_hasta = query.hasta || '';
+                this.filters.proveedor_id = query.proveedor || '';
+                this.filters.estado = ['Registrado', 'Cancelado', 'Anulado'].includes(query.estado) ? query.estado : '';
+                this.filters.formas_pago = query.formas
+                    ? String(query.formas).split(',').filter(Boolean).map(value => Number(value)).filter(Number.isFinite)
+                    : [];
+            },
+            normalizarFiltros() {
+                if (this.filters.proveedor_id && !this.arrayProveedor.some(item => String(item.id) === String(this.filters.proveedor_id))) {
+                    this.filters.proveedor_id = '';
+                }
+                const formasPermitidas = this.arrayFormaPago.map(item => String(item.id));
+                this.filters.formas_pago = this.filters.formas_pago.filter(id => formasPermitidas.includes(String(id)));
+            },
+            actualizarFiltro({ key, value }) {
+                this.$set(this.filters, key, value);
+            },
+            aplicarFiltros() {
+                if (this.filters.fecha_desde && this.filters.fecha_hasta && this.filters.fecha_desde > this.filters.fecha_hasta) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Rango de fechas no válido',
+                        text: 'La fecha inicial no puede ser posterior a la fecha final.'
+                    });
+                    return;
+                }
+                this.sincronizarFiltrosRouter(1);
+                this.listarCompra(1);
+            },
+            limpiarFiltros() {
+                this.filters = { fecha_desde: '', fecha_hasta: '', proveedor_id: '', estado: '', formas_pago: [] };
+                this.sincronizarFiltrosRouter(1);
+                this.listarCompra(1);
+            },
+            quitarFiltro(key) {
+                if (key === 'fechas') {
+                    this.filters.fecha_desde = '';
+                    this.filters.fecha_hasta = '';
+                } else if (key === 'formas_pago') {
+                    this.filters.formas_pago = [];
+                } else {
+                    this.filters[key] = '';
+                }
+                this.aplicarFiltros();
+            },
+            listarCompra(page = 1){
                 let me=this;
                 me.recordsLoading = true;
-                var url='/compra?page=' + page + '&buscar=' + buscar + '&criterio=' + criterio;
-                return axios.get(url).then(function(response){
+                return axios.get('/compra', { params: me.filtrosConsulta(page) }).then(function(response){
                     me.arrayCompra=response.data.data;
                     me.pagination={total:response.data.total,
                         current_page:response.data.current_page,
@@ -814,10 +895,11 @@
                     this.listarCompra(1, this.buscar, this.criterio);
                 }, 350);
             },
-            cambiarPagina(page, buscar, criterio){
+            cambiarPagina(page){
                 let me=this;
                 me.pagination.current_page=page;
-                me.listarCompra(page, buscar, criterio);
+                me.sincronizarFiltrosRouter(page);
+                me.listarCompra(page);
             },
             listarArticulo(page,buscarP, criterioP){
                 let me = this;
@@ -1651,7 +1733,11 @@
         },
         async mounted() {
             this.initialLoading = true;
-            await this.listarCompra(1, this.buscar, this.criterio);
+            await Promise.all([this.selectProveedor(), this.selectFormaP()]);
+            this.cargarFiltrosRouter();
+            this.normalizarFiltros();
+            const initialPage = Math.max(1, Number(this.$route && this.$route.query.page) || 1);
+            await this.listarCompra(initialPage);
             this.initialLoading = false;
         },
         beforeDestroy() {

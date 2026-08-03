@@ -24,22 +24,51 @@
                 eyebrow="Consulta"
                 flush
             >
-                <div class="history-toolbar">
-                    <label>
-                        <span>Buscar por</span>
-                        <select :value="criterion" @change="$emit('update:criterion', $event.target.value)">
-                            <option value="proveedor.nombre">Proveedor</option>
-                        </select>
-                    </label>
-                    <app-input
-                        :value="search"
-                        label="Texto de búsqueda"
-                        placeholder="Nombre del proveedor…"
-                        @input="$emit('update:search', $event)"
-                        @keyup="$emit('typing')"
-                        @keyup.enter="$emit('search')"
-                    />
-                    <app-button icon="icons/magnifying-glass.svg" @click="$emit('search')">Buscar</app-button>
+                <div class="history-filter-panel">
+                    <div class="history-filter-grid">
+                        <div class="history-period">
+                            <app-input :value="filters.fecha_desde" type="date" label="Desde" @input="updateFilter('fecha_desde', $event)" />
+                            <app-input :value="filters.fecha_hasta" type="date" label="Hasta" @input="updateFilter('fecha_hasta', $event)" />
+                        </div>
+                        <app-live-search
+                            :value="filters.proveedor_id"
+                            :items="providers"
+                            label="Proveedor"
+                            track-by="id"
+                            display-by="nombre"
+                            placeholder="Todos los proveedores"
+                            @input="updateFilter('proveedor_id', $event)"
+                        />
+                        <label class="history-filter-field">
+                            <span>Estado</span>
+                            <select :value="filters.estado" @change="updateFilter('estado', $event.target.value)">
+                                <option value="">Todos los estados</option>
+                                <option value="Registrado">Registrado</option>
+                                <option value="Cancelado">Cancelado</option>
+                                <option value="Anulado">Anulado</option>
+                            </select>
+                        </label>
+                        <app-multi-select-dropdown
+                            :value="filters.formas_pago"
+                            :options="filterPaymentForms"
+                            label="Formas de pago"
+                            placeholder="Todas las formas"
+                            menu-title="Filtrar por formas de pago"
+                            track-by="id"
+                            display-by="nombre"
+                            @input="updateFilter('formas_pago', $event)"
+                        />
+                    </div>
+                    <div class="history-filter-actions">
+                        <span>{{ activeFilterCount ? `${activeFilterCount} filtros activos` : 'Sin filtros aplicados' }}</span>
+                        <app-button v-if="activeFilterCount" variant="ghost" @click="$emit('clear-filters')">Limpiar</app-button>
+                        <app-button icon="icons/magnifying-glass.svg" @click="$emit('apply-filters')">Aplicar filtros</app-button>
+                    </div>
+                    <div v-if="filterChips.length" class="history-filter-chips" aria-label="Filtros activos">
+                        <button v-for="chip in filterChips" :key="chip.key" type="button" @click="$emit('remove-filter', chip.key)">
+                            {{ chip.label }} <span aria-hidden="true">×</span>
+                        </button>
+                    </div>
                 </div>
 
                 <app-table
@@ -196,6 +225,11 @@ export default {
         providers: { type: Array, default: () => [] },
         paymentTypes: { type: Array, default: () => [] },
         paymentForms: { type: Array, default: () => [] },
+        filterPaymentForms: { type: Array, default: () => [] },
+        filters: {
+            type: Object,
+            default: () => ({ fecha_desde: '', fecha_hasta: '', proveedor_id: '', estado: '', formas_pago: [] }),
+        },
         datos: { type: Object, required: true },
         datosPago: { type: Object, required: true },
         pagination: { type: Object, required: true },
@@ -263,12 +297,35 @@ export default {
         pageAmount() {
             return this.rows.reduce((total, row) => total + Number(row.total || 0), 0);
         },
+        activeFilterCount() {
+            return ['fecha_desde', 'fecha_hasta', 'proveedor_id', 'estado'].filter(key => Boolean(this.filters[key])).length
+                + (this.filters.formas_pago && this.filters.formas_pago.length ? 1 : 0);
+        },
+        filterChips() {
+            const chips = [];
+            if (this.filters.fecha_desde || this.filters.fecha_hasta) {
+                chips.push({ key: 'fechas', label: `Fecha: ${this.filters.fecha_desde || 'inicio'} a ${this.filters.fecha_hasta || 'hoy'}` });
+            }
+            if (this.filters.proveedor_id) {
+                const provider = this.providers.find(item => String(item.id) === String(this.filters.proveedor_id));
+                chips.push({ key: 'proveedor_id', label: `Proveedor: ${provider ? provider.nombre : this.filters.proveedor_id}` });
+            }
+            if (this.filters.estado) chips.push({ key: 'estado', label: `Estado: ${this.filters.estado}` });
+            if (this.filters.formas_pago && this.filters.formas_pago.length) {
+                const labels = this.filterPaymentForms
+                    .filter(item => this.filters.formas_pago.some(id => String(id) === String(item.id)))
+                    .map(item => item.nombre);
+                chips.push({ key: 'formas_pago', label: `Pago: ${labels.join(', ')}` });
+            }
+            return chips;
+        },
     },
     watch: {
         grandTotal: { immediate: true, handler(value) { this.datos.total = Number(value).toFixed(2); this.datos.sub_total = Number(this.calculatedTotal || 0).toFixed(2); this.datos.total_deposito = this.mixedDeposit; } },
         mixedDeposit(value) { this.datos.total_deposito = value; },
     },
     methods: {
+        updateFilter(key, value) { this.$emit('update-filter', { key, value }); },
         lineSubtotal(row) { return Number(row.costo_compra || 0) * Number(row.cantidad || 0) - Number(row.descuento || 0); },
         money(value) { return Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
         paymentLabel(value) { return value === 'Cuenta por Cobrar' ? 'Cuenta por pagar' : (value || '—'); },
@@ -282,9 +339,16 @@ export default {
 .history-page { display: grid; gap: 1rem; padding: 1.15rem; background: #f4f8f6; }
 .history-page__content { display: contents; }
 .history-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
-.history-toolbar { display: grid; grid-template-columns: 230px minmax(250px, 1fr) auto; align-items: end; gap: .65rem; padding: 1rem; background: #f8fbf9; border-bottom: 1px solid #d8e5df; }
-.history-toolbar label, .history-field { display: flex; flex-direction: column; gap: .35rem; color: #315044; font-size: .72rem; font-weight: 800; }
-.history-toolbar select, .history-field select, .history-product-search select { min-height: 40px; padding: .48rem .65rem; color: #17362b; background: #fff; border: 1px solid #bdd2c9; border-radius: 8px; }
+.history-filter-panel { padding: 1rem; background: #f8fbf9; border-bottom: 1px solid #d8e5df; }
+.history-filter-grid { display: grid; grid-template-columns: minmax(280px, 1.15fr) minmax(220px, 1fr) minmax(170px, .65fr) minmax(220px, .9fr); gap: .7rem; align-items: end; }
+.history-period { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+.history-filter-field, .history-field { display: flex; flex-direction: column; gap: .35rem; color: #315044; font-size: .72rem; font-weight: 800; }
+.history-filter-field select, .history-field select, .history-product-search select { min-height: 40px; padding: .48rem .65rem; color: #17362b; background: #fff; border: 1px solid #bdd2c9; border-radius: 8px; }
+.history-filter-actions { display: flex; justify-content: flex-end; align-items: center; gap: .45rem; margin-top: .75rem; }
+.history-filter-actions > span { margin-right: auto; color: #6f817a; font-size: .68rem; font-weight: 700; }
+.history-filter-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .65rem; padding-top: .65rem; border-top: 1px dashed #cbdcd5; }
+.history-filter-chips button { padding: .3rem .5rem; color: #17693c; background: #e5f5eb; border: 1px solid #c2e4cf; border-radius: 999px; font-size: .67rem; font-weight: 800; cursor: pointer; }
+.history-filter-chips button:hover { color: #a52b2b; background: #fff0f0; border-color: #efcaca; }
 .history-date { white-space: nowrap; }
 .history-page small { display: block; color: #6f817a; font-size: .66rem; }
 .history-badge { display: inline-flex; padding: .25rem .48rem; font-size: .66rem; font-weight: 900; border-radius: 999px; }
@@ -312,6 +376,7 @@ export default {
 .history-modal h5 { margin: .1rem 0 0; font-weight: 800; }
 .history-modal .modal-header small { color: #71d5e8; font-weight: 800; text-transform: uppercase; }
 .history-product-search { display: grid; grid-template-columns: 220px 1fr auto; gap: .55rem; margin-bottom: 1rem; }
+@media (max-width: 1100px) { .history-filter-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 900px) { .history-edit-layout { grid-template-columns: 1fr; } .history-metrics, .history-overview { grid-template-columns: 1fr; } }
-@media (max-width: 650px) { .history-page { padding: .75rem; } .history-toolbar, .history-detail-form, .history-edit-form, .history-product-search { grid-template-columns: 1fr; } .history-field--full { grid-column: auto; } .history-footer { flex-direction: column-reverse; } }
+@media (max-width: 650px) { .history-page { padding: .75rem; } .history-filter-grid, .history-period, .history-detail-form, .history-edit-form, .history-product-search { grid-template-columns: 1fr; } .history-filter-actions { flex-wrap: wrap; } .history-filter-actions > span { width: 100%; } .history-field--full { grid-column: auto; } .history-footer { flex-direction: column-reverse; } }
 </style>

@@ -21,33 +21,52 @@ use DateTime;
 class CompraController extends BitacoraController
 {
 
-    public function index(Request $request){
-        $buscar = $request->buscar;
-        $criterio = $request->criterio;
-        if($buscar==''){
-            $obj= Compra::join('users','compra.id_usuario','=','users.id')
-            ->join('proveedor','compra.id_proveedor','=','proveedor.id')
-            ->join('forma_pago','compra.id_forma_pago','=','forma_pago.id')
-            ->join('tipo_pago','compra.id_tipo_pago','=','tipo_pago.id')
-            ->leftJoin('pago_compra','pago_compra.id_compra','=','compra.id')
-            ->select('compra.id','compra.fecha','compra.descripcion','compra.sub_total','compra.descuento',
-            'compra.total','compra.estado','users.name','proveedor.nombre as proveedor','forma_pago.nombre as formaP','tipo_pago.nombre as tipo','compra.total_efectivo','compra.total_deposito','compra.id_forma_pago','compra.id_proveedor','compra.id_tipo_pago','pago_compra.fecha_final as fecha_pago_final','pago_compra.saldo as saldo_pago')
-            ->where('compra.estado','!=','Anulado')
-            ->orderBy('compra.id','desc')->paginate(15);
+    public function index(Request $request)
+    {
+        $filtros = $request->validate([
+            'fecha_desde' => 'nullable|date',
+            'fecha_hasta' => 'nullable|date|after_or_equal:fecha_desde',
+            'proveedor_id' => 'nullable|integer|exists:proveedor,id',
+            'estado' => 'nullable|string|in:Registrado,Cancelado,Anulado',
+            'formas_pago' => 'nullable|array',
+            'formas_pago.*' => 'integer|distinct|exists:forma_pago,id',
+            'buscar' => 'nullable|string|max:100',
+        ]);
+
+        $consulta = Compra::join('users', 'compra.id_usuario', '=', 'users.id')
+            ->join('proveedor', 'compra.id_proveedor', '=', 'proveedor.id')
+            ->join('forma_pago', 'compra.id_forma_pago', '=', 'forma_pago.id')
+            ->join('tipo_pago', 'compra.id_tipo_pago', '=', 'tipo_pago.id')
+            ->leftJoin('pago_compra', 'pago_compra.id_compra', '=', 'compra.id')
+            ->select(
+                'compra.id', 'compra.fecha', 'compra.descripcion', 'compra.sub_total',
+                'compra.descuento', 'compra.total', 'compra.estado', 'users.name',
+                'proveedor.nombre as proveedor', 'forma_pago.nombre as formaP',
+                'tipo_pago.nombre as tipo', 'compra.total_efectivo', 'compra.total_deposito',
+                'compra.id_forma_pago', 'compra.id_proveedor', 'compra.id_tipo_pago',
+                'pago_compra.fecha_final as fecha_pago_final', 'pago_compra.saldo as saldo_pago'
+            );
+
+        if (!empty($filtros['fecha_desde'])) {
+            $consulta->whereDate('compra.fecha', '>=', $filtros['fecha_desde']);
         }
-        else{
-            $obj= Compra::join('users','compra.id_usuario','=','users.id')
-            ->join('proveedor','compra.id_proveedor','=','proveedor.id')
-            ->join('forma_pago','compra.id_forma_pago','=','forma_pago.id')
-            ->join('tipo_pago','compra.id_tipo_pago','=','tipo_pago.id')
-            ->leftJoin('pago_compra','pago_compra.id_compra','=','compra.id')
-            ->select('compra.id','compra.fecha','compra.descripcion','compra.sub_total','compra.descuento',
-            'compra.total','compra.estado','users.name','proveedor.nombre as proveedor','forma_pago.nombre as formaP','tipo_pago.nombre as tipo','compra.total_efectivo','compra.total_deposito','compra.id_forma_pago','compra.id_proveedor','compra.id_tipo_pago','pago_compra.fecha_final as fecha_pago_final','pago_compra.saldo as saldo_pago')
-            ->where($criterio, 'like', '%'.$buscar.'%')
-            ->where('compra.estado','!=','Anulado')
-            ->orderBy('compra.id','desc')->paginate(15);
+        if (!empty($filtros['fecha_hasta'])) {
+            $consulta->whereDate('compra.fecha', '<=', $filtros['fecha_hasta']);
         }
-        return $obj;
+        if (!empty($filtros['proveedor_id'])) {
+            $consulta->where('compra.id_proveedor', $filtros['proveedor_id']);
+        }
+        if (!empty($filtros['estado'])) {
+            $consulta->where('compra.estado', $filtros['estado']);
+        }
+        if (!empty($filtros['formas_pago'])) {
+            $consulta->whereIn('compra.id_forma_pago', $filtros['formas_pago']);
+        }
+        if (!empty($filtros['buscar'])) {
+            $consulta->where('proveedor.nombre', 'like', '%' . $filtros['buscar'] . '%');
+        }
+
+        return $consulta->orderByDesc('compra.id')->paginate(15)->appends($request->query());
     }
 
     private function actualizarStock($id_producto,$cantVenta){
