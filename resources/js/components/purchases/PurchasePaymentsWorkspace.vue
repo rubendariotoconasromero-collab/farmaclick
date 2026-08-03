@@ -17,7 +17,7 @@
         </app-module-header>
 
         <template v-if="listado === 0">
-            <section class="payments-overview">
+            <section v-if="false" class="payments-overview">
                 <app-metric-card label="Proveedores pendientes" :value="providers.length" hint="Con cuentas por pagar" icon="icons/truck.svg" :loading="providersLoading" />
                 <app-metric-card label="Deuda visible" :value="`Bs ${money(totalDebt)}`" hint="Saldo de los resultados actuales" icon="icons/wallet.svg" tone="cyan" :loading="providersLoading" />
                 <app-metric-card label="Estado de caja" :value="estadoCaja || 'Sin verificar'" hint="Necesaria para registrar pagos" icon="img/menu/control.png" tone="neutral" />

@@ -13,7 +13,7 @@
         </app-module-header>
 
         <template v-if="listado === 0">
-            <section class="history-overview">
+            <section v-if="false" class="history-overview">
                 <app-metric-card label="Compras registradas" :value="pagination.total || rows.length" hint="Total según la consulta" icon="img/menu/compra.png" :loading="recordsLoading" />
                 <app-metric-card label="Compras activas en página" :value="pendingCount" hint="Operaciones con estado Registrado" icon="icons/wallet.svg" tone="cyan" :loading="recordsLoading" />
                 <app-metric-card label="Importe de la página" :value="`Bs ${money(pageAmount)}`" hint="Suma de los resultados visibles" icon="icons/money.svg" tone="neutral" :loading="recordsLoading" />
@@ -23,6 +23,7 @@
                 subtitle="Busque, revise, imprima o anule compras registradas."
                 eyebrow="Consulta"
                 flush
+                hide-header
             >
                 <div class="history-filter-panel">
                     <div class="history-filter-grid">
@@ -76,6 +77,7 @@
                     :rows="rows"
                     :loading="recordsLoading"
                     min-width="1120px"
+                    max-height="420px"
                     empty-title="No hay compras"
                     empty-message="No se encontraron compras con el criterio seleccionado."
                 >

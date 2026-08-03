@@ -1,6 +1,6 @@
 <template>
     <section class="app-data-panel">
-        <header class="app-data-panel__header">
+        <header v-if="!hideHeader" class="app-data-panel__header">
             <div>
                 <span v-if="eyebrow" class="app-data-panel__eyebrow">{{ eyebrow }}</span>
                 <h2>{{ title }}</h2>
@@ -33,6 +33,10 @@ export default {
             default: '',
         },
         flush: {
+            type: Boolean,
+            default: false,
+        },
+        hideHeader: {
             type: Boolean,
             default: false,
         },
