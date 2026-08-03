@@ -11,27 +11,27 @@ use DB;
 class GastoController extends BitacoraController
 {
     public function index(Request $request){
-        $buscar = $request->buscar;
-        $criterio = $request->criterio;
-        $id_usuario=\Auth::user()->id;
+        $buscar = trim((string) $request->input('buscar', ''));
+        $criterios = [
+            'motivo_gasto.nombre' => 'motivo_gasto.nombre',
+            'gasto.monto' => 'gasto.monto',
+        ];
+        $criterio = $criterios[$request->input('criterio')] ?? 'motivo_gasto.nombre';
 
-        if($buscar==''){
-            $obj= Gasto::join('motivo_gasto','gasto.id_motivo_gasto','=','motivo_gasto.id')
-            ->join('forma_pago','gasto.id_forma_pago','=','forma_pago.id')
-            ->select('gasto.id','gasto.fecha','gasto.monto','gasto.descripcion','gasto.id_motivo_gasto',
-            'motivo_gasto.nombre as motivo','gasto.id_forma_pago','gasto.efectivo','gasto.deposito','forma_pago.nombre as forma')
-            ->where('gasto.id_usuario',$id_usuario)
-            ->orderBy('gasto.id','desc')->paginate(15);
+        $query = Gasto::join('motivo_gasto', 'gasto.id_motivo_gasto', '=', 'motivo_gasto.id')
+            ->join('forma_pago', 'gasto.id_forma_pago', '=', 'forma_pago.id')
+            ->select(
+                'gasto.id', 'gasto.fecha', 'gasto.monto', 'gasto.descripcion', 'gasto.id_motivo_gasto',
+                'motivo_gasto.nombre as motivo', 'gasto.id_forma_pago', 'gasto.efectivo', 'gasto.deposito',
+                'forma_pago.nombre as forma'
+            )
+            ->where('gasto.id_usuario', \Auth::id());
+
+        if ($buscar !== '') {
+            $query->where($criterio, 'like', '%' . $buscar . '%');
         }
-        else{
-            $obj= Gasto::join('motivo_gasto','gasto.id_motivo_gasto','=','motivo_gasto.id')
-            ->select('gasto.id','gasto.fecha','gasto.monto','gasto.descripcion','gasto.id_motivo_gasto',
-            'motivo_gasto.nombre as motivo','gasto.id_forma_pago','gasto.efectivo','gasto.deposito','forma_pago.nombre as forma')
-            ->where($criterio, 'like', '%'.$buscar.'%')
-            ->where('gasto.id_usuario',$id_usuario)
-            ->orderBy('gasto.id','desc')->paginate(15);            
-        }
-        return $obj;
+
+        return $query->orderByDesc('gasto.id')->paginate(15);
     }
 
     private function actualizarCaja($monto,$id_usuario){
@@ -118,8 +118,9 @@ class GastoController extends BitacoraController
             // }
 
             DB::commit();
-        } catch (Exception $e){
+        } catch (\Throwable $e){
             DB::rollBack();
+            throw $e;
         }
     }
 

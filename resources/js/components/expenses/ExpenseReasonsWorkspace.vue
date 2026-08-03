@@ -1,5 +1,7 @@
 <template>
     <section class="reasons-page">
+        <app-page-skeleton v-if="initialLoading" :rows="6" :columns="3" label="Cargando motivos de gasto" />
+        <template v-else>
         <app-module-header
             eyebrow="Gastos"
             title="Motivos de gasto"
@@ -17,6 +19,7 @@
                 hint="Categorías disponibles"
                 icon="icons/tags.svg"
                 tone="green"
+                :loading="tableLoading"
             />
             <div class="reasons-help">
                 <img :src="asset('icons/info.svg')" alt="" aria-hidden="true">
@@ -46,6 +49,7 @@
             <app-table
                 :columns="columns"
                 :rows="rows"
+                :loading="tableLoading"
                 min-width="640px"
                 empty-title="Sin motivos registrados"
                 empty-message="Cree el primer motivo para comenzar a clasificar gastos."
@@ -55,9 +59,9 @@
                 </template>
                 <template #cell-descripcion="{ value }"><span class="reason-description">{{ value || 'Sin descripción' }}</span></template>
                 <template #cell-actions="{ row }">
-                    <button class="reason-edit" type="button" @click="$emit('edit', row)">
-                        <img :src="asset('icons/pencil.svg')" alt="" aria-hidden="true"> Modificar
-                    </button>
+                    <div class="reason-actions">
+                        <app-icon-button icon="icons/pencil.svg" label="Modificar motivo" @click="$emit('edit', row)" />
+                    </div>
                 </template>
             </app-table>
             <purchase-pagination :pagination="pagination" :pages="pages" @change="$emit('page', $event)" />
@@ -99,6 +103,7 @@
                 </footer>
             </section>
         </div>
+        </template>
     </section>
 </template>
 
@@ -117,6 +122,8 @@ export default {
         serverErrors: { type: Object, default: () => ({}) },
         validationErrors: { type: Array, default: () => [] },
         saving: { type: Boolean, default: false },
+        initialLoading: { type: Boolean, default: false },
+        tableLoading: { type: Boolean, default: false },
     },
     data() {
         return {
@@ -153,9 +160,7 @@ export default {
 .reason-name { display: inline-flex; align-items: center; gap: .5rem; color: #17362b; }
 .reason-name img { width: 16px; height: 16px; filter: invert(42%) sepia(48%) saturate(691%) hue-rotate(94deg); }
 .reason-description { color: #5f716a; }
-.reason-edit { display: inline-flex; align-items: center; gap: .35rem; min-height: 32px; padding: .35rem .55rem; color: #315044; font-size: .7rem; font-weight: 800; background: #fff; border: 1px solid #cbdcd4; border-radius: 6px; }
-.reason-edit:hover { color: #17693c; background: #effaf4; border-color: #2fae66; }
-.reason-edit img { width: 14px; height: 14px; filter: invert(42%) sepia(18%) saturate(647%) hue-rotate(100deg); }
+.reason-actions { display: flex; align-items: center; justify-content: center; }
 .expense-dialog-backdrop { position: fixed; inset: 0; z-index: 1055; display: grid; padding: 1rem; place-items: center; background: rgba(9,33,26,.58); backdrop-filter: blur(3px); }
 .expense-dialog { overflow: hidden; width: min(620px, 100%); background: #fff; border-radius: 14px; box-shadow: 0 24px 70px rgba(0,0,0,.25); }
 .expense-dialog header { display: flex; align-items: flex-start; justify-content: space-between; padding: 1rem 1.15rem; color: #fff; background: linear-gradient(110deg, #173f32, #1f8a4c); border-bottom: 3px solid #3ec6e0; }

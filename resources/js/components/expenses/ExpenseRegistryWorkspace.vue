@@ -1,5 +1,7 @@
 <template>
     <section class="expenses-page">
+        <app-page-skeleton v-if="initialLoading" :rows="6" :columns="6" label="Cargando registro de gastos" />
+        <template v-else>
         <app-module-header
             eyebrow="Gastos"
             title="Registro de gastos"
@@ -11,20 +13,19 @@
         </app-module-header>
 
         <div class="expenses-metrics">
-            <app-metric-card label="Gastos registrados" :value="expenseCount" hint="Cantidad de movimientos" icon="icons/description.svg" tone="green" />
-            <app-metric-card label="Motivos disponibles" :value="reasonCount" hint="Categorías de gasto" icon="icons/tags.svg" tone="cyan" />
-            <app-metric-card label="Total visible" :value="`Bs ${money(visibleTotal)}`" hint="Suma de la página actual" icon="icons/money.svg" tone="blue" />
+            <app-metric-card label="Gastos registrados" :value="expenseCount" hint="Cantidad de movimientos" icon="icons/description.svg" tone="green" :loading="tableLoading" />
+            <app-metric-card label="Motivos disponibles" :value="reasonCount" hint="Categorías de gasto" icon="icons/tags.svg" tone="cyan" :loading="tableLoading" />
+            <app-metric-card label="Total visible" :value="`Bs ${money(visibleTotal)}`" hint="Suma de la página actual" icon="icons/money.svg" tone="blue" :loading="tableLoading" />
         </div>
 
         <app-data-panel title="Historial de gastos" subtitle="Consulte movimientos por motivo o monto." eyebrow="Seguimiento" flush>
             <div class="expenses-toolbar">
-                <label class="expense-field">
-                    <span>Buscar por</span>
-                    <select :value="criterion" @change="$emit('update:criterion', $event.target.value)">
-                        <option value="motivo_gasto.nombre">Motivo de gasto</option>
-                        <option value="gasto.monto">Monto</option>
-                    </select>
-                </label>
+                <app-select
+                    :value="criterion"
+                    :options="searchCriteria"
+                    label="Buscar por"
+                    @input="$emit('update:criterion', $event)"
+                />
                 <app-input
                     :value="search"
                     label="Texto de búsqueda"
@@ -34,15 +35,15 @@
                 />
                 <app-button icon="icons/magnifying-glass.svg" @click="$emit('search')">Buscar</app-button>
             </div>
-            <app-table :columns="columns" :rows="rows" min-width="900px" empty-title="Sin gastos registrados" empty-message="Los movimientos aparecerán aquí después del primer registro.">
+            <app-table :columns="columns" :rows="rows" :loading="tableLoading" min-width="900px" empty-title="Sin gastos registrados" empty-message="Los movimientos aparecerán aquí después del primer registro.">
                 <template #cell-fecha="{ row }"><span class="expense-date">{{ row.fecha_mostrar || row.fecha }}</span></template>
                 <template #cell-motivo="{ value }"><strong>{{ value }}</strong></template>
                 <template #cell-monto="{ value }"><strong class="expense-amount">Bs {{ money(value) }}</strong></template>
                 <template #cell-forma="{ value }"><span class="expense-payment">{{ value || '—' }}</span></template>
                 <template #cell-actions="{ row }">
-                    <button class="expense-edit" type="button" @click="$emit('edit', row)">
-                        <img :src="asset('icons/pencil.svg')" alt="" aria-hidden="true"> Modificar
-                    </button>
+                    <div class="expense-actions">
+                        <app-icon-button icon="icons/pencil.svg" label="Modificar gasto" @click="$emit('edit', row)" />
+                    </div>
                 </template>
             </app-table>
             <purchase-pagination :pagination="pagination" :pages="pages" @change="$emit('page', $event)" />
@@ -56,25 +57,34 @@
                 </header>
                 <div class="expense-registry-dialog__content">
                     <div class="expense-form">
-                        <label class="expense-field expense-field--full">
-                            <span>Motivo de gasto *</span>
+                        <div class="expense-field expense-field--full">
                             <div class="expense-reason-control">
-                                <select v-model="datos.id_motivo_gasto">
-                                    <option value="0" disabled>Seleccione un motivo</option>
-                                    <option v-for="reason in reasons" :key="reason.id" :value="reason.id">{{ reason.nombre }}</option>
-                                </select>
+                                <app-select
+                                    v-model="datos.id_motivo_gasto"
+                                    :options="reasons"
+                                    option-value="id"
+                                    option-label="nombre"
+                                    label="Motivo de gasto"
+                                    placeholder="Seleccione un motivo"
+                                    :placeholder-value="0"
+                                    required
+                                    :error="fieldError('id_motivo_gasto')"
+                                />
                                 <app-button variant="secondary" icon="icons/plus.svg" @click="$emit('create-reason')">Nuevo</app-button>
                             </div>
-                            <small v-if="fieldError('id_motivo_gasto')" class="expense-error">{{ fieldError('id_motivo_gasto') }}</small>
-                        </label>
+                        </div>
                         <app-input v-model="datos.fecha" type="date" label="Fecha" required />
-                        <label class="expense-field">
-                            <span>Forma de pago *</span>
-                            <select v-model="datos.id_forma_pago">
-                                <option value="0" disabled>Seleccione la forma</option>
-                                <option v-for="form in paymentForms" :key="form.id" :value="form.id">{{ form.nombre }}</option>
-                            </select>
-                        </label>
+                        <app-select
+                            v-model="datos.id_forma_pago"
+                            :options="paymentForms"
+                            option-value="id"
+                            option-label="nombre"
+                            label="Forma de pago"
+                            placeholder="Seleccione la forma"
+                            :placeholder-value="0"
+                            required
+                            :error="fieldError('id_forma_pago')"
+                        />
                         <app-input v-model="datos.monto" type="number" label="Monto total" min="0" step="0.01" required :error="fieldError('monto')">
                             <template #prefix>Bs</template>
                         </app-input>
@@ -113,15 +123,16 @@
             <section class="quick-reason-dialog" role="dialog" aria-modal="true">
                 <header><div><span>Creación rápida</span><h2>Nuevo motivo de gasto</h2></div><button type="button" @click="$emit('close-reason')">×</button></header>
                 <div class="quick-reason-dialog__body">
-                    <app-input v-model="reasonData.nombre" label="Nombre" required placeholder="Nombre del motivo" />
+                    <app-input v-model="reasonData.nombre" label="Nombre" required placeholder="Nombre del motivo" :error="reasonFieldError('nombre')" />
                     <app-input v-model="reasonData.descripcion" label="Descripción" multiline :rows="3" />
                 </div>
                 <footer>
                     <app-button variant="secondary" @click="$emit('close-reason')">Cancelar</app-button>
-                    <app-button icon="icons/save.svg" @click="$emit('save-reason')">Guardar motivo</app-button>
+                    <app-button icon="icons/save.svg" :loading="reasonSaving" @click="$emit('save-reason')">Guardar motivo</app-button>
                 </footer>
             </section>
         </div>
+        </template>
     </section>
 </template>
 
@@ -146,9 +157,17 @@ export default {
         serverErrors: { type: Object, default: () => ({}) },
         validationErrors: { type: Array, default: () => [] },
         saving: { type: Boolean, default: false },
+        initialLoading: { type: Boolean, default: false },
+        tableLoading: { type: Boolean, default: false },
+        reasonSaving: { type: Boolean, default: false },
+        reasonErrors: { type: Object, default: () => ({}) },
     },
     data() {
         return {
+            searchCriteria: [
+                { value: 'motivo_gasto.nombre', label: 'Motivo de gasto' },
+                { value: 'gasto.monto', label: 'Monto' },
+            ],
             columns: [
                 { key: 'fecha', label: 'Fecha' }, { key: 'motivo', label: 'Motivo' },
                 { key: 'monto', label: 'Monto', className: 'text-right' }, { key: 'forma', label: 'Forma de pago' },
@@ -195,6 +214,10 @@ export default {
             const value = this.serverErrors[field];
             return Array.isArray(value) ? value[0] : (value || '');
         },
+        reasonFieldError(field) {
+            const value = this.reasonErrors[field];
+            return Array.isArray(value) ? value[0] : (value || '');
+        },
         asset(path) {
             const index = window.location.pathname.indexOf('/main');
             const base = index >= 0 ? window.location.pathname.substring(0, index) : '';
@@ -210,13 +233,10 @@ export default {
 .expenses-toolbar { display: grid; grid-template-columns: 220px minmax(260px,1fr) auto; align-items: end; gap: .6rem; padding: 1rem; background: #f8fbf9; border-bottom: 1px solid #d8e5df; }
 .expense-field { display: flex; flex-direction: column; gap: .35rem; color: #315044; font-size: .73rem; font-weight: 800; }
 .expense-field--full { grid-column: 1 / -1; }
-.expense-field select { min-height: 40px; padding: .48rem .65rem; color: #17362b; background: #fff; border: 1px solid #bdd2c9; border-radius: 8px; }
 .expense-date { white-space: nowrap; }
 .expense-amount { color: #b45120; font-variant-numeric: tabular-nums; }
 .expense-payment { display: inline-flex; padding: .24rem .45rem; color: #0b718b; font-size: .67rem; font-weight: 800; background: #e8f9fc; border-radius: 999px; }
-.expense-edit { display: inline-flex; align-items: center; gap: .35rem; min-height: 32px; padding: .35rem .55rem; color: #315044; font-size: .7rem; font-weight: 800; background: #fff; border: 1px solid #cbdcd4; border-radius: 6px; }
-.expense-edit:hover { color: #17693c; background: #effaf4; border-color: #2fae66; }
-.expense-edit img { width: 14px; height: 14px; filter: invert(42%) sepia(18%) saturate(647%) hue-rotate(100deg); }
+.expense-actions { display: flex; align-items: center; justify-content: center; }
 .expense-registry-backdrop { position: fixed; inset: 0; z-index: 1055; display: grid; padding: 1rem; place-items: center; background: rgba(9,33,26,.58); backdrop-filter: blur(3px); }
 .expense-registry-backdrop--nested { z-index: 1065; background: rgba(9,33,26,.7); }
 .expense-registry-dialog { overflow: hidden; width: min(980px,100%); max-height: calc(100vh - 2rem); overflow-y: auto; background: #fff; border-radius: 14px; box-shadow: 0 24px 70px rgba(0,0,0,.25); }
@@ -226,7 +246,7 @@ export default {
 .expense-registry-dialog header button, .quick-reason-dialog header button { color: #fff; font-size: 1.5rem; line-height: 1; background: transparent; border: 0; }
 .expense-registry-dialog__content { display: grid; grid-template-columns: minmax(0,1fr) 270px; gap: 1rem; padding: 1.15rem; }
 .expense-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .85rem; }
-.expense-reason-control { display: grid; grid-template-columns: 1fr auto; gap: .45rem; }
+.expense-reason-control { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: .45rem; }
 .expense-deposit { display: flex; flex-direction: column; justify-content: center; padding: .65rem .75rem; color: #315044; background: #e8f9fc; border: 1px solid #cae9ef; border-radius: 8px; }
 .expense-deposit span, .expense-deposit small { font-size: .68rem; }
 .expense-deposit strong { margin: .2rem 0; color: #0b718b; font-size: 1rem; }

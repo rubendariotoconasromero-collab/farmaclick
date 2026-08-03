@@ -11,7 +11,7 @@ class MotivoGastoController extends BitacoraController
 {
     public function index(Request $request){
         $buscar = $request->buscar;
-        $criterio = $request->criterio;       
+        $criterio = 'nombre';
         if ($buscar==''){
             $motivo_gasto = MotivoGasto::orderBy('motivo_gasto.id', 'desc')->paginate(15);
         }

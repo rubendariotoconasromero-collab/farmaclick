@@ -32,6 +32,7 @@ Vue.component('app-page-skeleton', require('./components/ui/AppPageSkeleton.vue'
 Vue.component('app-live-search', require('./components/ui/AppLiveSearch.vue').default);
 Vue.component('app-multi-select-dropdown', require('./components/ui/AppMultiSelectDropdown.vue').default);
 Vue.component('app-icon-button', require('./components/ui/AppIconButton.vue').default);
+Vue.component('app-select', require('./components/ui/AppSelect.vue').default);
 Vue.component('purchase-pagination', require('./components/purchases/PurchasePagination.vue').default);
 Vue.component('purchase-entry-workspace', require('./components/purchases/PurchaseEntryWorkspace.vue').default);
 Vue.component('purchase-report-format-modal', require('./components/purchases/PurchaseReportFormatModal.vue').default);
