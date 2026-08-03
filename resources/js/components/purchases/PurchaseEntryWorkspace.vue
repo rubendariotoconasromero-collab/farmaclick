@@ -286,7 +286,7 @@ export default {
 .purchase-field { display: flex; flex-direction: column; gap: .25rem; color: #315044; font-size: .7rem; font-weight: 800; }
 .purchase-field--wide { grid-column: span 2; }
 .purchase-field--full { grid-column: 1 / -1; }
-.purchase-field select, .purchase-search select { min-height: 36px; padding: .38rem .6rem; color: #17362b; background: #fff; border: 1px solid #bdd2c9; border-radius: 8px; outline: 0; }
+.purchase-field select, .purchase-search select { box-sizing: border-box; min-height: 40px; padding: .52rem .72rem; color: #17362b; font-size: .82rem; background: #fff; border: 1px solid #bdd2c9; border-radius: 8px; outline: 0; }
 .purchase-field select:focus, .purchase-search select:focus { border-color: #0e93b5; box-shadow: 0 0 0 3px rgba(62, 198, 224, .18); }
 .purchase-summary { display: flex; flex-direction: column; gap: .35rem; padding: 1rem; color: #315044; background: linear-gradient(160deg, #effaf4, #fff); border: 1px solid #cfe0d8; border-top: 4px solid #3ec6e0; border-radius: 14px; box-shadow: 0 6px 18px rgba(23,54,43,.06); }
 .purchase-summary > span { margin-bottom: .35rem; color: #0e93b5; font-size: .67rem; font-weight: 900; text-transform: uppercase; letter-spacing: .07em; }
