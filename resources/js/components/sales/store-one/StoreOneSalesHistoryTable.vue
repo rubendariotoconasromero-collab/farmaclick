@@ -2,34 +2,57 @@
     <app-data-panel
         eyebrow="Consulta"
         title="Ventas registradas"
-        subtitle="Busque por cliente y administre cada comprobante desde una sola vista."
+        subtitle="Filtre por período, cliente, estado o forma de pago y administre cada comprobante."
         flush
     >
-        <div class="history-toolbar">
-            <label class="history-toolbar__field">
-                <span>Buscar cliente</span>
-                <app-input
-                    :value="search"
-                    placeholder="Nombre del cliente..."
-                    @input="$emit('update:search', $event)"
-                    @keyup.enter.native="$emit('search')"
+        <div class="history-filter-panel">
+            <div class="history-filter-grid">
+                <div class="history-period">
+                    <app-input :value="filters.fecha_desde" type="date" label="Desde" @input="updateFilter('fecha_desde', $event)" />
+                    <app-input :value="filters.fecha_hasta" type="date" label="Hasta" @input="updateFilter('fecha_hasta', $event)" />
+                </div>
+                <app-live-search
+                    :value="filters.cliente_id"
+                    :items="customers"
+                    :loading="customerLoading"
+                    label="Cliente"
+                    track-by="id"
+                    display-by="nombre"
+                    placeholder="Todos los clientes"
+                    @search="$emit('search-customer', $event)"
+                    @input="updateFilter('cliente_id', $event)"
                 />
-            </label>
-            <app-button
-                variant="secondary"
-                icon="icons/reload.svg"
-                :disabled="loading"
-                @click="$emit('refresh')"
-            >
-                Actualizar
-            </app-button>
-            <app-button
-                icon="icons/magnifying-glass.svg"
-                :disabled="loading"
-                @click="$emit('search')"
-            >
-                Buscar
-            </app-button>
+                <label class="history-filter-field">
+                    <span>Estado</span>
+                    <select :value="filters.estado" @change="updateFilter('estado', $event.target.value)">
+                        <option value="">Estados activos</option>
+                        <option value="Entregado">Entregada</option>
+                        <option value="Devolucion">Con devolución</option>
+                        <option value="Anulado">Anulada</option>
+                    </select>
+                </label>
+                <app-multi-select-dropdown
+                    :value="filters.formas_pago"
+                    :options="paymentForms"
+                    label="Formas de pago"
+                    placeholder="Todas las formas"
+                    menu-title="Filtrar por formas de pago"
+                    track-by="id"
+                    display-by="nombre"
+                    @input="updateFilter('formas_pago', $event)"
+                />
+            </div>
+            <div class="history-filter-actions">
+                <span>{{ activeFilterCount ? `${activeFilterCount} filtros activos` : 'Sin filtros aplicados' }}</span>
+                <app-button v-if="activeFilterCount" variant="ghost" @click="$emit('clear-filters')">Limpiar</app-button>
+                <app-button variant="secondary" icon="icons/reload.svg" :disabled="loading" @click="$emit('refresh')">Actualizar</app-button>
+                <app-button icon="icons/magnifying-glass.svg" :disabled="loading" @click="$emit('apply-filters')">Aplicar filtros</app-button>
+            </div>
+            <div v-if="filterChips.length" class="history-filter-chips" aria-label="Filtros activos">
+                <button v-for="chip in filterChips" :key="chip.key" type="button" @click="$emit('remove-filter', chip.key)">
+                    {{ chip.label }} <span aria-hidden="true">×</span>
+                </button>
+            </div>
         </div>
 
         <app-table
@@ -53,27 +76,29 @@
             </template>
             <template #cell-actions="{ row }">
                 <div class="history-actions">
-                    <button type="button" title="Ver detalle" @click="$emit('view', row)">
-                        <img :src="icon('eye.svg')" alt=""><span>Detalle</span>
-                    </button>
-                    <button
+                    <app-button variant="secondary" icon="icons/eye.svg" title="Ver detalle" @click="$emit('view', row)">
+                        Detalle
+                    </app-button>
+                    <app-button
                         v-if="canReturn(row)"
-                        type="button"
-                        class="history-actions__return"
+                        variant="secondary"
+                        icon="icons/action-undo.svg"
                         title="Registrar devolución"
                         @click="$emit('return', row)"
                     >
-                        <img :src="icon('action-undo.svg')" alt=""><span>Devolución</span>
-                    </button>
-                    <button
+                        Devolución
+                    </app-button>
+                    <app-button
                         v-if="canVoid(row)"
-                        type="button"
-                        class="history-actions__danger"
+                        variant="danger"
+                        icon="icons/lock-locked.svg"
                         title="Anular venta"
+                        :loading="voidingIds.includes(row.id)"
+                        :disabled="voidingIds.includes(row.id)"
                         @click="$emit('void', row)"
                     >
-                        <img :src="icon('lock-locked.svg')" alt=""><span>Anular</span>
-                    </button>
+                        Anular
+                    </app-button>
                 </div>
             </template>
         </app-table>
@@ -93,9 +118,13 @@ export default {
         rows: { type: Array, default: () => [] },
         pagination: { type: Object, required: true },
         pages: { type: Array, default: () => [] },
-        search: { type: String, default: '' },
+        filters: { type: Object, required: true },
+        customers: { type: Array, default: () => [] },
+        paymentForms: { type: Array, default: () => [] },
+        customerLoading: { type: Boolean, default: false },
         loading: { type: Boolean, default: false },
         isAdministrator: { type: Boolean, default: false },
+        voidingIds: { type: Array, default: () => [] },
     },
     data() {
         return {
@@ -110,7 +139,32 @@ export default {
             ],
         };
     },
+    computed: {
+        activeFilterCount() {
+            return ['fecha_desde', 'fecha_hasta', 'cliente_id', 'estado'].filter(key => Boolean(this.filters[key])).length
+                + (this.filters.formas_pago && this.filters.formas_pago.length ? 1 : 0);
+        },
+        filterChips() {
+            const chips = [];
+            if (this.filters.fecha_desde || this.filters.fecha_hasta) {
+                chips.push({ key: 'fechas', label: `Fecha: ${this.filters.fecha_desde || 'inicio'} a ${this.filters.fecha_hasta || 'hoy'}` });
+            }
+            if (this.filters.cliente_id) {
+                const customer = this.customers.find(item => String(item.id) === String(this.filters.cliente_id));
+                chips.push({ key: 'cliente_id', label: `Cliente: ${customer ? customer.nombre : `#${this.filters.cliente_id}`}` });
+            }
+            if (this.filters.estado) chips.push({ key: 'estado', label: `Estado: ${this.statusLabel(this.filters.estado)}` });
+            if (this.filters.formas_pago && this.filters.formas_pago.length) {
+                const labels = this.paymentForms
+                    .filter(item => this.filters.formas_pago.some(id => String(id) === String(item.id)))
+                    .map(item => item.nombre);
+                chips.push({ key: 'formas_pago', label: `Pago: ${labels.join(', ')}` });
+            }
+            return chips;
+        },
+    },
     methods: {
+        updateFilter(key, value) { this.$emit('update-filter', { key, value }); },
         money(value) {
             return `${Number(value || 0).toFixed(2)} Bs`;
         },
@@ -130,27 +184,22 @@ export default {
         canVoid(row) {
             return this.isAdministrator && ['Entregado', 'Devolucion'].includes(row.estado);
         },
-        icon(name) {
-            const mainIndex = window.location.pathname.indexOf('/main');
-            const base = mainIndex >= 0 ? window.location.pathname.substring(0, mainIndex) : '';
-            return `${base}/icons/${name}`;
-        },
     },
 };
 </script>
 
 <style scoped>
-.history-toolbar {
-    display: grid;
-    grid-template-columns: minmax(260px, 1fr) auto auto;
-    gap: .65rem;
-    align-items: end;
-    padding: 1rem;
-    background: var(--system-soft-bg, #f8fbf9);
-    border-bottom: 1px solid var(--system-border-color, #d8e5df);
-}
-.history-toolbar__field { display: grid; gap: .35rem; margin: 0; }
-.history-toolbar__field > span { color: var(--system-text-muted, #5f716a); font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.history-filter-panel { padding: 1rem; background: var(--system-soft-bg, #f8fbf9); border-bottom: 1px solid var(--system-border-color, #d8e5df); }
+.history-filter-grid { display: grid; grid-template-columns: 1.25fr 1fr .75fr 1fr; gap: .7rem; align-items: end; }
+.history-period { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+.history-filter-field { display: grid; gap: .35rem; margin: 0; }
+.history-filter-field > span { color: #315044; font-size: .73rem; font-weight: 800; }
+.history-filter-field select { width: 100%; min-height: 40px; padding: .48rem .65rem; color: #17362b; background: #fff; border: 1px solid #bdd2c9; border-radius: 8px; }
+.history-filter-actions { display: flex; justify-content: flex-end; align-items: center; gap: .55rem; margin-top: .8rem; }
+.history-filter-actions > span { margin-right: auto; color: var(--system-text-muted, #6f817a); font-size: .7rem; font-weight: 700; }
+.history-filter-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .65rem; }
+.history-filter-chips button { padding: .3rem .55rem; color: #17693c; background: #e3f5eb; border: 1px solid #c7e6d3; border-radius: 999px; font-size: .68rem; font-weight: 800; cursor: pointer; }
+.history-filter-chips button span { margin-left: .25rem; }
 .history-total { color: var(--fc-green-700, #1f6b45); white-space: nowrap; }
 .history-payment { display: block; color: var(--fc-ink, #17362b); font-weight: 800; }
 .history-payment + small { display: block; margin-top: .15rem; color: var(--system-text-muted, #6f817a); font-size: .68rem; }
@@ -159,16 +208,10 @@ export default {
 .history-status--warning { color: #8a6213; background: #fff3d2; }
 .history-status--danger { color: #a72f36; background: #fde8e9; }
 .history-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
-.history-actions button { display: inline-flex; align-items: center; gap: .3rem; min-height: 31px; padding: .3rem .48rem; color: #17693c; font-size: .68rem; font-weight: 800; background: #effaf4; border: 1px solid #c9e5d5; border-radius: 7px; }
-.history-actions button:hover { background: #e1f4e9; }
-.history-actions img { width: 14px; height: 14px; filter: invert(37%) sepia(20%) saturate(1290%) hue-rotate(98deg); }
-.history-actions .history-actions__return { color: #08758f; background: #ecf9fc; border-color: #c2e6ee; }
-.history-actions .history-actions__return img { filter: invert(43%) sepia(73%) saturate(950%) hue-rotate(153deg); }
-.history-actions .history-actions__danger { color: #a72f36; background: #fff3f3; border-color: #f0cece; }
-.history-actions .history-actions__danger img { filter: invert(29%) sepia(72%) saturate(1248%) hue-rotate(324deg); }
 @media (max-width: 720px) {
-    .history-toolbar { grid-template-columns: 1fr 1fr; }
-    .history-toolbar__field { grid-column: 1 / -1; }
-    .history-actions button span { display: none; }
+    .history-filter-grid { grid-template-columns: 1fr; }
+    .history-filter-actions { flex-wrap: wrap; justify-content: stretch; }
+    .history-filter-actions > span { width: 100%; }
 }
+@media (max-width: 1200px) and (min-width: 721px) { .history-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

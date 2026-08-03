@@ -55,6 +55,7 @@ export default {
     name: 'AppLiveSearch',
     props: {
         value: { type: [String, Number], default: '' },
+        searchValue: { type: [String, Number], default: null },
         items: { type: Array, default: () => [] },
         trackBy: { type: String, default: 'id' },
         displayBy: { type: String, default: 'nombre' },
@@ -93,6 +94,7 @@ export default {
     },
     watch: {
         value: { immediate: true, handler() { this.syncQuery(); } },
+        searchValue() { this.syncQuery(); },
         items() { this.syncQuery(); },
     },
     methods: {
@@ -104,6 +106,10 @@ export default {
         },
         syncQuery() {
             if (this.open) return;
+            if (this.searchValue !== null && this.searchValue !== undefined) {
+                this.query = String(this.searchValue);
+                return;
+            }
             this.query = this.selectedItem ? this.itemLabel(this.selectedItem) : '';
         },
         onFocus() {
@@ -119,6 +125,7 @@ export default {
         onInput() {
             this.open = true;
             this.highlighted = 0;
+            this.$emit('search', this.query);
             if (!this.query) this.$emit('input', '');
         },
         move(step) {
@@ -140,6 +147,7 @@ export default {
         clear() {
             this.query = '';
             this.$emit('input', '');
+            this.$emit('search', '');
             this.$emit('select', null);
             this.$refs.field.focus();
         },

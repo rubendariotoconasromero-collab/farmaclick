@@ -1,13 +1,13 @@
 <template>
-    <div v-if="open" class="report-format" role="dialog" aria-modal="true" aria-labelledby="purchase-report-title" @click.self="$emit('close')">
+    <div v-if="open" class="report-format" role="dialog" aria-modal="true" aria-labelledby="report-format-title" @click.self="$emit('close')">
         <section class="report-format__card">
             <header class="report-format__header">
                 <div class="report-format__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6zM18 12h1"/></svg>
                 </div>
                 <div>
-                    <small>Compra registrada</small>
-                    <h2 id="purchase-report-title">¿Cómo desea generar la nota?</h2>
+                    <small>{{ contextLabel }}</small>
+                    <h2 id="report-format-title">{{ title }}</h2>
                     <p>Seleccione el formato adecuado para su impresora.</p>
                 </div>
                 <button type="button" class="report-format__close" aria-label="Cerrar" :disabled="Boolean(loadingFormat)" @click="$emit('close')">×</button>
@@ -34,7 +34,7 @@
             </div>
 
             <footer>
-                <span>Puede volver a imprimir la última nota desde el encabezado del módulo.</span>
+                <span>{{ footerHint }}</span>
                 <button type="button" :disabled="Boolean(loadingFormat)" @click="$emit('close')">Ahora no</button>
             </footer>
         </section>
@@ -47,6 +47,9 @@ export default {
     props: {
         open: { type: Boolean, default: false },
         loadingFormat: { type: String, default: '' },
+        contextLabel: { type: String, default: 'Compra registrada' },
+        title: { type: String, default: '¿Cómo desea generar la nota?' },
+        footerHint: { type: String, default: 'Puede volver a imprimir la última nota desde el encabezado del módulo.' },
     },
 };
 </script>

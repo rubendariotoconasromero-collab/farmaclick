@@ -234,50 +234,30 @@ class TiendaController extends BitacoraController
 
 
     public function inventario(Request $request){
-        $buscar = $request->buscar;
-        $criterio = $request->criterio;     
-        if ($buscar==''){
-            $obj= TiendaArticulo::join('articulo','tienda_articulo.id_articulo','=','articulo.id')
+        $filtros = $request->validate([
+            'buscar' => 'nullable|string|max:100',
+            'criterio' => 'nullable|string|in:articulo.nombre_comercial,proveedor.nombre,categoria.nombre',
+        ]);
+        $buscar = trim($filtros['buscar'] ?? '');
+        $criterio = $filtros['criterio'] ?? 'articulo.nombre_comercial';
+        $fechaAlerta = now()->addDays(30)->toDateString();
+
+        $obj = TiendaArticulo::join('articulo','tienda_articulo.id_articulo','=','articulo.id')
             ->join('categoria','articulo.id_categoria','=','categoria.id')
             ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
             ->select('tienda_articulo.id as id_tienda_articulo', 'articulo.id','articulo.cod_sistema','articulo.cod_proveedor','articulo.nombre_comercial','articulo.costo_compra'
             ,'articulo.costo_unitario','tienda_articulo.stock','categoria.nombre as categoria','articulo.nombre_generico'
             ,'proveedor.nombre as laboratorio','articulo.venta_presentacion','articulo.cantidad_blister','articulo.cantidad_caja',
             'articulo.precio_caja','articulo.precio_blister')
+            ->selectRaw('EXISTS (SELECT 1 FROM lote WHERE lote.id_producto = tienda_articulo.id AND lote.estado != 0 AND lote.fecha_vecimiento IS NOT NULL AND lote.fecha_vecimiento <= ?) as v_fecha', [$fechaAlerta])
             ->where('tienda_articulo.id_tienda',1)
-            ->where('articulo.estado','=',1)
-            ->orderBy('tienda_articulo.id', 'desc')->paginate(30);
-        }
-        else{
-            if($criterio=="proveedor.nombre"){
-                
-                $obj= TiendaArticulo::join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-                ->join('categoria','articulo.id_categoria','=','categoria.id')
-                ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
-                ->select('tienda_articulo.id as id_tienda_articulo', 'articulo.id','articulo.cod_sistema','articulo.cod_proveedor','articulo.nombre_comercial','articulo.costo_compra'
-                ,'articulo.costo_unitario','tienda_articulo.stock','categoria.nombre as categoria','articulo.nombre_generico'
-                ,'proveedor.nombre as laboratorio','articulo.venta_presentacion','articulo.cantidad_blister','articulo.cantidad_caja',
-                'articulo.precio_caja','articulo.precio_blister')
-                ->where('tienda_articulo.id_tienda',1)
-                ->where('articulo.estado','=',1)
-                ->where($criterio,$buscar)
-                ->orderBy('tienda_articulo.id', 'desc')->paginate(30);
-            }else{
+            ->where('articulo.estado','=',1);
 
-                $obj= TiendaArticulo::join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-                ->join('categoria','articulo.id_categoria','=','categoria.id')
-                ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
-                ->select('tienda_articulo.id as id_tienda_articulo', 'articulo.id','articulo.cod_sistema','articulo.cod_proveedor','articulo.nombre_comercial','articulo.costo_compra'
-                ,'articulo.costo_unitario','tienda_articulo.stock','categoria.nombre as categoria','articulo.nombre_generico'
-                ,'proveedor.nombre as laboratorio','articulo.venta_presentacion','articulo.cantidad_blister','articulo.cantidad_caja',
-                'articulo.precio_caja','articulo.precio_blister')
-                ->where('tienda_articulo.id_tienda',1)
-                ->where('articulo.estado','=',1)
-                ->where($criterio, 'like', '%'.$buscar.'%')
-                ->orderBy('tienda_articulo.id', 'desc')->paginate(30);
-            }
+        if ($buscar !== '') {
+            $obj->where($criterio, 'like', '%' . $buscar . '%');
         }
-        return $obj;
+
+        return $obj->orderByDesc('tienda_articulo.id')->paginate(30)->appends($request->query());
     }
 
     public function listarSinPaginate(Request $request){
@@ -565,11 +545,15 @@ class TiendaController extends BitacoraController
     }
 
     public function listarSinPaginateInventario(Request $request){
-        $buscar = $request->buscar; 
-        $criterio = $request->criterio;    
-        if ($buscar==''){
+        $filtros = $request->validate([
+            'buscar' => 'nullable|string|max:100',
+            'criterio' => 'nullable|string|in:articulo.nombre_comercial,proveedor.nombre,categoria.nombre',
+        ]);
+        $buscar = trim($filtros['buscar'] ?? '');
+        $criterio = $filtros['criterio'] ?? 'articulo.nombre_comercial';
+        $fechaAlerta = now()->addDays(30)->toDateString();
 
-            $tienda_articulo = Lote::join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
+        $tienda_articulo = Lote::join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
             ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
             ->join('categoria','articulo.id_categoria','=','categoria.id')
             ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
@@ -579,55 +563,19 @@ class TiendaController extends BitacoraController
             'articulo.costo_compra','articulo.costo_unitario','articulo.costo_mayorista','articulo.precio_blister','articulo.precio_caja',
             'articulo.costo_preferencial','articulo.id_categoria','categoria.nombre as categoria','lote.cantidad as stock','lote.fecha_vecimiento',
             'articulo.descripcion','articulo.cod_proveedor','articulo.cantidad_blister','articulo.cantidad_caja','articulo.venta_presentacion',
-            'articulo.ubicacion','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion','lote.lote') 
-            //->where('lote.cantidad', '!=', 0)
-            ->where('lote.estado', '!=', 0)
-            ->orderBy('lote.fecha_vecimiento', 'asc')
-            ->paginate(30);
-            //->get();
-        }
-        else{
-            if($criterio=="proveedor.nombre"){
-                $tienda_articulo = Lote::join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
-                ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-                ->join('categoria','articulo.id_categoria','=','categoria.id')
-                ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
-                ->join('unidad_medida','articulo.id_unidad','=','unidad_medida.id')
-                ->select('lote.id','tienda_articulo.id as id_articulo','tienda_articulo.id_tienda',
-                'articulo.nombre_comercial as articulo','articulo.nombre_generico',
-                'articulo.costo_compra','articulo.costo_unitario','articulo.costo_mayorista','articulo.precio_blister','articulo.precio_caja',
-                'articulo.costo_preferencial','articulo.id_categoria','categoria.nombre as categoria','lote.cantidad as stock','lote.fecha_vecimiento',
-                'articulo.descripcion','articulo.cod_proveedor','articulo.cantidad_blister','articulo.cantidad_caja','articulo.venta_presentacion',
-                'articulo.ubicacion','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion','lote.lote')
-                ->where($criterio,$buscar)
-                //->where('lote.cantidad', '!=', 0)
-                ->where('lote.estado', '!=', 0)
-                ->orderBy('lote.fecha_vecimiento', 'asc')
-                ->paginate(30);
-                //->get();
-            }else{
-                $tienda_articulo = Lote::join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
-                ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-                ->join('categoria','articulo.id_categoria','=','categoria.id')
-                ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
-                ->join('unidad_medida','articulo.id_unidad','=','unidad_medida.id')
-                ->select('lote.id','tienda_articulo.id as id_articulo','tienda_articulo.id_tienda',
-                'articulo.nombre_comercial as articulo','articulo.nombre_generico',
-                'articulo.costo_compra','articulo.costo_unitario','articulo.costo_mayorista','articulo.precio_blister','articulo.precio_caja',
-                'articulo.costo_preferencial','articulo.id_categoria','categoria.nombre as categoria','lote.cantidad as stock','lote.fecha_vecimiento',
-                'articulo.descripcion','articulo.cod_proveedor','articulo.cantidad_blister','articulo.cantidad_caja','articulo.venta_presentacion',
-                'articulo.ubicacion','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion','lote.lote')
-                ->where($criterio, 'like', '%'.$buscar.'%')
-                //->where('lote.cantidad', '!=', 0)
-                ->where('lote.estado', '!=', 0)
-                ->orderBy('lote.fecha_vecimiento', 'asc')
-                ->paginate(30);
-                //->get();
-            }
-          
+            'articulo.ubicacion','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion','lote.lote')
+            ->selectRaw('CASE WHEN lote.fecha_vecimiento IS NOT NULL AND lote.fecha_vecimiento <= ? THEN 1 ELSE 0 END as v_fecha', [$fechaAlerta])
+            ->where('tienda_articulo.id_tienda', 1)
+            ->where('articulo.estado', 1)
+            ->where('lote.estado', '!=', 0);
+
+        if ($buscar !== '') {
+            $tienda_articulo->where($criterio, 'like', '%' . $buscar . '%');
         }
 
-        return $tienda_articulo;
+        return $tienda_articulo->orderBy('lote.fecha_vecimiento', 'asc')
+            ->paginate(30)
+            ->appends($request->query());
     }
 
     public function selectProveedorB(Request $request){  

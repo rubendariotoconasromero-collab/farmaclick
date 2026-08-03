@@ -1,5 +1,7 @@
 <template>
     <section class="store-history">
+        <app-page-skeleton v-if="initialLoading" :rows="6" :columns="7" label="Preparando el historial de ventas" />
+        <template v-else>
         <app-module-header
             eyebrow="Ventas · Tienda Primera"
             :title="headerTitle"
@@ -16,7 +18,7 @@
         </app-module-header>
 
         <template v-if="mode === 'list'">
-            <div class="store-history__metrics">
+            <div v-if="false" class="store-history__metrics">
                 <app-metric-card label="Ventas encontradas" :value="pagination.total || rows.length" hint="Registros según el filtro" icon="icons/cart.svg" tone="green" />
                 <app-metric-card label="Total visible" :value="money(visibleTotal)" hint="Suma de la página actual" icon="icons/money.svg" tone="cyan" />
                 <app-metric-card label="Página actual" :value="pageLabel" hint="Navegación del historial" icon="icons/calendar-check.svg" tone="blue" />
@@ -25,11 +27,18 @@
                 :rows="rows"
                 :pagination="pagination"
                 :pages="pages"
-                :search="search"
+                :filters="filters"
+                :customers="customers"
+                :payment-forms="paymentForms"
+                :customer-loading="customerLoading"
                 :loading="loading"
                 :is-administrator="isAdministrator"
-                @update:search="$emit('update:search', $event)"
-                @search="$emit('search')"
+                :voiding-ids="voidingIds"
+                @update-filter="$emit('update-filter', $event)"
+                @search-customer="$emit('search-customer', $event)"
+                @apply-filters="$emit('apply-filters')"
+                @clear-filters="$emit('clear-filters')"
+                @remove-filter="$emit('remove-filter', $event)"
                 @refresh="$emit('refresh')"
                 @page="$emit('page', $event)"
                 @view="$emit('view', $event)"
@@ -47,10 +56,12 @@
             :saving="saving"
             :deleting="deleting"
             :deleting-ids="deletingIds"
+            :pending-return-count="pendingReturnCount"
             @remove="$emit('remove-detail', $event)"
             @update-cash="$emit('update-cash', $event)"
             @save="$emit('save-return')"
         />
+        </template>
     </section>
 </template>
 
@@ -68,13 +79,19 @@ export default {
         datos: { type: Object, required: true },
         pagination: { type: Object, required: true },
         pages: { type: Array, default: () => [] },
-        search: { type: String, default: '' },
+        filters: { type: Object, required: true },
+        customers: { type: Array, default: () => [] },
+        paymentForms: { type: Array, default: () => [] },
+        customerLoading: { type: Boolean, default: false },
+        initialLoading: { type: Boolean, default: false },
         loading: { type: Boolean, default: false },
         detailLoading: { type: Boolean, default: false },
         saving: { type: Boolean, default: false },
         deleting: { type: Boolean, default: false },
         deletingIds: { type: Array, default: () => [] },
+        pendingReturnCount: { type: Number, default: 0 },
         isAdministrator: { type: Boolean, default: false },
+        voidingIds: { type: Array, default: () => [] },
         printing: { type: Boolean, default: false },
     },
     computed: {

@@ -11,7 +11,7 @@
             </template>
         </app-module-header>
 
-        <section class="warehouse-inventory__metrics">
+        <section v-if="false" class="warehouse-inventory__metrics">
             <app-metric-card label="Productos" :value="productPagination.total || productRows.length" hint="Existencias por producto" icon="img/menu/Almacen.png" />
             <app-metric-card label="Lotes" :value="lotPagination.total || lotRows.length" hint="Registros individuales" icon="img/menu/control.png" tone="cyan" />
             <app-metric-card label="Vista actual" :value="viewLabel" hint="Nivel de detalle seleccionado" icon="img/menu/historial.png" tone="neutral" />
@@ -35,18 +35,16 @@
                 :row-class="expiryClass"
             >
                 <template #cell-fecha_vecimiento="{ value }">{{ value || 'Sin fecha' }}</template>
-                <template #cell-actions="{ row }">
-                    <app-button variant="danger" @click="$emit('remove-lot', row.id)">Eliminar lote</app-button>
-                </template>
+                <template #cell-actions="{ row }"><div class="warehouse-inventory__actions"><app-icon-button variant="danger" icon="icons/trash.svg" label="Eliminar lote" @click="$emit('remove-lot', row.id)" /></div></template>
             </app-table>
         </app-data-panel>
 
         <template v-else>
             <nav class="warehouse-inventory__tabs" aria-label="Tipo de inventario">
-                <button type="button" :class="{ 'is-active': activeTab === 'products' }" @click="activeTab = 'products'">
+                <button type="button" :class="{ 'is-active': activeTab === 'products' }" @click="selectTab('products')">
                     Existencias por producto
                 </button>
-                <button type="button" :class="{ 'is-active': activeTab === 'lots' }" @click="activeTab = 'lots'">
+                <button type="button" :class="{ 'is-active': activeTab === 'lots' }" @click="selectTab('lots')">
                     Inventario por lote
                 </button>
             </nav>
@@ -81,9 +79,7 @@
                     <template #cell-precio_blister="{ value }">{{ money(value) }}</template>
                     <template #cell-precio_caja="{ value }">{{ money(value) }}</template>
                     <template #cell-stock="{ value }"><strong>{{ value || 0 }}</strong></template>
-                    <template #cell-actions="{ row }">
-                        <app-button variant="secondary" @click="$emit('view-lots', row)">Ver lotes</app-button>
-                    </template>
+                    <template #cell-actions="{ row }"><div class="warehouse-inventory__actions"><app-icon-button icon="icons/eye.svg" label="Ver lotes" @click="$emit('view-lots', row)" /></div></template>
                 </app-table>
                 <purchase-pagination :pagination="productPagination" :pages="productPages" @change="$emit('product-page', $event)" />
             </app-data-panel>
@@ -118,9 +114,7 @@
                     <template #cell-precio_blister="{ value }">{{ money(value) }}</template>
                     <template #cell-precio_caja="{ value }">{{ money(value) }}</template>
                     <template #cell-stock="{ value }"><strong>{{ value || 0 }}</strong></template>
-                    <template #cell-actions="{ row }">
-                        <app-button variant="danger" @click="$emit('remove-lot', row.id)">Eliminar</app-button>
-                    </template>
+                    <template #cell-actions="{ row }"><div class="warehouse-inventory__actions"><app-icon-button variant="danger" icon="icons/trash.svg" label="Eliminar lote" @click="$emit('remove-lot', row.id)" /></div></template>
                 </app-table>
                 <purchase-pagination :pagination="lotPagination" :pages="lotPages" @change="$emit('lot-page', $event)" />
             </app-data-panel>
@@ -183,6 +177,10 @@ export default {
         },
     },
     methods: {
+        selectTab(tab) {
+            this.activeTab = tab;
+            if (tab === 'lots') this.$emit('activate-lots');
+        },
         money(value) {
             return `${Number(value || 0).toFixed(2)} Bs`;
         },
@@ -199,6 +197,7 @@ export default {
 .warehouse-inventory__tabs { display: inline-flex; width: fit-content; gap: .35rem; padding: .3rem; background: #e5efe9; border-radius: 10px; }
 .warehouse-inventory__tabs button { padding: .55rem .85rem; color: #5f716a; font-size: .75rem; font-weight: 800; background: transparent; border: 0; border-radius: 8px; }
 .warehouse-inventory__tabs button.is-active { color: #17693c; background: #fff; box-shadow: 0 3px 10px rgba(23, 54, 43, .08); }
+.warehouse-inventory__actions { display: flex; justify-content: center; }
 .warehouse-inventory >>> .warehouse-inventory__expired { background: #fff1f1 !important; }
 @media (max-width: 900px) { .warehouse-inventory__metrics { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .warehouse-inventory { padding: .75rem; } .warehouse-inventory__tabs { width: 100%; flex-direction: column; } }

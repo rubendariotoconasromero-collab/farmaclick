@@ -2,10 +2,14 @@
     <main class="main">
         <store-one-sale-workspace
             :cash-state="estadoCaja"
+            :cash-loading="cargandoCaja"
+            :cash-error="errorCaja"
+            :initial-loading="cargaInicial"
             :datos="datos"
             :datos-pago="datosPago"
             :customer-keyword="keywordCliente"
             :customers="filteredClientes"
+            :customer-loading="buscandoClientes"
             :payment-types="arrayPago"
             :payment-forms="arrayFormaContado"
             :details="arrayDetalle"
@@ -26,6 +30,9 @@
             :deposit-total="totalDeposito"
             :change="cambioVenta"
             :saving="isSaving"
+            :last-sale-id="lastSaleId"
+            :report-modal-open="reportModalOpen"
+            :report-loading-format="reportLoadingFormat"
             @update:customerKeyword="keywordCliente = $event"
             @search-customer="buscarClientes"
             @select-customer="seleccionarCliente"
@@ -46,13 +53,17 @@
             @update:quantity="quantityInput = $event"
             @cancel-quantity="cancelarCantidad"
             @confirm-quantity="confirmarCantidad"
+            @retry-cash="verificarCaja"
+            @open-report-modal="reportModalOpen = true"
+            @close-report-modal="cerrarModalReporte"
+            @generate-report="generarNotaVenta"
         />
         <frm-toast ref="toast"></frm-toast>
     </main>
 </template>
 
 <script>
-import Swal from 'sweetalert2';
+import Swal from '../../utils/appSwal';
 import moment from 'moment';
 import StoreOneSaleWorkspace from '../sales/store-one/StoreOneSaleWorkspace.vue';
 
@@ -90,12 +101,17 @@ export default {
             keywordCliente: '',
             filteredClientes: [],
             customerSearchTimer: null,
+            customerSearchSequence: 0,
+            buscandoClientes: false,
             showQuantityModal: false,
             quantityInput: '',
             quantityError: '',
             selectedProduct: {},
             modalP: false,
             isSaving: false,
+            lastSaleId: 0,
+            reportModalOpen: false,
+            reportLoadingFormat: '',
             datos: crearDatosVenta(),
             datosPago: crearDatosPago(),
             arrayDetalle: [],
@@ -105,6 +121,9 @@ export default {
             arrayForma: [],
             arrayProveedor: [],
             estadoCaja: '',
+            cargandoCaja: true,
+            errorCaja: '',
+            cargaInicial: true,
             criterioP: 'articulo.nombre_comercial',
             buscarP: '',
             pagination: {
@@ -147,9 +166,11 @@ export default {
     },
     methods: {
         buscarClientes(busqueda) {
+            const sequence = ++this.customerSearchSequence;
             this.datos.id_cliente = 0;
             this.datos.cliente = busqueda;
             clearTimeout(this.customerSearchTimer);
+            this.buscandoClientes = false;
 
             if (!String(busqueda || '').trim()) {
                 this.filteredClientes = [];
@@ -157,18 +178,30 @@ export default {
             }
 
             this.customerSearchTimer = setTimeout(async () => {
+                this.buscandoClientes = true;
                 try {
                     const { data } = await axios.get('/cliente/selectCliente', {
                         params: { filtro: busqueda },
                     });
-                    this.filteredClientes = data.data || data;
+                    if (sequence === this.customerSearchSequence) {
+                        this.filteredClientes = data.data || data;
+                    }
                 } catch (error) {
                     console.error(error);
-                    this.filteredClientes = [];
+                    if (sequence === this.customerSearchSequence) {
+                        this.filteredClientes = [];
+                    }
+                } finally {
+                    if (sequence === this.customerSearchSequence) {
+                        this.buscandoClientes = false;
+                    }
                 }
             }, 250);
         },
         seleccionarCliente(cliente) {
+            this.customerSearchSequence += 1;
+            clearTimeout(this.customerSearchTimer);
+            this.buscandoClientes = false;
             this.keywordCliente = cliente.nombre;
             this.datos.id_cliente = Number(cliente.id);
             this.datos.cliente = cliente.nombre;
@@ -178,6 +211,9 @@ export default {
             this.filteredClientes = [];
         },
         limpiarCliente() {
+            this.customerSearchSequence += 1;
+            clearTimeout(this.customerSearchTimer);
+            this.buscandoClientes = false;
             this.keywordCliente = '';
             this.datos.id_cliente = 1;
             this.datos.cliente = 'Público General';
@@ -354,7 +390,7 @@ export default {
             });
 
             try {
-                await axios.post('/venta/guardar_tienda1', {
+                const response = await axios.post('/venta/guardar_tienda1', {
                     ...this.datos,
                     id_servicio: this.datos.id,
                     fecha_final: this.datosPago.fecha_final,
@@ -369,18 +405,31 @@ export default {
                     stock_producto_paquete: this.arrayProductoPaquete,
                 });
 
-                Swal.fire({
+                const saleId = Number(response.data && response.data.id);
+                if (!saleId) {
+                    throw new Error('La venta fue procesada sin devolver un identificador.');
+                }
+
+                this.lastSaleId = saleId;
+                await Swal.fire({
                     icon: 'success',
                     title: 'Venta registrada',
                     showConfirmButton: false,
-                    timer: 1500,
+                    timer: 1100,
                 });
-                this.cargarPdf2();
                 this.limpiarVenta();
-                this.listarArticulo();
+                await this.listarArticulo();
+                this.reportModalOpen = true;
             } catch (requestError) {
                 console.error(requestError);
-                Swal.fire('Error', 'No fue posible guardar la venta.', 'error');
+                const message = requestError.response && requestError.response.data
+                    ? (requestError.response.data.message || requestError.response.data.error)
+                    : '';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'No se pudo registrar la venta',
+                    text: message || 'Revise la información e intente nuevamente.',
+                });
             } finally {
                 this.isSaving = false;
             }
@@ -388,13 +437,36 @@ export default {
         mostrarAlerta(mensaje) {
             Swal.fire({ icon: 'error', title: 'Revise la venta', text: mensaje });
         },
-        cargarPdf2() {
-            axios.get('/venta/pdfVentasGeneral2', { responseType: 'blob' })
-                .then(response => {
-                    const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-                    window.open(url, '_blank');
-                })
-                .catch(error => console.error(error));
+        cerrarModalReporte() {
+            if (!this.reportLoadingFormat) {
+                this.reportModalOpen = false;
+            }
+        },
+        async generarNotaVenta(formato) {
+            if (!this.lastSaleId || !['carta', 'ticket'].includes(formato) || this.reportLoadingFormat) return;
+
+            const reportWindow = window.open('', '_blank');
+            this.reportLoadingFormat = formato;
+            try {
+                const response = await axios.get(`/venta/tienda1/${this.lastSaleId}/nota/${formato}`, {
+                    responseType: 'blob',
+                });
+                const reportUrl = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+                if (reportWindow) reportWindow.location.href = reportUrl;
+                else window.open(reportUrl, '_blank');
+                this.reportModalOpen = false;
+                window.setTimeout(() => URL.revokeObjectURL(reportUrl), 60000);
+            } catch (error) {
+                if (reportWindow) reportWindow.close();
+                console.error(error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'No se pudo generar la nota',
+                    text: 'Intente nuevamente o seleccione el otro formato.',
+                });
+            } finally {
+                this.reportLoadingFormat = '';
+            }
         },
         limpiarVenta() {
             this.datos = crearDatosVenta();
@@ -424,21 +496,41 @@ export default {
             }
         },
         async verificarCaja() {
+            if (this.cargandoCaja && !this.cargaInicial) return;
+
+            this.cargandoCaja = true;
+            this.errorCaja = '';
             try {
                 const { data } = await axios.get('/arqueo_caja/estado_caja');
-                this.estadoCaja = data.estado;
+                const estado = data && data.estado;
+
+                if (!['Abierta', 'Cerrada'].includes(estado)) {
+                    throw new Error('La respuesta del estado de caja no es valida.');
+                }
+
+                this.estadoCaja = estado;
             } catch (error) {
                 console.error(error);
-                this.estadoCaja = 'Cerrada';
+                this.estadoCaja = '';
+                this.errorCaja = 'No fue posible consultar el estado de la caja.';
+            } finally {
+                this.cargandoCaja = false;
             }
         },
     },
     async mounted() {
-        await Promise.all([
-            this.cargarCatalogos(),
-            this.listarArticulo(),
-            this.verificarCaja(),
-        ]);
+        try {
+            await Promise.all([
+                this.cargarCatalogos(),
+                this.verificarCaja(),
+            ]);
+        } finally {
+            this.cargaInicial = false;
+        }
+    },
+    beforeDestroy() {
+        clearTimeout(this.customerSearchTimer);
+        this.customerSearchSequence += 1;
     },
 };
 </script>

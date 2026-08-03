@@ -35,6 +35,7 @@ Vue.component('app-icon-button', require('./components/ui/AppIconButton.vue').de
 Vue.component('purchase-pagination', require('./components/purchases/PurchasePagination.vue').default);
 Vue.component('purchase-entry-workspace', require('./components/purchases/PurchaseEntryWorkspace.vue').default);
 Vue.component('purchase-report-format-modal', require('./components/purchases/PurchaseReportFormatModal.vue').default);
+Vue.component('app-report-format-modal', require('./components/purchases/PurchaseReportFormatModal.vue').default);
 Vue.component('purchase-history-workspace', require('./components/purchases/PurchaseHistoryWorkspace.vue').default);
 Vue.component('purchase-payments-workspace', require('./components/purchases/PurchasePaymentsWorkspace.vue').default);
 Vue.component('expense-reasons-workspace', require('./components/expenses/ExpenseReasonsWorkspace.vue').default);

@@ -17,55 +17,61 @@ use App\Models\CXCobrar;
 use App\Models\ArqueoCaja;
 use App\Models\Cliente;
 use App\Models\Auxiliar;
+use App\Models\Lote;
+use App\Models\MiEmpresa;
 use App\Http\Controllers\BitacoraController;
+use Illuminate\Validation\ValidationException;
 use DB;
 use DateTime;
 
 class VentaController1 extends BitacoraController
 {
     public function index(Request $request){
-        $buscar = $request->buscar;
-        $criterio = $request->criterio;
-        $id_usuario = $request->id_usuario;
-        if($buscar==''){
-            $obj= Venta::join('users','venta.id_usuario','=','users.id')
-            ->join('cliente','venta.id_cliente','=','cliente.id')
-            ->join('tipo_pago','venta.id_tipo_pago','=','tipo_pago.id')
-            ->join('forma_pago','venta.id_forma_pago','=','forma_pago.id')
-            ->join('tienda','venta.id_tienda','=','tienda.id')
-            ->join('grupo','users.id_grupo','=','grupo.id')
-            ->select('venta.id','venta.fecha','venta.sub_total','venta.descuento','venta.tipo_venta',
-            'venta.total','venta.estado','users.name','cliente.nombre as cliente','cliente.descuento as id_descuento','tipo_pago.nombre as tipoP','forma_pago.nombre as formaP','forma_pago.nombre as formaP',
-            'tienda.id as tienda_id','tienda.nombre as tienda','venta.id_orden_servicio','venta.total_efectivo','venta.total_deposito','grupo.id as grupo','venta.id_usuario','venta.id_usuario')
-            //->where('venta.tipo_venta','=','Venta Directa')
-            ->whereNotBetween('venta.tipo_venta', ['Venta Directa', 'Venta Cotizacion','Venta Control Vacuna','Venta Antiparasitario'])
-            //->orWhere('venta.tipo_venta','=','Venta Cotizacion')
-            ->where('venta.id_tienda','=',1)
-            //->whereBetween('fecha_final', [$fecha1, $fecha2])
-            // ->whereNotBetween('venta.estado', ['Entregado', 'Cancelado'])
-            ->where('venta.estado','!=','Anulado')
+        $filtros = $request->validate([
+            'fecha_desde' => 'nullable|date',
+            'fecha_hasta' => 'nullable|date|after_or_equal:fecha_desde',
+            'cliente_id' => 'nullable|integer|exists:cliente,id',
+            'estado' => 'nullable|string|in:Entregado,Devolucion,Anulado',
+            'formas_pago' => 'nullable|array',
+            'formas_pago.*' => 'integer|distinct|exists:forma_pago,id',
+        ]);
 
-            ->where('users.id','=',\Auth::user()->id)
-            ->orderBy('venta.id','desc')->paginate(15);
+        $consulta = Venta::join('users', 'venta.id_usuario', '=', 'users.id')
+            ->join('cliente', 'venta.id_cliente', '=', 'cliente.id')
+            ->join('tipo_pago', 'venta.id_tipo_pago', '=', 'tipo_pago.id')
+            ->join('forma_pago', 'venta.id_forma_pago', '=', 'forma_pago.id')
+            ->join('tienda', 'venta.id_tienda', '=', 'tienda.id')
+            ->join('grupo', 'users.id_grupo', '=', 'grupo.id')
+            ->select(
+                'venta.id', 'venta.fecha', 'venta.sub_total', 'venta.descuento', 'venta.tipo_venta',
+                'venta.total', 'venta.estado', 'users.name', 'cliente.nombre as cliente',
+                'cliente.descuento as id_descuento', 'tipo_pago.nombre as tipoP',
+                'forma_pago.nombre as formaP', 'tienda.id as tienda_id', 'tienda.nombre as tienda',
+                'venta.id_orden_servicio', 'venta.total_efectivo', 'venta.total_deposito',
+                'grupo.id as grupo', 'venta.id_usuario', 'venta.id_cliente',
+                'venta.id_forma_pago', 'venta.id_tipo_pago'
+            )
+            ->where('venta.id_tienda', 1)
+            ->where('venta.id_usuario', \Auth::id());
+
+        if (!empty($filtros['fecha_desde'])) {
+            $consulta->whereDate('venta.fecha', '>=', $filtros['fecha_desde']);
         }
-        else{
-            $obj= Venta::join('users','venta.id_usuario','=','users.id')
-            ->join('cliente','venta.id_cliente','=','cliente.id')
-            ->join('tipo_pago','venta.id_tipo_pago','=','tipo_pago.id')
-            ->join('forma_pago','venta.id_forma_pago','=','forma_pago.id')
-            ->join('tienda','venta.id_tienda','=','tienda.id')
-            ->join('grupo','users.id_grupo','=','grupo.id')
-            ->select('venta.id','venta.fecha','venta.sub_total','venta.descuento','venta.tipo_venta',
-            'venta.total','venta.estado','users.name','cliente.nombre as cliente','cliente.descuento as id_descuento','tipo_pago.nombre as tipoP','forma_pago.nombre as formaP','forma_pago.nombre as formaP',
-            'tienda.id as tienda_id','tienda.nombre as tienda','venta.id_orden_servicio','venta.total_efectivo','venta.total_deposito','grupo.id as grupo','venta.id_usuario')
-            ->where($criterio, 'like', '%'.$buscar.'%')
-            ->whereNotBetween('venta.tipo_venta', ['Venta Directa', 'Venta Cotizacion'])
-            ->where('venta.estado','!=','Anulado')
-            ->where('venta.id_tienda','=',1)
-            ->where('users.id','=',\Auth::user()->id)
-            ->orderBy('venta.id','desc')->paginate(15);
+        if (!empty($filtros['fecha_hasta'])) {
+            $consulta->whereDate('venta.fecha', '<=', $filtros['fecha_hasta']);
         }
-        return $obj;
+        if (!empty($filtros['cliente_id'])) {
+            $consulta->where('venta.id_cliente', $filtros['cliente_id']);
+        }
+        if (!empty($filtros['estado'])) {
+            $consulta->where('venta.estado', $filtros['estado']);
+        } else {
+            $consulta->where('venta.estado', '!=', 'Anulado');
+        }
+        if (!empty($filtros['formas_pago'])) {
+            $consulta->whereIn('venta.id_forma_pago', $filtros['formas_pago']);
+        }
+        return $consulta->orderByDesc('venta.id')->paginate(15)->appends($request->query());
     }
     public function indexContado(Request $request){
         $buscar = $request->buscar;
@@ -721,10 +727,126 @@ class VentaController1 extends BitacoraController
 
 
             DB::commit();
-        } catch (Exception $e){
+
+            return response()->json([
+                'id' => $venta->id,
+                'message' => 'Venta registrada correctamente.',
+            ], 201);
+        } catch (\Throwable $e){
             DB::rollBack();
+            report($e);
+
+            return response()->json([
+                'message' => 'No fue posible registrar la venta. No se aplicaron cambios.',
+            ], 500);
         }
     }
+
+    private function datosNotaVenta($id)
+    {
+        $venta = Venta::join('users', 'venta.id_usuario', '=', 'users.id')
+            ->join('cliente', 'venta.id_cliente', '=', 'cliente.id')
+            ->join('forma_pago', 'venta.id_forma_pago', '=', 'forma_pago.id')
+            ->join('tipo_pago', 'venta.id_tipo_pago', '=', 'tipo_pago.id')
+            ->join('tienda', 'venta.id_tienda', '=', 'tienda.id')
+            ->select(
+                'venta.id', 'venta.fecha', 'venta.sub_total', 'venta.descuento',
+                'venta.total', 'venta.estado', 'venta.tipo_venta', 'venta.efectivo',
+                'venta.cambio', 'venta.total_efectivo', 'venta.total_deposito',
+                'users.name as usuario', 'cliente.nombre as cliente',
+                'forma_pago.nombre as forma_pago', 'tipo_pago.nombre as tipo_pago',
+                'tienda.nombre as tienda', 'tienda.direccion as tienda_direccion'
+            )
+            ->where('venta.id', $id)
+            ->where('venta.id_tienda', 1)
+            ->where('venta.id_usuario', \Auth::id())
+            ->firstOrFail();
+
+        $detalles = DetalleVenta::join('tienda_articulo', 'detalle_venta.id_producto', '=', 'tienda_articulo.id')
+            ->join('articulo', 'tienda_articulo.id_articulo', '=', 'articulo.id')
+            ->leftJoin('categoria', 'articulo.id_categoria', '=', 'categoria.id')
+            ->leftJoin('lote', 'detalle_venta.id_lote', '=', 'lote.id')
+            ->select(
+                'detalle_venta.cantidad', 'detalle_venta.costo_venta', 'detalle_venta.sub_total',
+                'detalle_venta.presentacion', 'articulo.nombre_comercial as articulo',
+                'categoria.nombre as categoria', 'lote.lote', 'lote.fecha_vecimiento'
+            )
+            ->where('detalle_venta.id_venta', $id)
+            ->where(function ($query) {
+                $query->whereNull('detalle_venta.estado')->orWhere('detalle_venta.estado', 0);
+            })
+            ->orderBy('detalle_venta.id')
+            ->get();
+
+        $paquetes = DetalleVentaPaquete::join('paquetes', 'detalle_venta_paquete.id_paquete', '=', 'paquetes.id')
+            ->select(
+                'detalle_venta_paquete.cantidad', 'detalle_venta_paquete.costo_venta',
+                'detalle_venta_paquete.sub_total', 'paquetes.nombre as articulo'
+            )
+            ->where('detalle_venta_paquete.id_venta', $id)
+            ->orderBy('detalle_venta_paquete.id')
+            ->get()
+            ->each(function ($detalle) {
+                $detalle->categoria = 'Paquete';
+                $detalle->lote = null;
+                $detalle->fecha_vecimiento = null;
+                $detalle->presentacion = null;
+            });
+
+        $empresa = MiEmpresa::select(
+            'nombre', 'nit', 'representante', 'direccion', 'telefono',
+            'localidad', 'Correo as correo', 'sitio_web', 'foto'
+        )->first();
+
+        return [
+            'venta' => $venta,
+            'detalles' => $detalles->concat($paquetes)->values(),
+            'empresa' => $empresa,
+            'logo' => $this->logoNotaVenta($empresa),
+            'fecha_impresion' => now()->format('d/m/Y H:i'),
+        ];
+    }
+
+    private function logoNotaVenta($empresa)
+    {
+        $candidatos = [];
+
+        if ($empresa && $empresa->foto) {
+            $archivo = basename(str_replace('\\', '/', $empresa->foto));
+            $candidatos[] = public_path('img/logo/' . $archivo);
+            $candidatos[] = public_path('img/mi_empresa/' . $archivo);
+        }
+
+        $candidatos[] = public_path('img/FarmaClick_logo_horizontal.png');
+
+        foreach ($candidatos as $ruta) {
+            if (is_file($ruta) && is_readable($ruta)) {
+                $mime = function_exists('mime_content_type') ? mime_content_type($ruta) : 'image/png';
+                return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($ruta));
+            }
+        }
+
+        return null;
+    }
+
+    public function notaVenta($id, $formato)
+    {
+        abort_unless(in_array($formato, ['carta', 'ticket'], true), 404);
+
+        $datos = $this->datosNotaVenta((int) $id);
+        $vista = $formato === 'ticket' ? 'pdf.venta.nota-ticket' : 'pdf.venta.nota-carta';
+        $pdf = \PDF::loadView($vista, $datos);
+
+        if ($formato === 'ticket') {
+            $alto = max(360, 300 + ($datos['detalles']->count() * 42));
+            $pdf->setPaper([0, 0, 226.77, $alto], 'portrait');
+        } else {
+            $pdf->setPaper('letter', 'portrait');
+        }
+
+        return $pdf->stream(sprintf('nota-venta-%s-%06d.pdf', $formato, $id));
+    }
+
     public function guardarCotizacion(Request $request){
         try{
                 DB::beginTransaction();
@@ -1024,163 +1146,150 @@ class VentaController1 extends BitacoraController
         ->get();
         return $obj;
     }
-    public function anular(Request $request){
-    try{
-        DB::beginTransaction();
-        $registro_venta = DB::select("SELECT id, total, id_tipo_pago,id_forma_pago,total_efectivo,total_deposito FROM venta WHERE venta.id = $request->id");
-        $total = $registro_venta[0]->total;
-        $total_efectivo = $registro_venta[0]->total_efectivo;
-        $total_deposito = $registro_venta[0]->total_deposito;
-        //dd($request->id);
-        $forma_pago = $registro_venta[0]->id_forma_pago;
-        $tipo_pago = $registro_venta[0]->id_tipo_pago;
-        $id_usuario=\Auth::user()->id;
-        $objdate = new DateTime();
-        $fechaactual= $objdate->format('Y-m-d');
-        $hora= $objdate->format('H:i:s');
+    private function validarAccesoVenta(Venta $venta, $soloAdministrador = false)
+    {
+        $usuario = \Auth::user();
+        $esAdministrador = (int) $usuario->id_grupo === 1;
 
-        if($tipo_pago == "1"){
-            // if($forma_pago ==2){
-            //     $this->descontarCaja($total,$id_usuario);
-            //     $this->descontarCajaContado($total,$id_usuario);
-            // }
-            // if($forma_pago ==3 || $forma_pago ==4 || $forma_pago ==5){
-            //     $this->descontarCaja($total,$id_usuario);
-            //     $this->descontarCajaContadoDeposito($total,$id_usuario);
-            // }
-            // if($forma_pago ==6){
-            //     $this->descontarCaja($total_efectivo,$id_usuario);
-            //     $this->descontarCajaContado($total_efectivo,$id_usuario);
-
-            //     $this->descontarCajaDeposito($total_deposito,$id_usuario);
-            //     $this->descontarCajaContadoDeposito($total_deposito,$id_usuario);
-            // }
-        }else if ($tipo_pago == "2"){
-            $total_monto_credito= 0;
-            $registro_venta_pago = DB::select("SELECT id, id_venta FROM pago WHERE id_venta = $request->id");
-            $id_pago = $registro_venta_pago[0]->id;
-            $registro_venta_credito = DB::select("SELECT id, id_pago, amortizacion,id_forma_pago FROM c_x_cobrar WHERE c_x_cobrar.id_pago = $id_pago");
-            //$id_forma_pago = $registro_venta_credito[0]->id_forma_pago;
-            foreach($registro_venta_credito as $credito){
-                $total_monto_credito = $total_monto_credito + floatval($credito->amortizacion);
-                //dd($credito->id_forma_pago);
-                // if($credito->id_forma_pago == 2){
-                //     $this->descontarCajaCredito($credito->amortizacion,$id_usuario);
-                // }
-                // if($credito->id_forma_pago == 3 || $credito->id_forma_pago == 4 || $credito->id_forma_pago == 5){
-                //     $this->descontarCajaCreditoDeposito($credito->amortizacion,$id_usuario);
-                // }
-            }
-            // $this->descontarCaja($total_monto_credito,$id_usuario);
-
+        if ($soloAdministrador && !$esAdministrador) {
+            throw ValidationException::withMessages(['id' => ['Solo un administrador puede anular ventas.']]);
         }
 
-        $obj = Venta::findOrFail($request->id);
-        $obj->estado = 'Anulado';
-        $obj->save();
-
-        if(isset($request->id_orden_servicio)){
-            $obj = OrdenServicio::findOrFail($request->id_orden_servicio);
-            $obj->estado = 'Anulado';
-            $obj->save();
+        if ((int) $venta->id_tienda !== 1 || (!$esAdministrador && (int) $venta->id_usuario !== (int) $usuario->id)) {
+            throw ValidationException::withMessages(['id' => ['No tiene autorización para operar esta venta.']]);
         }
-
-
-        $pago = Pago::findOrFail($request->id);
-        $pago->estado = 0;
-        $pago->save();
-
-
-        // $detalles = DetalleVenta::select('id_venta','id_producto','cantidad')
-        // ->where('detalle_venta.id_venta',$request->id)->get();
-
-        $detalles = DetalleVenta::select('detalle_venta.id_venta','detalle_venta.costo_venta','detalle_venta.id_lote','detalle_venta.cantidad','detalle_venta.id_producto','detalle_venta.total_cantidad','lote.cantidad as cantidad_lote')
-        ->join('lote','detalle_venta.id_lote','=','lote.id')
-        ->where('detalle_venta.id_venta',$request->id)->get();
-        //dd($detalles);
-        foreach($detalles as $ep=>$det){
-            DB::table('lote')->where('lote.id','=',$det->id_lote)
-            //->where('combo','=',0)
-            ->increment('cantidad', $det->total_cantidad);
-            $consulta = DB::select('CALL stock(?)', [$det->id_producto]);
-
-            $tienda_articulo=DB::select("SELECT ta.stock
-            FROM tienda_articulo ta
-            WHERE ta.id = '$det->id_producto'");
-
-            $ajuste = new Ajuste();
-            $ajuste->stock=$det->total_cantidad;
-            $ajuste->costo_compra=0;
-            $ajuste->costo_unitario=0;
-            $ajuste->costo_mayorista=0;
-            $ajuste->costo_preferencial=0;
-            $ajuste->stock_anterior=$det->cantidad_lote;
-            $ajuste->stock_actual=$det->cantidad_lote + $det->total_cantidad;
-            $ajuste->stock_general_anterior=$tienda_articulo[0]->stock - $det->total_cantidad;
-            $ajuste->stock_general=$tienda_articulo[0]->stock;
-            $ajuste->costo_unitario=0;
-            $ajuste->costo_mayorista=0;
-            $ajuste->costo_preferencial=0;
-            $ajuste->costo_venta= $det['costo_venta'];
-            $ajuste->observacion='';
-            $ajuste->id_lote=$det['id_lote'];
-            $ajuste->fecha=$fechaactual;
-            $ajuste->id_usuario=$id_usuario;
-            $ajuste->id_venta=$request->id;
-            $ajuste->id_compra=0;
-            $ajuste->id_motivo_ajuste=11;
-            $ajuste->id_transaccion=$request->id;
-            $ajuste->hora=$hora;
-            $ajuste->save();
-            //dd($det->id_producto);
-        }
-            // foreach($detalles as $ep=>$det){
-            //     // DB::table('tienda_articulo')->where('tienda_articulo.id','=',$det->id_producto)
-            //     // ->increment('stock', $det->cantidad);
-            //     $consulta = DB::select('CALL anular(?)', [$id_producto]);
-            //     }
-
-
-        $detalles = DetalleVentaPaquete::join('paquetes','detalle_venta_paquete.id_paquete','=','paquetes.id')
-        ->join('detalle_paquete','paquetes.id','=','detalle_paquete.id_paquete')
-        ->select('detalle_venta_paquete.id_venta','detalle_paquete.id_producto','detalle_venta_paquete.cantidad','detalle_venta_paquete.id')
-        ->where('detalle_venta_paquete.id_venta',$request->id)->get();
-        //dd($detalles);
-        // foreach($detalles as $ep=>$det2){
-        //     DB::table('Producto')->where('Producto.Id_Producto','=',$det->Id_Producto)
-        //     ->where('combo','=',1);
-
-        //     //->increment('Stock', $det->Cantidad);
-        // }
-        foreach($detalles as $ep=>$det2){
-            // $detallesCombo = DetalleCombo::select(DB::raw('detalle.Cantidad *'.$det2->Cantidad.'as Cantidad'),'DetalleCombo.Id_Producto')->where('DetalleCombo.Id_Combo','=',$det2->Id_Producto)->where('DetalleCombo.Eliminado','=',0)->get();
-            $detallesCombo = DetalleVentaPaquete::join('paquetes','detalle_venta_paquete.id_paquete','=','paquetes.id')
-            ->join('detalle_paquete','paquetes.id','=','detalle_paquete.id_paquete')
-            ->select(DB::raw('detalle_paquete.cantidad *'.$det2->cantidad.' as Cantidad'),'detalle_paquete.id_producto')
-            ->where('detalle_venta_paquete.id','=',$det2->id)
-            ->where('detalle_paquete.id_producto','=',$det2->id_producto)
-            ->get();
-            foreach($detallesCombo as $ep=>$det3){
-                DB::table('tienda_articulo')->where('tienda_articulo.id_articulo','=',$det3->id_producto)
-                ->increment('stock', $det3->Cantidad);
-            }
-
-           //dd($det3->Cantidad);
-
-        }
-        //dd($detalles);
-
-        $datos = [
-            'tabla' => 'venta',
-            'codigo_tabla' => $request->id,
-            'transaccion' => 'Anular Venta Tienda 1',
-        ];
-        $this->guardarBitacora($datos);
-        DB::commit();
-    } catch (Exception $e){
-        DB::rollBack();
     }
 
+    private function registrarAjusteDeVenta($venta, $detalle, $stockLoteAnterior, $stockLoteActual, $stockGeneralAnterior, $stockGeneralActual, $motivo, $observacion)
+    {
+        $ajuste = new Ajuste();
+        $ajuste->stock = (float) $detalle->total_cantidad;
+        $ajuste->costo_compra = 0;
+        $ajuste->costo_unitario = 0;
+        $ajuste->costo_mayorista = 0;
+        $ajuste->costo_preferencial = 0;
+        $ajuste->stock_anterior = $stockLoteAnterior;
+        $ajuste->stock_actual = $stockLoteActual;
+        $ajuste->stock_general_anterior = $stockGeneralAnterior;
+        $ajuste->stock_general = $stockGeneralActual;
+        $ajuste->costo_venta = (float) $detalle->costo_venta;
+        $ajuste->observacion = mb_substr($observacion, 0, 100);
+        $ajuste->id_lote = $detalle->id_lote;
+        $ajuste->fecha = now()->format('Y-m-d');
+        $ajuste->id_usuario = \Auth::id();
+        $ajuste->id_venta = $venta->id;
+        $ajuste->id_compra = 0;
+        $ajuste->id_motivo_ajuste = $motivo;
+        $ajuste->id_transaccion = $detalle->id;
+        $ajuste->hora = now()->format('H:i:s');
+        $ajuste->save();
+    }
+
+    public function anular(Request $request)
+    {
+        $request->validate(['id' => 'required|integer|exists:venta,id']);
+
+        try {
+            return DB::transaction(function () use ($request) {
+                $venta = Venta::where('id', $request->id)->lockForUpdate()->firstOrFail();
+                $this->validarAccesoVenta($venta, true);
+
+                if ($venta->estado === 'Anulado') {
+                    throw ValidationException::withMessages(['id' => ['La venta ya se encuentra anulada.']]);
+                }
+                if (!in_array($venta->estado, ['Entregado', 'Devolucion', 'Cancelado'], true)) {
+                    throw ValidationException::withMessages(['id' => ['El estado actual de la venta no permite anularla.']]);
+                }
+
+                $pago = Pago::where('id_venta', $venta->id)->lockForUpdate()->first();
+                $movimientosCredito = $pago
+                    ? CXCobrar::where('id_pago', $pago->id)->orderBy('id')->lockForUpdate()->get()
+                    : collect();
+                $totalAmortizado = (float) $movimientosCredito->sum('amortizacion');
+                if ($totalAmortizado > 0.001) {
+                    throw ValidationException::withMessages([
+                        'id' => ['La venta tiene cobros registrados. Debe revertirlos contablemente antes de anularla.'],
+                    ]);
+                }
+
+                $detalles = DetalleVenta::where('id_venta', $venta->id)
+                    ->where('estado', 0)
+                    ->orderBy('id_lote')
+                    ->lockForUpdate()
+                    ->get();
+                $lotes = Lote::whereIn('id', $detalles->pluck('id_lote')->unique()->values())
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                foreach ($detalles as $detalle) {
+                    $lote = $lotes->get($detalle->id_lote);
+                    if (!$lote) {
+                        throw ValidationException::withMessages(['id' => ['No se encontró uno de los lotes asociados a la venta.']]);
+                    }
+
+                    $stockLoteAnterior = (float) $lote->cantidad;
+                    $tiendaArticulo = DB::table('tienda_articulo')->where('id', $detalle->id_producto)->lockForUpdate()->first();
+                    $stockGeneralAnterior = $tiendaArticulo ? (float) $tiendaArticulo->stock : 0;
+                    $cantidadRestituida = (float) ($detalle->total_cantidad ?: $detalle->cantidad);
+                    $lote->cantidad = $stockLoteAnterior + $cantidadRestituida;
+                    $lote->save();
+                    DB::statement('CALL stock(?)', [$detalle->id_producto]);
+                    $stockActual = DB::table('tienda_articulo')->where('id', $detalle->id_producto)->value('stock');
+
+                    $detalle->total_cantidad = $cantidadRestituida;
+                    $this->registrarAjusteDeVenta(
+                        $venta,
+                        $detalle,
+                        $stockLoteAnterior,
+                        (float) $lote->cantidad,
+                        $stockGeneralAnterior,
+                        (float) ($stockActual ?: 0),
+                        11,
+                        'Anulación de venta Nro. ' . $venta->id
+                    );
+                }
+
+                $componentesPaquete = DB::table('detalle_venta_paquete')
+                    ->join('detalle_paquete', 'detalle_venta_paquete.id_paquete', '=', 'detalle_paquete.id_paquete')
+                    ->where('detalle_venta_paquete.id_venta', $venta->id)
+                    ->selectRaw('detalle_paquete.id_producto, detalle_paquete.cantidad * detalle_venta_paquete.cantidad as cantidad')
+                    ->orderBy('detalle_paquete.id_producto')
+                    ->lockForUpdate()
+                    ->get();
+                foreach ($componentesPaquete as $componente) {
+                    DB::table('tienda_articulo')
+                        ->where('id_articulo', $componente->id_producto)
+                        ->where('id_tienda', 1)
+                        ->increment('stock', $componente->cantidad);
+                }
+
+                $venta->estado = 'Anulado';
+                $venta->save();
+                if ($pago) {
+                    $pago->estado = 0;
+                    $pago->saldo = 0;
+                    $pago->save();
+                }
+                if ($venta->id_orden_servicio) {
+                    OrdenServicio::where('id', $venta->id_orden_servicio)->update(['estado' => 'Anulado']);
+                }
+
+                $this->guardarBitacora([
+                    'tabla' => 'venta',
+                    'codigo_tabla' => $venta->id,
+                    'transaccion' => 'Anular Venta Tienda 1',
+                ]);
+
+                return response()->json(['message' => 'Venta anulada y existencias restauradas correctamente.']);
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['message' => 'No se pudo anular la venta.'], 500);
+        }
     }
     public function cantidadRegistros(){
         $mayor = DB::table('control')->count();
@@ -1641,213 +1750,148 @@ class VentaController1 extends BitacoraController
         }
     }
     public function eliminarDetalle(Request $request){
-        //dd($request->id_tipo_pago);
-        $total_d = $request->totalAux;
-        $total = $request->total;
-
-        $total_efectivo = $request->total_efectivo;
-        $total_deposito = $request->total_deposito;
-
-        $total_efectivo_aux = $request->total_efectivo_aux;
-
-
-        $id_usuario= $request->id_usuario;
-
-        $id_eliminado=\Auth::user()->id;
-        $objdate = new DateTime();
-        $fechaactual= $objdate->format('Y-m-d');
-        $hora= $objdate->format('H:i:s');
-        //dd($request->id);
-        $affected = DB::table('detalle_venta')
-        ->where('id', $request->id)
-        ->update(['estado' => '1','id_eliminado' => $id_eliminado]);
-
-        //dd($total_d,$total);
-        $detalles = DetalleVenta::join('venta','detalle_venta.id_venta','=','venta.id')
-        ->join('lote','detalle_venta.id_lote','=','lote.id')
-        ->select('detalle_venta.id_venta','detalle_venta.id_producto','detalle_venta.id_lote'
-        ,'detalle_venta.cantidad','detalle_venta.sub_total','venta.id_forma_pago','detalle_venta.total_cantidad','costo_venta','lote.cantidad as lote_cantidad')
-        ->where('detalle_venta.id',$request->id)->get();
- 
-            foreach($detalles as $ep=>$det){
-                DB::table('lote')->where('lote.id','=',$det->id_lote)
-                ->increment('cantidad', $det->total_cantidad);
-
-                        $tienda_articulo=DB::select("SELECT ta.stock
-                        FROM tienda_articulo ta
-                        WHERE ta.id = '$det->id_producto'");
-
-                        $consulta = DB::select('CALL stock(?)', [$det->id_producto]);
-
-
-                        $ajuste = new Ajuste();
-                        $ajuste->stock=$det->total_cantidad;
-                        $ajuste->costo_compra=0;
-                        $ajuste->costo_unitario=0;
-                        $ajuste->costo_mayorista=0;
-                        $ajuste->costo_preferencial=0;
-                        $ajuste->stock_anterior=$tienda_articulo[0]->stock;
-                        $ajuste->stock_actual=$tienda_articulo[0]->stock + $det->total_cantidad;
-                        $ajuste->stock_general_anterior=$tienda_articulo[0]->stock;
-                        $ajuste->stock_general=$tienda_articulo[0]->stock + $det->total_cantidad;
-                        $ajuste->costo_unitario=0;
-                        $ajuste->costo_mayorista=0;
-                        $ajuste->costo_preferencial=0;
-                        $ajuste->costo_venta= $det['costo_venta'];
-                        $ajuste->observacion='';
-                        $ajuste->id_lote=$det['id_lote'];
-                        $ajuste->fecha=$fechaactual;
-                        $ajuste->id_usuario=$id_usuario;
-                        $ajuste->id_venta=$request->id;
-                        $ajuste->id_compra=0;
-                        $ajuste->id_motivo_ajuste=10;
-                        $ajuste->id_transaccion=$request->id;
-                        $ajuste->hora=$hora;
-                        $ajuste->save();
-
-                        if($request->id_tipo_pago == 'Contado'){
-                            $affected = DB::table('venta')
-                            ->where('id', $det->id_venta)
-                            ->update(['estado' => 'Devolucion']);
-                        }
-                }
-      
+        return response()->json([
+            'message' => 'La devolución debe confirmarse completa desde el historial de ventas.',
+        ], 409);
     }
     public function modificarVenta(Request $request){
-        try{
-            DB::beginTransaction();
-            $objdate = new DateTime();
-            $fechaactual= $objdate->format('Y-m-d');
-            $id_usuario=\Auth::user()->id;
+        $request->validate([
+            'id_venta' => 'required|integer|exists:venta,id',
+            'returned_detail_ids' => 'required|array|min:1',
+            'returned_detail_ids.*' => 'required|integer|distinct|exists:detalle_venta,id',
+            'total_efectivo' => 'nullable|numeric|min:0',
+        ]);
 
-            $total_d = $request->totalAux;
-            $total = $request->total;
+        try {
+            return DB::transaction(function () use ($request) {
+                $venta = Venta::where('id', $request->id_venta)->lockForUpdate()->firstOrFail();
+                $this->validarAccesoVenta($venta);
+                if (!in_array($venta->estado, ['Entregado', 'Devolucion'], true)) {
+                    throw ValidationException::withMessages(['id_venta' => ['El estado actual de la venta no permite devoluciones.']]);
+                }
 
-            $total_efectivo_aux = $request->total_efectivo_aux;
-            $total_deposito_aux = $request->total_deposito_aux;
-            //dd($total_deposito_aux);
-            $total_efectivo = $request->total_efectivo;
-            $total_deposito = $request->total_deposito;
+                $idsDevueltos = collect($request->returned_detail_ids)->map(function ($id) {
+                    return (int) $id;
+                })->unique()->values();
+                $detalles = DetalleVenta::where('id_venta', $venta->id)->orderBy('id_lote')->lockForUpdate()->get();
+                $aDevolver = $detalles->whereIn('id', $idsDevueltos)->where('estado', 0)->values();
+                if ($aDevolver->count() !== $idsDevueltos->count()) {
+                    throw ValidationException::withMessages([
+                        'returned_detail_ids' => ['Uno de los productos ya fue devuelto o no pertenece a la venta.'],
+                    ]);
+                }
 
-            //dd($total_d,$total);
+                $activosRestantes = $detalles->where('estado', 0)->whereNotIn('id', $idsDevueltos);
+                $cantidadPaquetes = DetalleVentaPaquete::where('id_venta', $venta->id)->count();
+                if ($activosRestantes->isEmpty() && $cantidadPaquetes === 0) {
+                    throw ValidationException::withMessages([
+                        'returned_detail_ids' => ['Para devolver todos los productos debe anular la venta completa.'],
+                    ]);
+                }
 
-            $total_deposito = $request->total_deposito;
-            $id_usuario= $request->id_usuario;
-            $id_eliminado=\Auth::user()->id;
+                $lotes = Lote::whereIn('id', $aDevolver->pluck('id_lote')->unique()->values())
+                    ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+                foreach ($aDevolver as $detalle) {
+                    $lote = $lotes->get($detalle->id_lote);
+                    if (!$lote) {
+                        throw ValidationException::withMessages(['returned_detail_ids' => ['No se encontró el lote del producto devuelto.']]);
+                    }
 
-            //dd($request->id_usuario);
+                    $stockLoteAnterior = (float) $lote->cantidad;
+                    $tiendaArticulo = DB::table('tienda_articulo')->where('id', $detalle->id_producto)->lockForUpdate()->first();
+                    $stockGeneralAnterior = $tiendaArticulo ? (float) $tiendaArticulo->stock : 0;
+                    $cantidadRestituida = (float) ($detalle->total_cantidad ?: $detalle->cantidad);
+                    $lote->cantidad = $stockLoteAnterior + $cantidadRestituida;
+                    $lote->save();
+                    $detalle->estado = 1;
+                    $detalle->id_eliminado = \Auth::id();
+                    $detalle->save();
+                    DB::statement('CALL stock(?)', [$detalle->id_producto]);
+                    $stockActual = DB::table('tienda_articulo')->where('id', $detalle->id_producto)->value('stock');
 
-            if($request->formaPago == 'Efectivo'){
-                $affected = DB::table('venta')
-                ->where('id', $request->id_venta)
-                ->update(['total' => $request->total,'sub_total' => $request->sub_total,'total_efectivo' => $request->total]);
-            }
-            elseif($request->formaPago == 'Transferencia'){
-                $affected = DB::table('venta')
-                ->where('id', $request->id_venta)
-                ->update(['total' => $request->total,'sub_total' => $request->sub_total,'total_deposito' =>$request->total]);
-            }elseif($request->formaPago == 'Pago por QR'){
-                $affected = DB::table('venta')
-                ->where('id', $request->id_venta)
-                ->update(['total' => $request->total,'sub_total' => $request->sub_total,'total_deposito' =>$request->total]);
-            }elseif($request->formaPago == 'Depósito'){
-                $affected = DB::table('venta')
-                ->where('id', $request->id_venta)
-                ->update(['total' => $request->total,'sub_total' => $request->sub_total,'total_deposito' =>$request->total]);
-            }elseif($request->formaPago == 'Mixta'){
-                $affected = DB::table('venta')
-                ->where('id', $request->id_venta)
-                ->update(['total' => $request->total,'sub_total' => $request->sub_total,'total_efectivo' => $request->total_efectivo,'total_deposito' => $request->total_deposito]);
-            }elseif($request->formaPago == 'Cuenta por Cobrar'){
-                $affected = DB::table('venta')
-                ->where('id', $request->id_venta)
-                ->update(['total' => $request->total,'sub_total' => $request->sub_total]);
-            }
+                    $detalle->total_cantidad = $cantidadRestituida;
+                    $this->registrarAjusteDeVenta(
+                        $venta,
+                        $detalle,
+                        $stockLoteAnterior,
+                        (float) $lote->cantidad,
+                        $stockGeneralAnterior,
+                        (float) ($stockActual ?: 0),
+                        10,
+                        'Devolución de producto de venta Nro. ' . $venta->id
+                    );
+                }
 
+                $subtotalProductos = (float) DetalleVenta::where('id_venta', $venta->id)->where('estado', 0)->sum('sub_total');
+                $subtotalPaquetes = (float) DetalleVentaPaquete::where('id_venta', $venta->id)->sum('sub_total');
+                $subtotal = round($subtotalProductos + $subtotalPaquetes, 2);
+                $total = round(max(0, $subtotal - (float) $venta->descuento), 2);
 
+                $pago = Pago::where('id_venta', $venta->id)->lockForUpdate()->first();
+                $movimientosCredito = $pago
+                    ? CXCobrar::where('id_pago', $pago->id)->orderBy('id')->lockForUpdate()->get()
+                    : collect();
+                $totalAmortizado = (float) $movimientosCredito->sum('amortizacion');
+                if ($totalAmortizado - $total > 0.001) {
+                    throw ValidationException::withMessages([
+                        'id_venta' => ['El nuevo total es menor al monto ya cobrado. Registre primero la reversión o reembolso correspondiente.'],
+                    ]);
+                }
 
-            // if($request->formaPago == 'Efectivo'){
+                $totalEfectivo = 0;
+                $totalDeposito = 0;
+                if ((int) $venta->id_tipo_pago === 1) {
+                    if ((int) $venta->id_forma_pago === 2) {
+                        $totalEfectivo = $total;
+                    } elseif (in_array((int) $venta->id_forma_pago, [3, 4, 5], true)) {
+                        $totalDeposito = $total;
+                    } elseif ((int) $venta->id_forma_pago === 6) {
+                        $totalEfectivo = round((float) $request->total_efectivo, 2);
+                        if ($totalEfectivo > $total) {
+                            throw ValidationException::withMessages(['total_efectivo' => ['El efectivo no puede superar el nuevo total.']]);
+                        }
+                        $totalDeposito = round($total - $totalEfectivo, 2);
+                    }
+                }
 
-            //     $this->descontarCaja($total_d,$id_usuario);
-            //     $this->descontarCajaContado($total_d,$id_usuario);
-                
-            //     $this->actualizarCaja($id_usuario,$total);
-            //     $this->actualizarCajaContado($id_usuario,$total);
+                $venta->sub_total = $subtotal;
+                $venta->total = $total;
+                $venta->total_efectivo = $totalEfectivo;
+                $venta->total_deposito = $totalDeposito;
+                $venta->estado = 'Devolucion';
+                $venta->save();
 
-            // }
-            // if($request->formaPago == 'Transferencia' || $request->formaPago == 'Pago por QR' || $request->formaPago == 'Depósito'){
+                if ($pago) {
+                    $pago->monto = $total;
+                    $pago->saldo = (int) $venta->id_tipo_pago === 2
+                        ? round($total - $totalAmortizado, 2)
+                        : $total;
+                    $pago->save();
+                }
 
-            //     $this->descontarCaja($total_d,$id_usuario);
-            //     $this->descontarCajaContadoDeposito($total_d,$id_usuario);
-                
-            //     $this->actualizarCaja($id_usuario,$total);
-            //     $this->actualizarCajaContadoDeposito($id_usuario,$total);
+                $this->guardarBitacora([
+                    'tabla' => 'venta',
+                    'codigo_tabla' => $venta->id,
+                    'transaccion' => 'Registrar devolución Tienda 1',
+                ]);
 
-            // }
-            if($request->formaPago == 'Mixta'){
-
-                // $this->descontarCaja($total_efectivo_aux,$id_usuario);
-                // $this->descontarCajaContado($total_efectivo_aux,$id_usuario);
-                
-                // $this->actualizarCaja($id_usuario,$total_efectivo);
-                // $this->actualizarCajaContado($id_usuario,$total_efectivo);
-
-
-                // $this->descontarCajaDeposito($total_deposito_aux,$id_usuario);
-                // $this->descontarCajaContadoDeposito($total_deposito_aux,$id_usuario);
-                
-                // $this->actualizarCajaDeposito($id_usuario,$total_deposito);
-                // $this->actualizarCajaContadoDeposito($id_usuario,$total_deposito);
-
-                $affected = DB::table('pago')
-                ->where('id_venta', $request->id_venta)
-                ->update(['monto' => $total_efectivo,'saldo'=>$total_efectivo]);
-            }
-            if($request->formaPago == 'Cuenta por Cobrar'){
-
-
-
-                // $detalles = CXCobrar::select('detalle_venta.id_venta','detalle_venta.id_producto','detalle_venta.id_lote'
-                // ,'detalle_venta.cantidad','detalle_venta.sub_total')
-                // ->where('c_x_cobrar.id',$request->id_venta)->get();
-                //$credentials = CXCobrar::where('id_pago', $request->id_venta)->orderBy('id', 'desc')->first();
-                $credentials2 = CXCobrar::select(DB::raw('SUM(amortizacion) as amortizacion'),'id')->where('id_pago', $request->id_venta)->orderBy('id', 'desc')->get();
-
-              //dd($credentials2[0]->amortizacion);
-                //  foreach($credentials as $cobrar){
-                //$consulta = CXCobrar::select("c_x_cobrar")->latest()->where('c_x_cobrar.id_pago','=',$request->id_venta)->first();
-                $affected = DB::table('pago')
-                ->where('id_venta', $request->id_venta)
-                ->update(['monto' => $total,'saldo'=>($total-$credentials2[0]->amortizacion)]);
-                
-                $saldoTotal = $total-$credentials2[0]->amortizacion;
-                //dd($saldoTotal);
-                $cxcobrar = new CXCobrar();
-                $cxcobrar->fecha = $fechaactual;
-                $cxcobrar->monto_total = $total;
-                $cxcobrar->amortizacion = $credentials2[0]->amortizacion;
-                $cxcobrar->descripcion = '';
-                $cxcobrar->saldo = $saldoTotal;
-                $cxcobrar->id_pago = $request->id_venta;
-                $cxcobrar->id_usuario = $id_usuario;
-                $cxcobrar->id_forma_pago = 0;
-                $cxcobrar->save();
-
-                // $affected = DB::table('c_x_cobrar')
-                // ->where('id', $credentials->id)
-                // //->first()
-                // ->update(['monto_total' => $total,'amortizacion' => $credentials2[0]->amortizacion,'saldo' => ($total-$credentials2[0]->amortizacion)]);
-                //;
-
-                // }
-            }
-            $affected = DB::table('pago')
-            ->where('id_venta', $request->id_venta)
-            ->update(['monto' => $total]);
-
-            DB::commit();
-        } catch (Exception $e){
-            DB::rollBack();
+                return response()->json([
+                    'message' => 'Devolución registrada correctamente.',
+                    'sale' => [
+                        'id' => $venta->id,
+                        'sub_total' => $subtotal,
+                        'total' => $total,
+                        'total_efectivo' => $totalEfectivo,
+                        'total_deposito' => $totalDeposito,
+                        'estado' => $venta->estado,
+                    ],
+                ]);
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['message' => 'No se pudo registrar la devolución.'], 500);
         }
     }
     public function cantidadProducto(Request $request){

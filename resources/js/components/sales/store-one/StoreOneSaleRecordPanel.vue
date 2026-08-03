@@ -24,14 +24,16 @@
                 >
                     <template v-if="editable" #cell-remove="{ row }">
                         <button
+                            v-if="!row.isPackage"
                             type="button"
                             class="sale-record__remove"
-                            :disabled="deleting || deletingIds.includes(row.id) || details.length <= 1"
+                            :disabled="deleting || deletingIds.includes(row.id) || !canRemoveProduct"
                             title="Devolver producto"
                             @click="$emit('remove', row)"
                         >
                             <img :src="icon('trash.svg')" alt="">
                         </button>
+                        <span v-else class="sale-record__package">Paquete</span>
                     </template>
                     <template #cell-producto="{ row }">
                         <strong>{{ row.articulo || row.nombre || 'Producto sin nombre' }}</strong>
@@ -69,14 +71,19 @@
                     <div class="sale-record__grand"><dt>Total</dt><dd>{{ money(total) }}</dd></div>
                 </dl>
                 <p v-if="editable" class="sale-record__notice">
-                    La venta debe conservar al menos un producto. Esta operación actualiza existencias y totales.
+                    <template v-if="pendingReturnCount">
+                        {{ pendingReturnCount }} {{ pendingReturnCount === 1 ? 'producto preparado' : 'productos preparados' }} para devolución. Los cambios aún no se guardaron.
+                    </template>
+                    <template v-else>
+                        Seleccione los productos que desea devolver. La venta debe conservar al menos un producto.
+                    </template>
                 </p>
                 <app-button
                     v-if="editable"
                     block
                     icon="icons/check.svg"
                     :loading="saving"
-                    :disabled="loading || deleting || details.length === 0"
+                    :disabled="loading || deleting || pendingReturnCount === 0"
                     @click="$emit('save')"
                 >
                     Confirmar devolución
@@ -97,6 +104,7 @@ export default {
         saving: { type: Boolean, default: false },
         deleting: { type: Boolean, default: false },
         deletingIds: { type: Array, default: () => [] },
+        pendingReturnCount: { type: Number, default: 0 },
     },
     computed: {
         columns() {
@@ -116,6 +124,11 @@ export default {
         },
         depositTotal() {
             return Math.max(0, this.total - Number(this.datos.total_efectivo || 0));
+        },
+        canRemoveProduct() {
+            const regularProducts = this.details.filter(row => !row.isPackage).length;
+            const packages = this.details.filter(row => row.isPackage).length;
+            return regularProducts > 1 || packages > 0;
         },
     },
     methods: {
@@ -150,6 +163,7 @@ export default {
 .sale-record__remove { display: grid; width: 31px; height: 31px; place-items: center; background: #fff3f3; border: 1px solid #f0cece; border-radius: 7px; }
 .sale-record__remove:disabled { cursor: not-allowed; opacity: .45; }
 .sale-record__remove img { width: 14px; filter: invert(29%) sepia(72%) saturate(1248%) hue-rotate(324deg); }
+.sale-record__package { display: inline-flex; padding: .25rem .45rem; color: #17647a; font-size: .62rem; font-weight: 900; background: #e8f8fb; border-radius: 999px; }
 .sale-record strong { color: var(--fc-ink, #17362b); }
 .sale-record strong + small { display: block; margin-top: .15rem; color: var(--system-text-muted, #6f817a); font-size: .68rem; }
 @media (max-width: 1050px) { .sale-record__grid { grid-template-columns: 1fr; } .sale-record__summary { position: static; } }

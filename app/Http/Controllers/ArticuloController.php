@@ -621,14 +621,15 @@ class ArticuloController extends BitacoraController
     }
 
     public function detalleLote(Request $request){
-        $buscar = $request->buscar;
+        $datos = $request->validate([
+            'buscar' => 'required|integer|exists:tienda_articulo,id',
+        ]);
 
-        //dd($buscar);
-        $obj=DB::select("SELECT l.id,l.cantidad, l.fecha_vecimiento,l.id_producto,l.id_producto,l.lote
-        FROM lote l 
-        WHERE id_producto=$buscar AND l.estado!=0" );
-
-        return $obj;
+        return Lote::select('id', 'cantidad', 'fecha_vecimiento', 'id_producto', 'lote')
+            ->where('id_producto', $datos['buscar'])
+            ->where('estado', '!=', 0)
+            ->orderBy('fecha_vecimiento')
+            ->get();
     }
     public function detalleLotePrincipal(Request $request){
 

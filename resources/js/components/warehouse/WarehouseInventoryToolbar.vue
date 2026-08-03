@@ -4,7 +4,6 @@
             <option value="articulo.nombre_comercial">Producto</option>
             <option value="proveedor.nombre">Laboratorio</option>
             <option value="categoria.nombre">Categoría</option>
-            <option value="nombre">Categoría (lote)</option>
         </select>
         <app-input
             :value="search"

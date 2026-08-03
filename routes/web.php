@@ -595,6 +595,8 @@ Route::group(['middleware'=>['auth']],function(){
         //Reportes Ventas
         Route::get('/venta/pdf_ventas_tienda1',[VentaController1::class, 'pdfVentas']);
         Route::get('/venta/pdf_ventas_general_tienda1',[VentaController1::class, 'pdfVentasGeneral']);
+        Route::get('/venta/tienda1/{id}/nota/{formato}', [VentaController1::class, 'notaVenta'])
+            ->where(['id' => '[0-9]+', 'formato' => 'carta|ticket']);
         Route::put('/venta/modificar', [VentaController1::class, 'modificar']);
         Route::put('/venta/modificar/antiparasitario', [VentaController1::class, 'modificarAntiparasitario']);
         Route::get('/historialCliente', [VentaController1::class, 'historialCliente']);
