@@ -12,7 +12,7 @@
             </template>
         </app-module-header>
 
-        <section class="warehouse-catalog__metrics">
+        <section v-if="false" class="warehouse-catalog__metrics">
             <app-metric-card
                 label="Registros"
                 :value="pagination.total || records.length"

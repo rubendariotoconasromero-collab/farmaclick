@@ -12,7 +12,7 @@
             </template>
         </app-module-header>
 
-        <section class="warehouse-adjustment__metrics">
+        <section v-if="false" class="warehouse-adjustment__metrics">
             <app-metric-card label="Ajustes registrados" :value="pagination.total || rows.length" hint="Historial disponible" icon="img/menu/Almacen.png" />
             <app-metric-card label="Productos en ajuste" :value="details.length" hint="Detalle de la operación actual" icon="img/menu/control.png" tone="cyan" />
             <app-metric-card label="Estado" :value="view === 'form' ? 'En preparación' : 'Consulta'" hint="Flujo operativo" icon="img/menu/historial.png" tone="neutral" />

@@ -11,7 +11,7 @@
             </template>
         </app-module-header>
 
-        <section class="warehouse-lots__metrics">
+        <section v-if="false" class="warehouse-lots__metrics">
             <app-metric-card label="Productos seleccionados" :value="details.length" hint="Líneas del registro" icon="img/menu/Almacen.png" />
             <app-metric-card label="Unidades ingresadas" :value="totalUnits" hint="Suma de cantidades" icon="img/menu/control.png" tone="cyan" />
             <app-metric-card label="Estado" :value="details.length ? 'En preparación' : 'Sin productos'" hint="Registro actual" icon="img/menu/historial.png" tone="neutral" />
