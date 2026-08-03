@@ -9,6 +9,8 @@ use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithDrawings;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use App\Exports\Concerns\StylesFarmaClickReport;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use App\Models\Tienda;
 use App\Models\MiEmpresa;
@@ -16,8 +18,9 @@ use App\Models\Articulo;
 use DateTime;
 use DB;
 
-class ProductoExport implements FromView, ShouldAutoSize, WithTitle, WithColumnFormatting
+class ProductoExport implements FromView, ShouldAutoSize, WithTitle, WithColumnFormatting, WithEvents
 {
+    use StylesFarmaClickReport;
     private $consulta;
     public function __construct(Request $consulta)
     {
@@ -49,6 +52,7 @@ class ProductoExport implements FromView, ShouldAutoSize, WithTitle, WithColumnF
         $total = 0;
         $desc = 0;
         $total1 = 0;
+        $totalResultado = 0;
         $desc2 = 0;
         $total1 = 0;
         foreach($detalles as $det)
@@ -81,7 +85,12 @@ class ProductoExport implements FromView, ShouldAutoSize, WithTitle, WithColumnF
     public function title(): string
     {
         return 'LISTA DE PRODUCTOS';
-    }  
+    }
+
+    protected function reportHeaderRow(): int
+    {
+        return 9;
+    }
 
     // Formato de celdas específicas
     public function columnFormats(): array

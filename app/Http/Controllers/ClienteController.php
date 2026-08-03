@@ -123,7 +123,7 @@ class ClienteController extends BitacoraController
             });
         }
 
-        return $query->orderBy('id','desc')->paginate(20);
+        return $query->orderBy('id','desc')->get();
     }
     public function listarSinPaginate(Request $request){
         $buscar = $request->buscar;     

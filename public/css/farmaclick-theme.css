@@ -162,6 +162,9 @@ textarea {
 }
 
 .sidebar {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   border-right: 1px solid #0d3025;
   box-shadow: 4px 0 18px rgba(13, 48, 37, 0.08);
 }
@@ -184,8 +187,32 @@ textarea {
 }
 
 .sidebar-nav {
+  min-height: 0;
   width: 100%;
   padding: 0.55rem 0 1rem;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(113, 213, 232, 0.48) transparent;
+}
+
+.sidebar-nav.simplebar-scrollable-y .simplebar-content-wrapper {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+.sidebar-nav .simplebar-track.simplebar-vertical {
+  right: 2px;
+  width: 7px;
+}
+
+.sidebar-nav .simplebar-scrollbar::before {
+  background: rgba(113, 213, 232, 0.55);
+  border-radius: 999px;
+}
+
+.sidebar-nav:hover .simplebar-scrollbar::before,
+.sidebar-nav .simplebar-scrollbar.simplebar-visible::before {
+  opacity: 0.75;
 }
 
 .sidebar-nav .nav-item,
@@ -263,10 +290,11 @@ textarea {
 }
 
 .sidebar-nav .nav-group-items {
+  max-height: none;
   width: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   background: rgba(5, 31, 23, 0.22);
   border-bottom: 1px solid rgba(255, 255, 255, 0.045);
 }

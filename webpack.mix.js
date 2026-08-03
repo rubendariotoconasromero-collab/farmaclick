@@ -26,7 +26,6 @@ mix.styles([
     'resources/plantilla/css/simple-line-icons.css'
 ], 'public/css/plantilla.css')
 .scripts([
-    'resources/plantilla/js/main.js',
     'resources/plantilla/js/popovers.js',
     'resources/plantilla/js/prism-autoloader.min.js',
     'resources/plantilla/js/prism-normalize-whitespace.js',
@@ -35,7 +34,8 @@ mix.styles([
     'resources/plantilla/js/simplebar.min.js',
     'resources/plantilla/js/toasts.js',
     'resources/plantilla/js/tooltips.js',
-    'resources/plantilla/js/widgets.js',
 ], 'public/js/plantilla.js')
 .js(['resources/js/app.js'],'public/js/app.js')
-.vue();
+.vue()
+.copy('resources/css/app.css', 'public/css/app.css')
+.copy('resources/css/fontawesome.min.css', 'public/css/fontawesome.min.css');

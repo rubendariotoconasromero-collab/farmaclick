@@ -35,6 +35,15 @@ use Mpdf\Mpdf;
 
 class ReporteController extends BitacoraController
 {
+    private function aplicarTemaReporte(Mpdf $mpdf): void
+    {
+        $theme = view('pdf.reportes.partials.system-theme')->render();
+        // mPDF's HEADER_CSS parser only applies CSS rules to every page (headers/footers
+        // included) when the stylesheet keeps its <style> wrapper; stripping it breaks
+        // repeating footers after page 1.
+        $mpdf->WriteHTML(trim($theme), \Mpdf\HTMLParserMode::HEADER_CSS);
+    }
+
 
     public function pdfPersonal(Request $request){
 
@@ -92,6 +101,9 @@ class ReporteController extends BitacoraController
 
         $foto_empresa=$mi_empresa[0]->foto;
         $logo_sistema=$mi_empresa[0]->logo_sistema;
+        $nombre_empresa=$mi_empresa[0]->nombre;
+        $direccion_empresa=$mi_empresa[0]->direccion;
+        $telefono_empresa=$mi_empresa[0]->telefono;
 
         $detalles=$obj;
         
@@ -100,6 +112,9 @@ class ReporteController extends BitacoraController
             'title'=>$title,
             'foto_empresa'=>$foto_empresa,
             'logo_sistema'=>$logo_sistema,
+            'nombre_empresa'=>$nombre_empresa,
+            'direccion_empresa'=>$direccion_empresa,
+            'telefono_empresa'=>$telefono_empresa,
             'detalles'=>$detalles,
             
         ]);
@@ -195,120 +210,117 @@ class ReporteController extends BitacoraController
         return $pdf->setPaper('letter', 'landscape')->stream('Producto.pdf');
     }
     public function pdfGasto(Request $request){
-
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin;
-
-        $x=DB::select("SELECT g.fecha,g.monto,g.descripcion,m.nombre motivo_gasto,g.id_forma_pago,g.efectivo,g.deposito,u.name as usuario,f.nombre as forma
-        FROM gasto g, motivo_gasto m,forma_pago f,users u
-        WHERE g.id_motivo_gasto=m.id and g.id_forma_pago=f.id and g.id_usuario=u.id
-        AND g.fecha>='$fecha_inicio' AND g.fecha<='$fecha_fin'");
-        $obj = json_decode(json_encode($x), true);
-
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
-
-        $title='LISTA DE GASTOS';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
-       // $id_forma_pago=$x[0]->id_forma_pago;
-        $detalles=$obj;
-        $total_general = 0;
-        $total_deposito = 0;
-        $total = 0;
-        foreach($detalles as $det)
-        {
-            $total_general=$total_general+$det['efectivo'];
-            $total_deposito=$total_deposito+$det['deposito'];
-            $total=$total_deposito+$total_general;
-            //$resul = $resul+$total_general;
-        
-
-        }
-        //dd($total_general,$total_deposito,$total);
-        //dd($detalles);
-        
-        $cont=Gasto::count();
-        $pdf = \PDF::loadView('pdf.reportes.gasto.gasto', [
-
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            //'id_forma_pago'=>$id_forma_pago,
-            'detalles'=>$detalles,
-            'total_general'=>$total_general,
-            'total_deposito'=>$total_deposito,
-            'total'=>$total,
-            
-        ]);
-        //return $pdf->stream('Gasto.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Gasto.pdf');
-
+        return $this->buildGastoReport($request, false);
     }
+
     public function pdfGastoCliente(Request $request){
+        return $this->buildGastoReport($request, true);
+    }
 
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin;
+    private function buildGastoReport(Request $request, bool $soloEfectivo)
+    {
+        try {
+            $fecha_inicio = $request->fecha_inicio;
+            $fecha_fin = $request->fecha_fin;
 
-        $x=DB::select("SELECT g.fecha,g.monto,g.descripcion,m.nombre motivo_gasto,g.id_forma_pago,g.efectivo,g.deposito,u.name as usuario,f.nombre as forma
-        FROM gasto g, motivo_gasto m,forma_pago f,users u
-        WHERE g.id_motivo_gasto=m.id and g.id_forma_pago=f.id and g.id_usuario=u.id and g.id_forma_pago !=3 and g.id_forma_pago !=4 and g.id_forma_pago !=5
-        AND g.fecha>='$fecha_inicio' AND g.fecha<='$fecha_fin'");
-        $obj = json_decode(json_encode($x), true);
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
+            $base = DB::table('gasto as g')
+                ->join('motivo_gasto as m', 'g.id_motivo_gasto', '=', 'm.id')
+                ->join('forma_pago as f', 'g.id_forma_pago', '=', 'f.id')
+                ->join('users as u', 'g.id_usuario', '=', 'u.id')
+                ->whereDate('g.fecha', '>=', $fecha_inicio)
+                ->whereDate('g.fecha', '<=', $fecha_fin);
+            if ($soloEfectivo) {
+                $base->whereNotIn('g.id_forma_pago', [3, 4, 5]);
+            }
 
-        $title='LISTA DE GASTOS TOTAL EFECTIVO';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
-       // $id_forma_pago=$x[0]->id_forma_pago;
-        $detalles=$obj;
-        $total_general = 0;
-        foreach($detalles as $det)
-        {
-            $total_general=$total_general+$det['efectivo'];
-            //$resul = $resul+$total_general;
-        
+            $totales = (clone $base)->selectRaw('SUM(g.efectivo) as totalEfectivo, SUM(g.deposito) as totalDeposito')->first();
+            $totalEfectivo = (float) ($totales->totalEfectivo ?? 0);
+            $totalDeposito = (float) ($totales->totalDeposito ?? 0);
+            $totalCount = (clone $base)->count();
 
+            $title = $soloEfectivo ? 'LISTA DE GASTOS TOTAL EFECTIVO' : 'LISTA DE GASTOS';
+
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
+            ]);
+
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
+
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Movimientos de gasto',
+                'documentLabel' => $soloEfectivo ? 'Gastos en efectivo' : 'Reporte de gastos',
+                'sectionTitle' => $soloEfectivo ? 'Gastos pagados en efectivo' : 'Gastos registrados',
+                'description' => $soloEfectivo
+                    ? 'Gastos pagados en efectivo durante el período seleccionado.'
+                    : 'Detalle de los gastos registrados en el período seleccionado.',
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Gastos',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => $soloEfectivo ? 'Gastos en efectivo' : 'Listado de gastos',
+            ];
+
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
+
+            $summaryItems = $soloEfectivo
+                ? [['label' => 'Total efectivo', 'value' => 'Bs ' . number_format($totalEfectivo, 2, ',', '.')]]
+                : [
+                    ['label' => 'Total efectivo', 'value' => 'Bs ' . number_format($totalEfectivo, 2, ',', '.')],
+                    ['label' => 'Total depósito', 'value' => 'Bs ' . number_format($totalDeposito, 2, ',', '.')],
+                    ['label' => 'Total general', 'value' => 'Bs ' . number_format($totalEfectivo + $totalDeposito, 2, ',', '.')],
+                ];
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-summary-cards', ['items' => $summaryItems])->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:10%">Fecha</th><th style="width:22%">Descripción</th><th style="width:15%">Motivo</th>'
+                . '<th style="width:13%">Forma pago</th><th style="width:13%">Efectivo</th><th style="width:13%">Depósito</th><th style="width:14%">Usuario</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            (clone $base)
+                ->select('g.id', 'g.fecha', 'g.descripcion', 'm.nombre as motivo_gasto', 'f.nombre as forma', 'g.efectivo', 'g.deposito', 'u.name as usuario')
+                ->orderBy('g.id')
+                ->chunk(300, function ($rows) use ($mpdf) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $html .= '<tr>'
+                            . '<td>' . e($row->fecha) . '</td>'
+                            . '<td>' . e($row->descripcion ?: '—') . '</td>'
+                            . '<td>' . e($row->motivo_gasto) . '</td>'
+                            . '<td>' . e($row->forma) . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->efectivo, 2, ',', '.') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->deposito, 2, ',', '.') . '</td>'
+                            . '<td>' . e($row->usuario) . '</td>'
+                            . '</tr>';
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="7">No existen gastos registrados para el período seleccionado.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $filename = $soloEfectivo ? 'Gastos_Efectivo.pdf' : 'Gastos.pdf';
+            $content = $mpdf->Output($filename, 'S');
+
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $filename . '"',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en reporte de gastos: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de gastos'], 500);
         }
-        //dd($total_general);
-        //dd($detalles);
-        
-        $cont=Gasto::count();
-        $pdf = \PDF::loadView('pdf.reportes.gasto.gasto_efectivo', [
-
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            //'id_forma_pago'=>$id_forma_pago,
-            'detalles'=>$detalles,
-            'total_general'=>$total_general,
-            
-        ]);
-        //return $pdf->stream('Gasto.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Gasto.pdf');
-
     }
     public function pdfProveedor(Request $request){
 
@@ -342,650 +354,423 @@ class ReporteController extends BitacoraController
             
         ]);
         //return $pdf->stream('Proveedor.pdf');
-        return $pdf->setPaper('letter')->stream('Proveedor.pdf');
+        return $pdf->setPaper('letter', 'portrait')->stream('Proveedor.pdf');
     }
     public function pdfCompraGeneral(Request $request){
+        try {
+            $fecha_inicio = $request->fecha_inicio;
+            $fecha_fin = $request->fecha_fin;
 
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin; 
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-        $x=DB::select("SELECT c.fecha,p.nombre proveedor,u.name usuario,c.sub_total,c.descuento,c.total, t.nombre as tipo,f.nombre as forma,c.total_efectivo,c.total_deposito
-        FROM compra c, proveedor p, users u,tipo_pago t,forma_pago f
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id AND c.id_tipo_pago=t.id AND c.id_forma_pago=f.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin'");
-        $obj = json_decode(json_encode($x), true);
+            $base = DB::table('compra as c')
+                ->join('proveedor as p', 'c.id_proveedor', '=', 'p.id')
+                ->join('users as u', 'c.id_usuario', '=', 'u.id')
+                ->join('tipo_pago as t', 'c.id_tipo_pago', '=', 't.id')
+                ->join('forma_pago as f', 'c.id_forma_pago', '=', 'f.id')
+                ->where('c.estado', '!=', 'Anulado')
+                ->whereDate('c.fecha', '>=', $fecha_inicio)
+                ->whereDate('c.fecha', '<=', $fecha_fin);
 
-        $a=DB::select("SELECT SUM(c.total) as totalC
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin' ");
-        $obj2 = json_decode(json_encode($a), true);
+            $totales = (clone $base)->selectRaw('
+                SUM(c.total) as totalC,
+                SUM(CASE WHEN c.id_tipo_pago = 1 THEN c.total ELSE 0 END) as totalCo,
+                SUM(CASE WHEN c.id_tipo_pago = 2 THEN c.total ELSE 0 END) as totalCr,
+                SUM(c.total_efectivo) as totalEf,
+                SUM(c.total_deposito) as totalDep
+            ')->first();
 
-        $b=DB::select("SELECT SUM(c.total) as totalCo
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin' AND c.id_tipo_pago=1");
-        $obj3 = json_decode(json_encode($b), true);
+            $totalCount = (clone $base)->count();
+            $title = 'LISTADO DE COMPRAS';
 
-        $c=DB::select("SELECT SUM(c.total) as totalCr
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin' AND c.id_tipo_pago=2");
-        $obj4 = json_decode(json_encode($c), true);
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
+            ]);
 
-        $d=DB::select("SELECT SUM(c.total_efectivo) as totalEf
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin'");
-        $obj5 = json_decode(json_encode($d), true);
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
-        $e=DB::select("SELECT SUM(c.total_deposito) as totalDep
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin'");
-        $obj6 = json_decode(json_encode($e), true);
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Movimientos de compra',
+                'documentLabel' => 'Reporte de compras',
+                'sectionTitle' => 'Compras registradas',
+                'description' => 'Listado general de las compras registradas en el período seleccionado.',
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Compras',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => 'Listado de compras',
+            ];
 
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
 
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
+            $summaryItems = [
+                ['label' => 'Total compra', 'value' => 'Bs ' . number_format((float) ($totales->totalC ?? 0), 2, ',', '.')],
+                ['label' => 'Contado', 'value' => 'Bs ' . number_format((float) ($totales->totalCo ?? 0), 2, ',', '.')],
+                ['label' => 'Crédito', 'value' => 'Bs ' . number_format((float) ($totales->totalCr ?? 0), 2, ',', '.')],
+                ['label' => 'Efectivo', 'value' => 'Bs ' . number_format((float) ($totales->totalEf ?? 0), 2, ',', '.')],
+                ['label' => 'Depósito', 'value' => 'Bs ' . number_format((float) ($totales->totalDep ?? 0), 2, ',', '.')],
+            ];
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-summary-cards', ['items' => $summaryItems])->render(), \Mpdf\HTMLParserMode::HTML_BODY);
 
-        $title='LISTADO DE COMPRAS';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:5%">N.º</th><th style="width:10%">Fecha</th><th style="width:18%">Proveedor</th>'
+                . '<th style="width:10%">Tipo P.</th><th style="width:12%">Forma P.</th><th style="width:11%">Descuento</th>'
+                . '<th style="width:11%">Subtotal</th><th style="width:11%">Total</th><th style="width:12%">Usuario</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
 
-        $detalles=$obj;
-        $detalles2=$obj2;
-        $detalles3=$obj3;
-        $detalles4=$obj4;
-        $detalles5=$obj5;
-        $detalles6=$obj6;
-        
-        //dd($detalles2,$detalles3,$detalles4,$detalles5,$detalles6);
-        
-        $cont=Compra::count();
-        $pdf = \PDF::loadView('pdf.reportes.compra.compra_general', [
+            $index = 1;
+            (clone $base)
+                ->select('c.id', 'c.fecha', 'p.nombre as proveedor', 'u.name as usuario', 'c.sub_total', 'c.descuento', 'c.total', 't.nombre as tipo', 'f.nombre as forma')
+                ->orderBy('c.id')
+                ->chunk(300, function ($rows) use ($mpdf, &$index) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $forma = $row->forma === 'Cuenta por Cobrar' ? 'Cuenta por Pagar' : $row->forma;
+                        $html .= '<tr>'
+                            . '<td class="is-center">' . $index++ . '</td>'
+                            . '<td>' . e($row->fecha) . '</td>'
+                            . '<td class="is-strong">' . e($row->proveedor) . '</td>'
+                            . '<td>' . e($row->tipo) . '</td>'
+                            . '<td>' . e($forma) . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->descuento, 2, ',', '.') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->sub_total, 2, ',', '.') . '</td>'
+                            . '<td class="is-right is-strong">Bs ' . number_format((float) $row->total, 2, ',', '.') . '</td>'
+                            . '<td>' . e($row->usuario) . '</td>'
+                            . '</tr>';
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
 
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="9">No existen compras registradas para el período seleccionado.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
 
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            'detalles'=>$detalles,
+            $content = $mpdf->Output('Listado_Compras.pdf', 'S');
 
-            'detalles2'=>$detalles2,
-            'detalles3'=>$detalles3,
-            'detalles4'=>$detalles4,
-            'detalles5'=>$detalles5,
-            'detalles6'=>$detalles6,
-
-            
-        ]);
-        //return $pdf->stream('Compra.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Compra.pdf');
-
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="Listado_Compras.pdf"',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en pdfCompraGeneral: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de compras'], 500);
+        }
     }
     public function pdfCompraDetallada(Request $request){
+        return $this->buildCompraDetalladaReport($request, false);
+    }
 
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin; 
+    private function buildCompraDetalladaReport(Request $request, bool $soloAnuladas)
+    {
+        try {
+            $fecha_inicio = $request->fecha_inicio;
+            $fecha_fin = $request->fecha_fin;
 
-        $x=DB::select("SELECT c.id,c.fecha,p.nombre proveedor,u.name usuario,c.sub_total,c.descuento,c.total,t.nombre as tipo,f.nombre as forma,c.total_efectivo,c.total_deposito
-        FROM compra c, proveedor p, users u,tipo_pago t,forma_pago f
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id AND c.id_tipo_pago=t.id AND c.id_forma_pago=f.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin'");
-        $obj = json_decode(json_encode($x), true);
-        $y= detalleCompra::join('tienda_articulo','detalle_compra.id_producto','=','tienda_articulo.id')
-        ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-        ->leftjoin('categoria', function($join){
-            $join->orOn('articulo.id_categoria','=','categoria.id');
-        })
-        ->join('tienda','tienda_articulo.id_tienda','=','tienda.id')
-        ->select('detalle_compra.id_compra','detalle_compra.costo_compra as pu','detalle_compra.id_compra','detalle_compra.cantidad',
-        'detalle_compra.sub_total','articulo.nombre_comercial as producto','tienda.nombre as tienda','categoria.nombre as categoria','detalle_compra.descuento')
-        ->where('detalle_compra.eliminado','=',0)
-        ->get();
-        $obj2 = json_decode(json_encode($y), true);
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-        $a=DB::select("SELECT SUM(c.total) as totalC
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin' ");
-        $obj3 = json_decode(json_encode($a), true);
+            $base = DB::table('compra as c')
+                ->join('proveedor as p', 'c.id_proveedor', '=', 'p.id')
+                ->join('users as u', 'c.id_usuario', '=', 'u.id')
+                ->join('tipo_pago as t', 'c.id_tipo_pago', '=', 't.id')
+                ->join('forma_pago as f', 'c.id_forma_pago', '=', 'f.id')
+                ->where('c.estado', $soloAnuladas ? '=' : '!=', 'Anulado')
+                ->whereDate('c.fecha', '>=', $fecha_inicio)
+                ->whereDate('c.fecha', '<=', $fecha_fin);
 
-        $b=DB::select("SELECT SUM(c.total) as totalCo
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin' AND c.id_tipo_pago=1");
-        $obj4 = json_decode(json_encode($b), true);
+            $totales = (clone $base)->selectRaw('
+                SUM(c.total) as totalC,
+                SUM(CASE WHEN c.id_tipo_pago = 1 THEN c.total ELSE 0 END) as totalCo,
+                SUM(CASE WHEN c.id_tipo_pago = 2 THEN c.total ELSE 0 END) as totalCr,
+                SUM(c.total_efectivo) as totalEf,
+                SUM(c.total_deposito) as totalDep
+            ')->first();
 
-        $c=DB::select("SELECT SUM(c.total) as totalCr
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin' AND c.id_tipo_pago=2");
-        $obj5 = json_decode(json_encode($c), true);
+            $totalCount = (clone $base)->count();
+            $title = $soloAnuladas ? 'LISTADO DE COMPRAS DETALLADA ANULADAS' : 'LISTADO DE COMPRAS DETALLADA';
 
-        $d=DB::select("SELECT SUM(c.total_efectivo) as totalEf
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin'");
-        $obj6 = json_decode(json_encode($d), true);
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
+            ]);
 
-        $e=DB::select("SELECT SUM(c.total_deposito) as totalDep
-        FROM compra c, proveedor p, users u
-        WHERE c.estado!='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin'");
-        $obj7 = json_decode(json_encode($e), true);
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Movimientos de compra',
+                'documentLabel' => $soloAnuladas ? 'Compras anuladas' : 'Reporte de compras',
+                'sectionTitle' => $soloAnuladas ? 'Compras anuladas' : 'Compras y detalle de productos',
+                'description' => $soloAnuladas
+                    ? 'Compras anuladas en el período seleccionado, con el detalle de productos incluidos.'
+                    : 'Compras registradas en el período seleccionado, con el detalle de productos de cada una.',
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Compras',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => $soloAnuladas ? 'Compras anuladas' : 'Compras detalladas',
+            ];
 
-        $title='LISTADO DE COMPRAS DETALLADA';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
 
-        $compra=$obj;
-        $detalles=$obj2;
+            $summaryItems = $soloAnuladas
+                ? [['label' => 'Total anulado', 'value' => 'Bs ' . number_format((float) ($totales->totalC ?? 0), 2, ',', '.')]]
+                : [
+                    ['label' => 'Total compra', 'value' => 'Bs ' . number_format((float) ($totales->totalC ?? 0), 2, ',', '.')],
+                    ['label' => 'Contado', 'value' => 'Bs ' . number_format((float) ($totales->totalCo ?? 0), 2, ',', '.')],
+                    ['label' => 'Crédito', 'value' => 'Bs ' . number_format((float) ($totales->totalCr ?? 0), 2, ',', '.')],
+                    ['label' => 'Efectivo', 'value' => 'Bs ' . number_format((float) ($totales->totalEf ?? 0), 2, ',', '.')],
+                    ['label' => 'Depósito', 'value' => 'Bs ' . number_format((float) ($totales->totalDep ?? 0), 2, ',', '.')],
+                ];
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-summary-cards', ['items' => $summaryItems])->render(), \Mpdf\HTMLParserMode::HTML_BODY);
 
-        $detalles2=$obj3;
-        $detalles3=$obj4;
-        $detalles4=$obj5;
-        $detalles5=$obj6;
-        $detalles6=$obj7;
-        
-        //dd($compra,$detalles);
-        
-        $cont=Compra::count();
-        $pdf = \PDF::loadView('pdf.reportes.compra.compra_detallada', [
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:46%">Compra / Producto</th><th style="width:18%">Costo unit.</th>'
+                . '<th style="width:14%">Cantidad</th><th style="width:22%">Subtotal</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
 
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
+            (clone $base)
+                ->select('c.id', 'c.fecha', 'p.nombre as proveedor', 'u.name as usuario', 'c.total', 't.nombre as tipo', 'f.nombre as forma')
+                ->orderBy('c.id')
+                ->chunk(100, function ($compras) use ($mpdf) {
+                    $ids = $compras->pluck('id')->all();
+                    $lineasPorCompra = DB::table('detalle_compra as dc')
+                        ->join('tienda_articulo as ta', 'dc.id_producto', '=', 'ta.id')
+                        ->join('articulo as a', 'ta.id_articulo', '=', 'a.id')
+                        ->leftJoin('categoria as cat', 'a.id_categoria', '=', 'cat.id')
+                        ->join('tienda as ti', 'ta.id_tienda', '=', 'ti.id')
+                        ->where('dc.eliminado', 0)
+                        ->whereIn('dc.id_compra', $ids)
+                        ->select('dc.id_compra', 'dc.costo_compra as pu', 'dc.cantidad', 'dc.sub_total', 'a.nombre_comercial as producto', 'ti.nombre as tienda', 'cat.nombre as categoria')
+                        ->orderBy('dc.id_compra')
+                        ->get()
+                        ->groupBy('id_compra');
 
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            'compra'=>$compra,
-            'detalles'=>$detalles,
+                    $html = '';
+                    foreach ($compras as $compra) {
+                        $forma = $compra->forma === 'Cuenta por Cobrar' ? 'Cuenta por Pagar' : $compra->forma;
+                        $html .= '<tr class="fc-group-row">'
+                            . '<td colspan="3">' . e($compra->fecha) . ' &middot; ' . e($compra->proveedor)
+                            . '<div class="is-muted">' . e($compra->tipo) . ' / ' . e($forma) . ' &middot; ' . e($compra->usuario) . '</div></td>'
+                            . '<td class="is-right">Total: Bs ' . number_format((float) $compra->total, 2, ',', '.') . '</td>'
+                            . '</tr>';
 
-            'detalles2'=>$detalles2,
-            'detalles3'=>$detalles3,
-            'detalles4'=>$detalles4,
-            'detalles5'=>$detalles5,
-            'detalles6'=>$detalles6,
+                        $lineas = $lineasPorCompra->get($compra->id, collect());
+                        if ($lineas->isEmpty()) {
+                            $html .= '<tr class="fc-subrow"><td colspan="4" class="is-muted">Sin líneas de producto registradas.</td></tr>';
+                            continue;
+                        }
+                        foreach ($lineas as $linea) {
+                            $html .= '<tr class="fc-subrow">'
+                                . '<td>' . e($linea->producto) . '<div class="is-muted">' . e($linea->categoria ?: '—') . ' · ' . e($linea->tienda) . '</div></td>'
+                                . '<td class="is-right">Bs ' . number_format((float) $linea->pu, 2, ',', '.') . '</td>'
+                                . '<td class="is-center">' . (float) $linea->cantidad . '</td>'
+                                . '<td class="is-right">Bs ' . number_format((float) $linea->sub_total, 2, ',', '.') . '</td>'
+                                . '</tr>';
+                        }
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
 
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="4">No existen compras para el período seleccionado.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
 
-            
-        ]);
-        //return $pdf->stream('Compra.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Compra.pdf');
+            $filename = $soloAnuladas ? 'Compras_Anuladas.pdf' : 'Compras_Detalladas.pdf';
+            $content = $mpdf->Output($filename, 'S');
 
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $filename . '"',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en reporte de compras detallado: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de compras detallado'], 500);
+        }
     }
     public function pdfCompraDetalladaAnular(Request $request){
-
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin; 
-
-        $x=DB::select("SELECT c.id,c.fecha,p.nombre proveedor,u.name usuario,c.sub_total,c.descuento,c.total,t.nombre as tipo,f.nombre as forma,c.total_efectivo,c.total_deposito
-        FROM compra c, proveedor p, users u,tipo_pago t,forma_pago f
-        WHERE c.estado='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id AND c.id_tipo_pago=t.id AND c.id_forma_pago=f.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin'");
-        $obj = json_decode(json_encode($x), true);
-       
-        $y= detalleCompra::join('tienda_articulo','detalle_compra.id_producto','=','tienda_articulo.id')
-        ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-        ->leftjoin('categoria', function($join){
-            $join->orOn('articulo.id_categoria','=','categoria.id');
-        })
-        ->join('tienda','tienda_articulo.id_tienda','=','tienda.id')
-        ->select('detalle_compra.id_compra','detalle_compra.costo_compra as pu','detalle_compra.id_compra','detalle_compra.cantidad',
-        'detalle_compra.sub_total','articulo.nombre_comercial as producto','tienda.nombre as tienda','categoria.nombre as categoria')
-        ->get();
-        $obj2 = json_decode(json_encode($y), true);
-
-        $a=DB::select("SELECT SUM(c.total) as totalC
-        FROM compra c, proveedor p, users u
-        WHERE c.estado='Anulado' AND c.id_proveedor=p.id AND c.id_usuario=u.id
-        AND c.fecha>='$fecha_inicio' AND c.fecha<='$fecha_fin' ");
-        $obj3 = json_decode(json_encode($a), true);
-
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
-
-        $title='LISTADO DE COMPRAS DETALLADA ANULADAS';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
-
-        $compra=$obj;
-        $detalles=$obj2;
-
-        $detalles2=$obj3;
-
-        
-        //dd($compra,$detalles);
-        
-        $cont=Compra::count();
-        $pdf = \PDF::loadView('pdf.reportes.compra.compra_detallada_anular', [
-
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            'compra'=>$compra,
-            'detalles'=>$detalles,
-
-            'detalles2'=>$detalles2,
-
-            
-        ]);
-        //return $pdf->stream('Compra.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Compra.pdf');
-
+        return $this->buildCompraDetalladaReport($request, true);
     }
     
+    private function pdfVentaGeneralBlade(Request $request)
+    {
+        $validated = $request->validate([
+            'fecha_inicio' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
+            'tipo_venta' => 'required|string',
+            'id_tienda' => 'required|exists:tienda,id',
+        ]);
+
+        $baseQuery = DB::table('venta as v')
+            ->where('v.estado', '!=', 'Anulado')
+            ->where('v.tipo_venta', $validated['tipo_venta'])
+            ->whereBetween('v.fecha', [$validated['fecha_inicio'], $validated['fecha_fin']])
+            ->where('v.id_tienda', $validated['id_tienda']);
+
+        $totales = (clone $baseQuery)
+            ->selectRaw('SUM(v.total) as totalV')
+            ->selectRaw('SUM(CASE WHEN v.id_tipo_pago = 1 THEN v.total ELSE 0 END) as totalC')
+            ->selectRaw('SUM(CASE WHEN v.id_tipo_pago = 2 THEN v.total ELSE 0 END) as totalCr')
+            ->selectRaw('SUM(v.total_efectivo) as totalEf')
+            ->selectRaw('SUM(v.total_deposito) as totalDep')
+            ->get();
+
+        $detalles = (clone $baseQuery)
+            ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
+            ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
+            ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
+            ->join('users as u', 'v.id_usuario', '=', 'u.id')
+            ->select(
+                'v.sub_total', 'v.descuento', 'v.total',
+                'c.nombre as cliente', 't.nombre as tipo_pago',
+                'f.nombre as forma_pago', 'u.name as usuario'
+            )
+            ->orderBy('v.fecha')
+            ->orderBy('v.id')
+            ->get();
+
+        $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+        abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
+
+        $pdf = \PDF::loadView('pdf.reportes.venta.venta_general', [
+            'title' => 'LISTADO DE VENTAS',
+            'nombre_empresa' => $empresa->nombre,
+            'direccion_empresa' => $empresa->direccion,
+            'telefono_empresa' => $empresa->telefono,
+            'foto_empresa' => $empresa->foto,
+            'logo_sistema' => $empresa->logo_sistema,
+            'fecha_inicio' => $validated['fecha_inicio'],
+            'fecha_fin' => $validated['fecha_fin'],
+            'totales' => $totales,
+            'detalles' => $detalles,
+        ]);
+
+        return $pdf->setPaper('letter', 'landscape')->stream('Venta_General.pdf');
+    }
+
     public function pdfVentaGeneral(Request $request)
     {
-        ini_set('memory_limit', '20048M');
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
             $tipo_venta = $request->tipo_venta;
             $id_tienda = $request->id_tienda;
 
-            // Obtener los totales resumidos
-            $resumen = DB::table('venta as v')
-                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->join('users as u', 'v.id_usuario', '=', 'u.id')
-                ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->selectRaw('SUM(v.total) as totalV')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('td.id', $id_tienda)
-                ->first();
-
-            $totalContado = DB::table('venta as v')
-                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->join('users as u', 'v.id_usuario', '=', 'u.id')
-                ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->selectRaw('SUM(v.total) as totalC')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('td.id', $id_tienda)
-                ->where('v.id_tipo_pago', 1) // Contado
-                ->first();
-
-            $totalCredito = DB::table('venta as v')
-                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->join('users as u', 'v.id_usuario', '=', 'u.id')
-                ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->selectRaw('SUM(v.total) as totalCr')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('td.id', $id_tienda)
-                ->where('v.id_tipo_pago', 2) // Crédito
-                ->first();
-
-            $totalEfectivo = DB::table('venta as v')
-                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->join('users as u', 'v.id_usuario', '=', 'u.id')
-                ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->selectRaw('SUM(v.total_efectivo) as totalEf')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('td.id', $id_tienda)
-                ->first();
-
-            $totalDeposito = DB::table('venta as v')
-                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->join('users as u', 'v.id_usuario', '=', 'u.id')
-                ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->selectRaw('SUM(v.total_deposito) as totalDep')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('td.id', $id_tienda)
-                ->first();
-
-            // === 2. DATOS DE LA EMPRESA ===
             $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
-            if (!$empresa) {
-                return response()->json(['error' => 'Datos de la empresa no configurados'], 500);
-            }
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-            // === 3. CONFIGURACIÓN DE mPDF ===
+            $base = DB::table('venta as v')
+                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
+                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
+                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
+                ->join('users as u', 'v.id_usuario', '=', 'u.id')
+                ->where('v.estado', '!=', 'Anulado')
+                ->where('v.tipo_venta', $tipo_venta)
+                ->where('v.id_tienda', $id_tienda)
+                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin]);
+
+            $totales = (clone $base)->selectRaw('
+                SUM(v.total) as totalV,
+                SUM(CASE WHEN v.id_tipo_pago = 1 THEN v.total ELSE 0 END) as totalCo,
+                SUM(CASE WHEN v.id_tipo_pago = 2 THEN v.total ELSE 0 END) as totalCr,
+                SUM(v.total_efectivo) as totalEf,
+                SUM(v.total_deposito) as totalDep
+            ')->first();
+
+            $totalCount = (clone $base)->count();
+            $title = 'LISTADO DE VENTAS';
+
             $mpdf = new Mpdf([
-                'mode' => 'utf-8',
-                'format' => 'Letter',
-                'margin_top' => 10,
-                'margin_bottom' => 10,
-                'margin_left' => 10,
-                'margin_right' => 10,
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
             ]);
 
-            // === 4. ESTILOS CSS ===
-            $css = "
-                @page {
-                    font-size: 13px;
-                }
-                body {
-                    position: relative;
-                    color: black;
-                    background: #FFFFFF;
-                    font-family: Arial, sans-serif;
-                    font-size: 13px;
-                }
-                .table {
-                    display: table;
-                    width: 100%;
-                    max-width: 100%;
-                    background-color: transparent;
-                    border-collapse: collapse;
-                }
-                .table th {
-                    padding: 0.5rem;
-                    vertical-align: top;
-                }
-                .table td {
-                    padding: 0.5rem;
-                    vertical-align: top;
-                }
-                .table-head {
-                    width: 100%;
-                    max-width: 100%;
-                    border-collapse: collapse;
-                }
-                .table-head th {
-                    vertical-align: center;
-                }
-                .table-body {
-                    display: table;
-                    width: 100%;
-                    max-width: 100%;
-                    background-color: transparent;
-                    border-collapse: collapse;
-                }
-                .table-body th {
-                    vertical-align: top;
-                }
-                .table-body td {
-                    vertical-align: top;
-                    padding-top: 5px;
-                    padding-bottom: 2px;
-                }
-                .table-footer{
-                    border-top: 1px solid #001843;
-                    font-size: 10px;
-                }
-                .table-saldo{
-                    text-align: right;
-                    vertical-align: top;
-                }
-                .footer-centro{
-                    position: absolute;
-                    bottom: 50%;
-                    left: 0;
-                    right: 0;
-                }
-                .footer-inferior{
-                    position: absolute;
-                    bottom: 0;
-                    left: 0;
-                    right: 0;
-                }
-                .A{
-                    float: left;
-                    width: 20%;
-                    height: 100px;
-                    text-align:center;
-                }
-                .AA{
-                    float: left;
-                    text-align:center;
-                }
-                .BB{
-                    float: left;
-                    text-align:center;
-                }
-                .CC{
-                    float: left;
-                    text-align:center;
-                }
-                .DD{
-                    float: left;
-                    text-align:center;
-                }
-                .EE{
-                    float: left;
-                    text-align:center;
-                }
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
-                .container{
-                    height: 100px;
-                }
-                .container2{
-                    height: 40px;
-                }
-                #lateral {
-                    width: 80px;
-                }
-                #lateral {
-                    height: 100px;
-                }
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Movimientos de venta',
+                'documentLabel' => 'Reporte de ventas',
+                'sectionTitle' => 'Ventas registradas',
+                'description' => 'Listado general de las ventas registradas en el período seleccionado.',
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Ventas',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => 'Listado de ventas',
+            ];
 
-                .mostrar {
-                    display: block;
-                }
-                .nomostrar {
-                    display: none;
-                }
-                .colocar_pie {
-                    page-break-before: always;
-                }
-                footer {
-                    position: fixed;
-                    bottom: 0cm;
-                    left: 0cm;
-                    right: 0cm;
-                    height: 1.5cm;
-                }
-            ";
-            $mpdf->WriteHTML('<style>' . $css . '</style>', \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
 
-            // === 5. ENCABEZADO DEL PDF ===
-            $title = 'LISTADO DE VENTAS';
-            $logoHtml = $empresa->logo_sistema
-                ? '<img src="img/logo/' . $empresa->logo_sistema . '" 
-                        style="height: 60px; width: auto; display: block; margin: 0 auto;" 
-                        alt="Logo de la Empresa">'
-                : '<div style="width: 60px; height: 60px; background-color: #f0f0f0; border: 1px solid #ccc; margin: 0 auto;"></div>';
+            $summaryItems = [
+                ['label' => 'Total venta', 'value' => 'Bs ' . number_format((float) ($totales->totalV ?? 0), 2, ',', '.')],
+                ['label' => 'Contado', 'value' => 'Bs ' . number_format((float) ($totales->totalCo ?? 0), 2, ',', '.')],
+                ['label' => 'Crédito', 'value' => 'Bs ' . number_format((float) ($totales->totalCr ?? 0), 2, ',', '.')],
+                ['label' => 'Efectivo', 'value' => 'Bs ' . number_format((float) ($totales->totalEf ?? 0), 2, ',', '.')],
+                ['label' => 'Depósito', 'value' => 'Bs ' . number_format((float) ($totales->totalDep ?? 0), 2, ',', '.')],
+            ];
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-summary-cards', ['items' => $summaryItems])->render(), \Mpdf\HTMLParserMode::HTML_BODY);
 
-            $header = "
-                <table style='width: 100%; border-collapse: collapse; margin-bottom: 0px; table-layout: fixed;'>
-                    <tr>
-                        <td style='width: 80px; text-align: center; vertical-align: middle; padding: 10px;'>
-                            {$logoHtml}
-                        </td>
-                        <td style='text-align: center; vertical-align: middle; padding: 10px;'>
-                            <div style='font-size: 20px; font-weight: bold; color: #001843; line-height: 1.3; margin: 0; padding: 0;'>
-                                " . strtoupper($title) . "
-                            </div>
-                            <small style='text-align:center'>DESDE: {$fecha_inicio} HASTA: {$fecha_fin}</small>
-                        </td>
-                        <td style='width: 170px; text-align: center; vertical-align: middle; padding: 10px;'>
-                            
-                        </td>
-                    </tr>
-                </table>
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:5%">N.º</th><th style="width:10%">Fecha</th><th style="width:18%">Cliente</th>'
+                . '<th style="width:10%">Tipo P.</th><th style="width:12%">Forma P.</th><th style="width:11%">Descuento</th>'
+                . '<th style="width:11%">Subtotal</th><th style="width:11%">Total</th><th style="width:12%">Usuario</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
 
-
-                <table class='table' style='' >
-                    <thead>
-                        <tr>
-                            <th style='width:50%; text-align:left;color:#fff;font-size: 12px; background-color:#001843'>
-                                Total Venta: " . ($resumen->totalV ?? 0) . "
-                            </th>
-                   
-                            <th style='width:50%'></th>
-                        </tr>
-                        <tr>
-                            <td height='5px'></td>
-                        </tr>
-                        <tr>
-                            <th style='width:50%; text-align:left;color:#fff;font-size: 12px;background-color:#5386a5'>
-                                Total Venta Contado: " . ($totalContado->totalC ?? 0) . "
-                            </th>
-                  
-                            <th style='width:50%; text-align:left;color:#fff;font-size: 12px;background-color:#5386a5'>
-                                Total Venta Credito: " . ($totalCredito->totalCr ?? 0) . "
-                            </th>
-                       
-                        </tr>
-
-                        <tr>
-                            <td height='5px'></td>
-                        </tr>
-                     
-                        <tr>
-                            <th style='width:50%; text-align:left;font-size: 12px;background-color:#a0d2f3'>
-                                Total Efectivo: " . ($totalEfectivo->totalEf ?? 0) . "
-                            </th>
-                            <th style='width:50%; text-align:left;font-size: 12px;background-color:#a0d2f3'>
-                                Total Deposito: " . ($totalDeposito->totalDep ?? 0) . "
-                            </th>
-                        </tr>
-
-                        <tr>
-                            <td height='5px'></td>
-                        </tr>
-
-                    </thead>
-                </table>
-            ";
-
-            $mpdf->WriteHTML($header, \Mpdf\HTMLParserMode::HTML_BODY);
-
-            // === 6. TABLA DE DETALLES DE VENTAS CON PAGINACIÓN ===
-            $query = DB::table('venta as v')
-                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->join('users as u', 'v.id_usuario', '=', 'u.id')
-                ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->select(
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'c.nombre as cliente',
-                    't.nombre as tipo_pago',
-                    'f.nombre as forma_pago',
-                    'u.name as usuario',
-                    'td.nombre as tienda'
-                )
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('td.id', $id_tienda)
-                ->orderBy('v.fecha') // Agrega un orden para consistencia en la paginación
-                ->orderBy('v.id'); // Orden secundario para evitar duplicados si hay fechas iguales
-
-            $ventasCount = $query->count();
-
-            if ($ventasCount > 0) {
-                $mpdf->WriteHTML("
-                    <table class='table' style='border: 1px solid black;'>
-                        <thead style='border: 1px solid black; background-color:#001843'>
-                            <tr>
-                                <th style='background-color:#001843; vertical-align: middle; border: 2px solid black ;color:#FFFFFF; text-align: center;' width='10%'>#</th>
-                                <th style='background-color:#001843; vertical-align: middle; border: 2px solid black ;color:#FFFFFF; text-align: start;' width='35%'>Cliente</th>
-                                <th style='background-color:#001843; vertical-align: middle; border: 2px solid black ;color:#FFFFFF; text-align: center;' width='15%'>Tipo P.</th>
-                                <th style='background-color:#001843; vertical-align: middle; border: 2px solid black ;color:#FFFFFF; text-align: center;' width='15%'>Forma P.</th>
-                                <th style='background-color:#001843; vertical-align: middle; border: 2px solid black ;color:#FFFFFF; text-align: center;' width='20%'>Descuento</th>
-                                <th style='background-color:#001843; vertical-align: middle; border: 2px solid black ;color:#FFFFFF; text-align: center;' width='20%'>Sub Total</th>
-                                <th style='background-color:#001843; vertical-align: middle; border: 2px solid black ;color:#FFFFFF; text-align: center;' width='20%'>Total</th>
-                                <th style='background-color:#001843; vertical-align: middle; border: 2px solid black ;color:#FFFFFF; text-align: start;' width='20%'>Usuario</th>
-                            </tr>
-                        </thead>
-                        <tbody>", \Mpdf\HTMLParserMode::HTML_BODY);
-
-                $contador = 1;
-                // chunk() procesa los resultados en bloques para no sobrecargar la memoria
-                $query->chunk(500, function ($ventasChunk) use ($mpdf, &$contador) {
-                    foreach ($ventasChunk as $venta) {
-                        $fila = "
-                            <tr style='border-top: 1px solid black'>
-                                <td style='text-align: center; border: 1px solid black;'>{$contador}</td>
-                                <td style='text-align: start; border: 1px solid black;'>" . e($venta->cliente ?? '—') . "</td>
-                                <td style='text-align: center; border: 1px solid black;'>" . e($venta->tipo_pago ?? '—') . "</td>
-                                <td style='text-align: center; border: 1px solid black;'>" . e($venta->forma_pago ?? '—') . "</td>
-                                <td style='text-align: center; border: 1px solid black;'>" . e($venta->descuento ?? '0') . "</td>
-                                <td style='text-align: center; border: 1px solid black;'>" . e($venta->sub_total ?? '0') . "</td>
-                                <td style='text-align: center; border: 1px solid black;'>" . e($venta->total ?? '0') . "</td>
-                                <td style='text-align: center; border: 1px solid black;'>" . e($venta->usuario ?? '—') . "</td>
-                            </tr>";
-                        $mpdf->WriteHTML($fila, \Mpdf\HTMLParserMode::HTML_BODY);
-                        $contador++;
+            $index = 1;
+            (clone $base)
+                ->select('v.fecha', 'c.nombre as cliente', 'u.name as usuario', 'v.sub_total', 'v.descuento', 'v.total', 't.nombre as tipo_pago', 'f.nombre as forma_pago')
+                ->orderBy('v.fecha')
+                ->orderBy('v.id')
+                ->chunk(500, function ($rows) use ($mpdf, &$index) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $html .= '<tr>'
+                            . '<td class="is-center">' . $index++ . '</td>'
+                            . '<td>' . e(\Carbon\Carbon::parse($row->fecha)->format('d/m/Y')) . '</td>'
+                            . '<td class="is-strong">' . e($row->cliente ?? '—') . '</td>'
+                            . '<td>' . e($row->tipo_pago ?? '—') . '</td>'
+                            . '<td>' . e($row->forma_pago ?? '—') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->descuento, 2, ',', '.') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->sub_total, 2, ',', '.') . '</td>'
+                            . '<td class="is-right is-strong">Bs ' . number_format((float) $row->total, 2, ',', '.') . '</td>'
+                            . '<td>' . e($row->usuario ?? '—') . '</td>'
+                            . '</tr>';
                     }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
                 });
 
-                $mpdf->WriteHTML("</tbody></table>", \Mpdf\HTMLParserMode::HTML_BODY);
-            } else {
-                $mpdf->WriteHTML("
-                    <table class='data-table' style='border: 1px solid black;'>
-                        <tr>
-                            <td style='text-align: center; border: 1px solid black; padding: 20px; font-style: italic;'>
-                                No se encuentran registros entre estas fechas
-                            </td>
-                        </tr>
-                    </table>", \Mpdf\HTMLParserMode::HTML_BODY);
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="9">No existen ventas registradas para el período seleccionado.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
             }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
 
-            // === 7. PIE DE PÁGINA (Opcional) ===
-            $mpdf->WriteHTML("
-                <div class='footer-note' style='font-size: 9px; color: #777; margin-top: 10px; text-align: center;'>
-                    Reporte generado automáticamente.
-                </div>", \Mpdf\HTMLParserMode::HTML_BODY);
+            $content = $mpdf->Output('Listado_Ventas.pdf', 'S');
 
-            // === 8. SALIDA DEL PDF ===
-            return response($mpdf->Output('Venta_General.pdf', 'I'))
-                ->header('Content-Type', 'application/pdf');
-
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="Listado_Ventas.pdf"',
+            ]);
         } catch (\Exception $e) {
             \Log::error('Error en pdfVentaGeneral: ' . $e->getMessage());
             return response()->json(['error' => 'Error al generar el reporte de ventas'], 500);
@@ -994,341 +779,194 @@ class ReporteController extends BitacoraController
 
     public function pdfVentaDetallada(Request $request)
     {
-        ini_set('memory_limit', '200048M');
+        return $this->buildVentaDetalladaReport($request, 'detallada');
+    }
+
+    /**
+     * Construye los reportes de venta con detalle de productos/paquetes por venta
+     * (Detallada, Anuladas y Devolución comparten exactamente la misma estructura,
+     * solo cambia el filtro de estado y los textos).
+     */
+    private function buildVentaDetalladaReport(Request $request, string $variant)
+    {
         try {
             $request->validate([
                 'fecha_inicio' => 'required|date',
-                'fecha_fin'     => 'required|date|after_or_equal:fecha_inicio',
-                'tipo_venta'    => 'required|string',
-                'id_tienda'     => 'required|exists:tienda,id',
+                'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
+                'tipo_venta' => 'required|string',
+                'id_tienda' => 'required|exists:tienda,id',
             ]);
 
             $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin    = $request->fecha_fin;
-            $tipo_venta   = $request->tipo_venta;
-            $id_tienda    = $request->id_tienda;
+            $fecha_fin = $request->fecha_fin;
+            $tipo_venta = $request->tipo_venta;
+            $id_tienda = $request->id_tienda;
 
             $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
-            if (!$empresa) {
-                return response()->json(['error' => 'Datos de la empresa no configurados'], 500);
-            }
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-            $totales = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->selectRaw('
-                    COUNT(v.id) as totalV,
-                    SUM(CASE WHEN v.id_tipo_pago = 1 THEN v.total ELSE 0 END) as totalC,
-                    SUM(CASE WHEN v.id_tipo_pago = 2 THEN v.total ELSE 0 END) as totalCr,
-                    SUM(v.total_efectivo) as totalEf,
-                    SUM(v.total_deposito) as totalDep
-                ')
-                ->first();
-
-            $mpdf = new Mpdf([
-                'mode' => 'utf-8',
-                'format' => 'Letter',
-                'margin_top' => 10,
-                'margin_bottom' => 10,
-                'margin_left' => 10,
-                'margin_right' => 10,
-            ]);
-
-            $css = "
-                @page {
-                    font-size: 12px;
-                }
-                body {
-                    position: relative;
-                    color: black;
-                    background: #FFFFFF;
-                    font-family: Arial, sans-serif;
-                    font-size: 11px;
-                }
-                .table {
-                    display: table;
-                    width: 100%;
-                    max-width: 100%;
-                    background-color: transparent;
-                    border-collapse: collapse;
-                }
-                .table th {
-                    padding: 0.5rem;
-                    vertical-align: top;
-                }
-                .table td {
-                    padding: 0.5rem;
-                    vertical-align: top;
-                }
-                .table-head {
-                    width: 100%;
-                    max-width: 100%;
-                    border-collapse: collapse;
-                }
-                .table-head th {
-                    vertical-align: center;
-                }
-                .container{
-                    height: auto;
-                }
-                footer {
-                    position: fixed;
-                    bottom: 0cm;
-                    left: 0cm;
-                    right: 0cm;
-                    height: 1.5cm;
-                }
-            ";
-            $mpdf->WriteHTML('<style>' . $css . '</style>', \Mpdf\HTMLParserMode::HEADER_CSS);
-
-            // === 5. HEADER ===
-            $title = 'LISTADO DE VENTAS DETALLADO';
-            $logoHtml = $empresa->logo_sistema
-                ? '<img src="img/logo/' . $empresa->logo_sistema . '" 
-                        style="height: 60px; width: auto; display: block; margin: 0 auto;" 
-                        alt="Logo de la Empresa">'
-                : '<div style="width: 60px; height: 60px; background-color: #f0f0f0; border: 1px solid #ccc; margin: 0 auto;"></div>';
-
-            $header = "
-                <table style='width: 100%; border-collapse: collapse; margin-bottom: 0px; table-layout: fixed;'>
-                    <tr>
-                        <td style='width: 80px; text-align: center; vertical-align: middle; padding: 10px;'>
-                            {$logoHtml}
-                        </td>
-                        <td style='text-align: center; vertical-align: middle; padding: 10px;'>
-                            <div style='font-size: 20px; font-weight: bold; color: #001843; line-height: 1.3; margin: 0; padding: 0;'>
-                                " . strtoupper($title) . "
-                            </div>
-                            <small style='text-align:center; font-size:14px;'>DESDE: {$fecha_inicio} HASTA: {$fecha_fin}</small>
-                        </td>
-                        <td style='width: 170px; text-align: center; vertical-align: middle; padding: 10px;'>
-                            
-                        </td>
-                    </tr>
-                </table>
-
-                <table class='table' style='margin-top: 10px;'>
-                    <thead>
-                        <tr>
-                            <th style='width:50%; text-align:left; color:#fff; font-size: 12px; background-color:#001843; border: 1px solid black; padding: 8px;'>
-                                Total Ventas: " . number_format($totales->totalV ?? 0, 0) . "
-                            </th>
-                            <th style='width:50%'>
-
-                            </th>
-                        </tr>
-                        <tr>
-                            <td height='5px' style='border: none;'></td>
-                        </tr>
-
-                        <tr>
-                            <th style='width:50%; text-align:left; color:#fff; font-size: 12px; background-color:#5386a5; border: 1px solid black; padding: 8px;'>
-                                Total Contado: Bs. " . number_format($totales->totalC ?? 0, 2) . "
-                            </th>
-                            <th style='width:50%; text-align:left; color:#fff; font-size: 12px; background-color:#5386a5; border: 1px solid black; padding: 8px;'>
-                                Total Crédito: Bs. " . number_format($totales->totalCr ?? 0, 2) . "
-                            </th>
-                        </tr>
-                        <tr>
-                            <td height='5px' style='border: none;'></td>
-                        </tr>
-                        <tr>
-                            <th style='width:50%; text-align:left; font-size: 12px; background-color:#a0d2f3; border: 1px solid black; padding: 8px;'>
-                                Total Efectivo: Bs. " . number_format($totales->totalEf ?? 0, 2) . "
-                            </th>
-                            <th style='width:50%; text-align:left; font-size: 12px; background-color:#a0d2f3; border: 1px solid black; padding: 8px;'>
-                                Total Depósito: Bs. " . number_format($totales->totalDep ?? 0, 2) . "
-                            </th>
-                        </tr>
-                        <tr>
-                            <td height='10px' style='border: none;'></td>
-                        </tr>
-                    </thead>
-                </table>
-            ";
-
-            $mpdf->WriteHTML($header, \Mpdf\HTMLParserMode::HTML_BODY);
-
-            // === 6. OBTENER VENTAS CON CHUNK PARA EVITAR SOBRECARGA ===
-            $queryVentas = DB::table('venta as v')
+            $base = DB::table('venta as v')
                 ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
                 ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
                 ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
                 ->join('users as u', 'v.id_usuario', '=', 'u.id')
-                ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
                 ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('td.id', $id_tienda)
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_efectivo',
-                    'v.total_deposito',
-                    'c.nombre as cliente',
-                    't.nombre as tipo_pago',
-                    'f.nombre as forma_pago',
-                    'u.name as usuario',
-                    'td.nombre as tienda'
-                )
-                ->orderBy('v.fecha', 'desc')
-                ->orderBy('v.id');
+                ->where('v.id_tienda', $id_tienda)
+                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin]);
 
-            $ventasCount = $queryVentas->count();
-
-            if ($ventasCount > 0) {
-                // === 7. PROCESAR VENTAS CON CHUNK ===
-                $queryVentas->chunk(100, function ($ventasChunk) use ($mpdf, $fecha_inicio, $fecha_fin) {
-                    foreach ($ventasChunk as $venta) {
-                        // Obtener detalles de productos para esta venta
-                        $detallesProductos = DB::table('detalle_venta as d')
-                            ->join('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                            ->join('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                            ->where('d.id_venta', $venta->id)
-                            ->where('d.estado', '!=', '1')
-                            ->select('d.cantidad', 'p.nombre_comercial as producto', 'd.costo_venta', 'd.sub_total')
-                            ->get();
-
-                        // Obtener detalles de paquetes para esta venta
-                        $detallesPaquetes = DB::table('detalle_venta_paquete as dvp')
-                            ->join('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
-                            ->where('dvp.id_venta', $venta->id)
-                            ->select('dvp.cantidad', 'pqt.nombre as producto', 'dvp.costo_venta', 'dvp.sub_total')
-                            ->get();
-
-                        $tieneDetalles = $detallesProductos->isNotEmpty() || $detallesPaquetes->isNotEmpty();
-
-                        // Calcular total mostrar
-                        $totalMostrar = $venta->forma_pago == 'Efectivo'
-                            ? ($venta->total_efectivo ?? 0)
-                            : ($venta->total_deposito ?? $venta->total ?? 0);
-
-                        // === TABLA DE LA VENTA ===
-                        $tablaVenta = "
-                            <table class='table' style='margin-bottom: 15px; border: 1px solid black; page-break-inside: avoid;'>
-                                <thead>
-                                    <tr>
-                                        <th style='background-color: #001843; color: #FFF; font-size: 10px; width: 25%; border: 1px solid black; padding: 6px; text-align: left;'>
-                                            Cliente: " . e($venta->cliente ?? 'N/A') . "
-                                        </th>
-                                        <th style='background-color: #001843; color: #FFF; font-size: 10px; width: 15%; border: 1px solid black; padding: 6px;'>
-                                            Tipo P.: " . e($venta->tipo_pago ?? 'N/A') . "
-                                        </th>
-                                        <th style='background-color: #001843; color: #FFF; font-size: 10px; width: 15%; border: 1px solid black; padding: 6px;'>
-                                            Forma P.: " . e($venta->forma_pago ?? 'N/A') . "
-                                        </th>
-                                        <th style='background-color: #001843; color: #FFF; font-size: 10px; width: 15%; border: 1px solid black; padding: 6px;'>
-                                            Desc.: " . number_format($venta->descuento ?? 0, 2) . "
-                                        </th>
-                                        <th style='background-color: #001843; color: #FFF; font-size: 10px; width: 15%; border: 1px solid black; padding: 6px;'>
-                                            Total: " . number_format($venta->total, 2) . " Bs.
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <th style='background-color: #FF0107; color: #FFF; font-size: 10px; border: 1px solid black; padding: 6px; text-align: left;'>Producto / Paquete</th>
-                                        <th style='background-color: #FF0107; color: #FFF; font-size: 10px; border: 1px solid black; padding: 6px; text-align: center;'>Cantidad</th>
-                                        <th style='background-color: #FF0107; color: #FFF; font-size: 10px; border: 1px solid black; padding: 6px; text-align: right;'>P.U.</th>
-                                        <th style='background-color: #FF0107; color: #FFF; font-size: 10px; border: 1px solid black; padding: 6px; text-align: right;'>Sub Total</th>
-                                        <th style='background-color: #FF0107; color: #FFF; font-size: 10px; border: 1px solid black; padding: 6px; text-align: center;'>Fecha</th>
-                                    </tr>
-                                </thead>
-                                <tbody style='border: 1px solid black;'>
-                        ";
-
-                        $ventaSubTotal = 0;
-
-                        // === DETALLES DE PRODUCTOS ===
-                        if ($detallesProductos->isNotEmpty()) {
-                            foreach ($detallesProductos as $det) {
-                                $ventaSubTotal += $det->sub_total ?? 0;
-                                $tablaVenta .= "
-                                    <tr style='border-top: 1px solid black;'>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: left;'>" . e($det->producto ?? 'Producto no disponible') . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: center;'>" . e($det->cantidad ?? 0) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: right;'>" . number_format($det->costo_venta ?? 0, 2) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: right;'>" . number_format($det->sub_total ?? 0, 2) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: center;'>" . \Carbon\Carbon::parse($venta->fecha)->format('d/m/Y') . "</td>
-                                    </tr>
-                                ";
-                            }
-                        }
-
-                        // === DETALLES DE PAQUETES ===
-                        if ($detallesPaquetes->isNotEmpty()) {
-                            foreach ($detallesPaquetes as $det) {
-                                $ventaSubTotal += $det->sub_total ?? 0;
-                                $tablaVenta .= "
-                                    <tr style='border-top: 1px solid black;'>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: left;'>" . e($det->producto ?? 'Paquete no disponible') . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: center;'>" . e($det->cantidad ?? 0) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: right;'>" . number_format($det->costo_venta ?? 0, 2) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: right;'>" . number_format($det->sub_total ?? 0, 2) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: center;'>" . \Carbon\Carbon::parse($venta->fecha)->format('d/m/Y') . "</td>
-                                    </tr>
-                                ";
-                            }
-                        }
-
-                        // === SI NO HAY DETALLES ===
-                        if (!$tieneDetalles) {
-                            $tablaVenta .= "
-                                <tr>
-                                    <td colspan='5' style='text-align: center; font-style: italic; color: #666; padding: 15px; border: 1px solid black;'>
-                                        No se encontraron detalles para esta venta
-                                    </td>
-                                </tr>
-                            ";
-                        } else {
-                            // === FILA DE TOTAL ===
-                            $tablaVenta .= "
-                                <tr style='background-color: #f8f8f8; border-top: 2px solid #001843;'>
-                                    <td colspan='3' style='text-align: right; font-weight: bold; font-size: 10px; padding: 8px; border: 1px solid black;'>
-                                        TOTAL:
-                                    </td>
-                                    <td style='text-align: right; font-weight: bold; font-size: 10px; padding: 8px; border: 1px solid black;'>
-                                        " . number_format($ventaSubTotal, 2) . " Bs.
-                                    </td>
-                                    <td style='border: 1px solid black;'></td>
-                                </tr>
-                            ";
-                        }
-
-                        $tablaVenta .= "</tbody></table>";
-
-                        $mpdf->WriteHTML($tablaVenta, \Mpdf\HTMLParserMode::HTML_BODY);
-                    }
-                });
+            if ($variant === 'anuladas') {
+                $base->where('v.estado', 'Anulado');
+            } elseif ($variant === 'devolucion') {
+                $base->where('v.estado', 'Devolucion');
             } else {
-                $mpdf->WriteHTML("
-                    <table class='table' style='border: 1px solid black;'>
-                        <tr>
-                            <td style='text-align: center; border: 1px solid black; padding: 20px; font-style: italic;'>
-                                No se encontraron registros entre las fechas {$fecha_inicio} y {$fecha_fin}
-                            </td>
-                        </tr>
-                    </table>
-                ", \Mpdf\HTMLParserMode::HTML_BODY);
+                $base->where('v.estado', '!=', 'Anulado');
             }
 
-            // === 8. FOOTER ===
-            $mpdf->WriteHTML("
-                <div style='font-size: 9px; color: #777; margin-top: 10px; text-align: center;'>
-                    Reporte generado automáticamente — " . now()->format('d/m/Y H:i') . "
-                </div>
-            ", \Mpdf\HTMLParserMode::HTML_BODY);
+            $totales = (clone $base)->selectRaw('
+                SUM(v.total) as totalV,
+                SUM(CASE WHEN v.id_tipo_pago = 1 THEN v.total ELSE 0 END) as totalCo,
+                SUM(CASE WHEN v.id_tipo_pago = 2 THEN v.total ELSE 0 END) as totalCr,
+                SUM(v.total_efectivo) as totalEf,
+                SUM(v.total_deposito) as totalDep
+            ')->first();
 
-            // === 9. SALIDA DEL PDF ===
-            return response($mpdf->Output("Ventas_Detalladas_{$tipo_venta}.pdf", 'I'))
-                ->header('Content-Type', 'application/pdf');
+            $totalCount = (clone $base)->count();
 
+            $textos = [
+                'detallada' => [
+                    'title' => 'LISTADO DE VENTAS DETALLADO',
+                    'documentLabel' => 'Reporte de ventas',
+                    'sectionTitle' => 'Ventas y detalle de productos',
+                    'description' => 'Ventas registradas en el período seleccionado, con el detalle de productos y paquetes de cada una.',
+                    'footerLabel' => 'Ventas detalladas',
+                    'filename' => 'Ventas_Detalladas.pdf',
+                    'empty' => 'No existen ventas para el período seleccionado.',
+                ],
+                'anuladas' => [
+                    'title' => 'LISTADO DE VENTAS ANULADAS',
+                    'documentLabel' => 'Ventas anuladas',
+                    'sectionTitle' => 'Ventas anuladas',
+                    'description' => 'Ventas anuladas en el período seleccionado, con el detalle de productos incluidos.',
+                    'footerLabel' => 'Ventas anuladas',
+                    'filename' => 'Ventas_Anuladas.pdf',
+                    'empty' => 'No existen ventas anuladas para el período seleccionado.',
+                ],
+                'devolucion' => [
+                    'title' => 'LISTADO DE VENTAS - DEVOLUCIÓN',
+                    'documentLabel' => 'Devoluciones',
+                    'sectionTitle' => 'Ventas con devolución',
+                    'description' => 'Ventas marcadas como devolución en el período seleccionado, con el detalle de productos incluidos.',
+                    'footerLabel' => 'Devoluciones',
+                    'filename' => 'Ventas_Devolucion.pdf',
+                    'empty' => 'No existen devoluciones para el período seleccionado.',
+                ],
+            ][$variant];
+
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
+            ]);
+
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
+
+            $viewData = [
+                'title' => $textos['title'],
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Movimientos de venta',
+                'documentLabel' => $textos['documentLabel'],
+                'sectionTitle' => $textos['sectionTitle'],
+                'description' => $textos['description'],
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Ventas',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => $textos['footerLabel'],
+            ];
+
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
+
+            $summaryItems = $variant === 'detallada'
+                ? [
+                    ['label' => 'Total venta', 'value' => 'Bs ' . number_format((float) ($totales->totalV ?? 0), 2, ',', '.')],
+                    ['label' => 'Contado', 'value' => 'Bs ' . number_format((float) ($totales->totalCo ?? 0), 2, ',', '.')],
+                    ['label' => 'Crédito', 'value' => 'Bs ' . number_format((float) ($totales->totalCr ?? 0), 2, ',', '.')],
+                    ['label' => 'Efectivo', 'value' => 'Bs ' . number_format((float) ($totales->totalEf ?? 0), 2, ',', '.')],
+                    ['label' => 'Depósito', 'value' => 'Bs ' . number_format((float) ($totales->totalDep ?? 0), 2, ',', '.')],
+                ]
+                : [['label' => $variant === 'anuladas' ? 'Total anulado' : 'Total devuelto', 'value' => 'Bs ' . number_format((float) ($totales->totalV ?? 0), 2, ',', '.')]];
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-summary-cards', ['items' => $summaryItems])->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:46%">Venta / Producto</th><th style="width:18%">Costo unit.</th>'
+                . '<th style="width:14%">Cantidad</th><th style="width:22%">Subtotal</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            (clone $base)
+                ->select('v.id', 'v.fecha', 'c.nombre as cliente', 'u.name as usuario', 'v.total', 't.nombre as tipo_pago', 'f.nombre as forma_pago')
+                ->orderBy('v.fecha')
+                ->orderBy('v.id')
+                ->chunk(100, function ($ventas) use ($mpdf) {
+                    $ids = $ventas->pluck('id')->all();
+
+                    $productos = DB::table('detalle_venta as d')
+                        ->join('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
+                        ->join('articulo as p', 'ta.id_articulo', '=', 'p.id')
+                        ->where('d.estado', '!=', '1')
+                        ->whereIn('d.id_venta', $ids)
+                        ->select('d.id_venta', 'd.cantidad', 'p.nombre_comercial as producto', 'd.costo_venta', 'd.sub_total')
+                        ->get();
+
+                    $paquetes = DB::table('detalle_venta_paquete as dvp')
+                        ->join('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
+                        ->whereIn('dvp.id_venta', $ids)
+                        ->select('dvp.id_venta', 'dvp.cantidad', 'pqt.nombre as producto', 'dvp.costo_venta', 'dvp.sub_total')
+                        ->get();
+
+                    $lineasPorVenta = $productos->concat($paquetes)->groupBy('id_venta');
+
+                    $html = '';
+                    foreach ($ventas as $venta) {
+                        $html .= '<tr class="fc-group-row">'
+                            . '<td colspan="3">' . e(\Carbon\Carbon::parse($venta->fecha)->format('d/m/Y')) . ' &middot; ' . e($venta->cliente)
+                            . '<div class="is-muted">' . e($venta->tipo_pago) . ' / ' . e($venta->forma_pago) . ' &middot; ' . e($venta->usuario) . '</div></td>'
+                            . '<td class="is-right">Total: Bs ' . number_format((float) $venta->total, 2, ',', '.') . '</td>'
+                            . '</tr>';
+
+                        $lineas = $lineasPorVenta->get($venta->id, collect());
+                        if ($lineas->isEmpty()) {
+                            $html .= '<tr class="fc-subrow"><td colspan="4" class="is-muted">Sin líneas de producto registradas.</td></tr>';
+                            continue;
+                        }
+                        foreach ($lineas as $linea) {
+                            $html .= '<tr class="fc-subrow">'
+                                . '<td>' . e($linea->producto) . '</td>'
+                                . '<td class="is-right">Bs ' . number_format((float) $linea->costo_venta, 2, ',', '.') . '</td>'
+                                . '<td class="is-center">' . (float) $linea->cantidad . '</td>'
+                                . '<td class="is-right">Bs ' . number_format((float) $linea->sub_total, 2, ',', '.') . '</td>'
+                                . '</tr>';
+                        }
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="4">' . e($textos['empty']) . '</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $content = $mpdf->Output($textos['filename'], 'S');
+
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $textos['filename'] . '"',
+            ]);
         } catch (\Exception $e) {
-            \Log::error('Error en pdfVentaDetallada: ' . $e->getMessage());
-            return response()->json(['error' => 'Error al generar el reporte: ' . $e->getMessage()], 500);
+            \Log::error('Error en reporte de ventas detallado (' . $variant . '): ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de ventas'], 500);
         }
     }
 
@@ -1402,201 +1040,12 @@ class ReporteController extends BitacoraController
 
     }
     public function pdfVentaDetalladaDevolucion(Request $request){
-
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin; 
-        $tipo_venta = $request->tipo_venta;
-        $id_tienda = $request->id_tienda;
-
-
-        $x=DB::select("SELECT v.id,v.fecha,v.sub_total,v.descuento,v.total,v.total_efectivo,v.total_deposito,c.nombre as cliente,t.nombre as tipo_pago,f.nombre as forma_pago, u.name as usuario, td.nombre as tienda
-        FROM venta v, cliente c, tipo_pago t, forma_pago f, users u, tienda td
-        WHERE v.estado='Devolucion' AND v.id_cliente=c.id AND v.id_tipo_pago=t.id AND v.id_forma_pago=f.id AND v.id_usuario=u.id AND v.id_tienda=td.id AND v.tipo_venta='$tipo_venta'
-        AND v.fecha>='$fecha_inicio' AND v.fecha<='$fecha_fin' AND td.id='$id_tienda' ");
-        $obj = json_decode(json_encode($x), true);
-
-        $z=DB::select("SELECT SUM(v.total) as totalV
-        FROM venta v, cliente c, tipo_pago t, forma_pago f, users u, tienda td
-        WHERE v.estado='Devolucion' AND v.id_cliente=c.id AND v.id_tipo_pago=t.id AND v.id_forma_pago=f.id AND v.id_usuario=u.id AND v.id_tienda=td.id AND v.tipo_venta='$tipo_venta'
-        AND v.fecha>='$fecha_inicio' AND v.fecha<='$fecha_fin' AND td.id='$id_tienda'");
-        $obj3 = json_decode(json_encode($z), true);
-
-
-        $y=DB::select("SELECT d.id_venta,d.cantidad,p.nombre_comercial producto, d.costo_venta, d.sub_total,u.name as usuario
-        FROM detalle_venta d, tienda_articulo ta, articulo p, users u
-        WHERE d.id_producto=ta.id AND ta.id_articulo=p.id AND d.id_eliminado=u.id AND d.estado='1'");
-        $obj2 = json_decode(json_encode($y), true);
-
-        $a=DB::select("SELECT detalle_venta_paquete.id_venta,detalle_venta_paquete.cantidad,paquetes.nombre producto, detalle_venta_paquete.costo_venta, detalle_venta_paquete.sub_total
-        FROM detalle_venta_paquete, paquetes
-        WHERE detalle_venta_paquete.id_paquete=paquetes.id");
-        $obj4 = json_decode(json_encode($a), true);
-
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
-
-
-
-
-        $title='LISTADO DE VENTAS DETALLADO DEVOLUCION';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
-
-        //dd($nombre_empresa);
-
-        $venta=$obj;
-        //dd($venta);
-        $detalles=$obj2;
-        $detalles2=$obj3;
-        $detallesPaquete=$obj4;
-        
-        //dd($venta,$detalles);
-        
-        $cont=Venta::count();
-        $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_devolucion', [
-
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-
-            'tipo_venta'=>$tipo_venta,
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            'venta'=>$venta,
-            'detalles'=>$detalles,
-            'detalles2'=>$detalles2,
-            'detallesPaquete'=>$detallesPaquete,
-            
-        ]);
-        //return $pdf->stream('Ventas.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Venta.pdf');
-
+        return $this->buildVentaDetalladaReport($request, 'devolucion');
     }
     
     public function pdfVentaDetalladaAnulada(Request $request)
     {
-        try {
-            // Validar entrada
-            $request->validate([
-                'fecha_inicio' => 'required|date',
-                'fecha_fin'     => 'required|date|after_or_equal:fecha_inicio',
-                'tipo_venta'    => 'required|string',
-                'id_tienda'     => 'required|exists:tienda,id',
-            ]);
-
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin    = $request->fecha_fin;
-            $tipo_venta   = $request->tipo_venta;
-            $id_tienda    = $request->id_tienda;
-
-            // === 1. Datos de la empresa ===
-            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto']);
-            if (!$empresa) {
-                return response()->json(['error' => 'Datos de la empresa no configurados'], 500);
-            }
-
-            // === 2. Ventas ANULADAS en el rango ===
-            $ventas = DB::table('venta as v')
-                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->join('users as u', 'v.id_usuario', '=', 'u.id')
-                ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '=', 'Anulado')  // Solo anuladas
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('td.id', $id_tienda)
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_efectivo',
-                    'v.total_deposito',
-                    'c.nombre as cliente',
-                    't.nombre as tipo_pago',
-                    'f.nombre as forma_pago',
-                    'u.name as usuario',
-                    'td.nombre as tienda'
-                )
-                ->orderBy('v.fecha', 'desc')
-                ->get();
-
-            if ($ventas->isEmpty()) {
-                return response()->json(['info' => 'No hay ventas anuladas en el rango seleccionado'], 404);
-            }
-
-            // === 3. Totales (solo anuladas) ===
-            $totales = DB::table('venta as v')
-                ->where('v.estado', '=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->select(
-                    DB::raw('SUM(v.total) as totalV'),
-                    DB::raw('SUM(CASE WHEN v.id_tipo_pago = 1 THEN v.total ELSE 0 END) as totalC'),
-                    DB::raw('SUM(CASE WHEN v.id_tipo_pago = 2 THEN v.total ELSE 0 END) as totalCr'),
-                    DB::raw('SUM(v.total_efectivo) as totalEf'),
-                    DB::raw('SUM(v.total_deposito) as totalDep')
-                )
-                ->first();
-
-            // === 4. Detalles de productos y paquetes ===
-            $ventasIds = $ventas->pluck('id')->toArray();
-            $detalles = [];
-            $detallesPaquete = [];
-
-            if (!empty($ventasIds)) {
-                // Productos
-                $detalles = DB::table('detalle_venta as d')
-                    ->join('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->join('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->select('d.id_venta', 'd.cantidad', 'p.nombre_comercial as producto', 'd.costo_venta', 'd.sub_total')
-                    ->get()
-                    ->groupBy('id_venta');
-
-                // Paquetes
-                $detallesPaquete = DB::table('detalle_venta_paquete as dvp')
-                    ->join('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
-                    ->whereIn('dvp.id_venta', $ventasIds)
-                    ->select('dvp.id_venta', 'dvp.cantidad', 'pqt.nombre as producto', 'dvp.costo_venta', 'dvp.sub_total')
-                    ->get()
-                    ->groupBy('id_venta');
-            }
-
-            // === 5. Generar PDF con DomPDF (o mPDF si es necesario) ===
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_anular', [
-                'title'               => 'LISTADO DE VENTAS DETALLADO ANULADAS',
-                'nombre_empresa'      => $empresa->nombre,
-                'direccion_empresa'   => $empresa->direccion,
-                'telefono_empresa'    => $empresa->telefono,
-                'foto_empresa'        => $empresa->foto,
-
-                'fecha_inicio'        => $fecha_inicio,
-                'fecha_fin'           => $fecha_fin,
-                'tipo_venta'          => $tipo_venta,
-
-                'ventas'              => $ventas,
-                'totales'             => $totales,
-                'detalles'            => $detalles,
-                'detallesPaquete'     => $detallesPaquete,
-            ]);
-
-            return $pdf->setPaper('letter', 'portrait')->stream("Ventas_Anuladas_Detalladas_{$tipo_venta}.pdf");
-
-        } catch (\Exception $e) {
-            Log::error('Error en pdfVentaDetalladaAnulada: ' . $e->getMessage());
-            return response()->json(['error' => 'Error al generar el reporte'], 500);
-        }
+        return $this->buildVentaDetalladaReport($request, 'anuladas');
     }
 
     
@@ -1646,6 +1095,7 @@ class ReporteController extends BitacoraController
                 .table th, .table td { vertical-align: top; border:1px solid #000}
             ";
             $mpdf->WriteHTML('<style>' . $css . '</style>', \Mpdf\HTMLParserMode::HEADER_CSS);
+            $this->aplicarTemaReporte($mpdf);
 
             // === 5. HEADER ===
             $title = 'LISTADO DE VENTAS EFECTIVO DETALLADO';
@@ -2326,62 +1776,234 @@ class ReporteController extends BitacoraController
     }
     
     public function pdfPagoVenta(Request $request){
+        try {
+            $fecha_inicio = $request->fecha_inicio;
+            $fecha_fin = $request->fecha_fin;
+            $tipo_venta = $request->tipo_venta;
+            $id_tienda = $request->id_tienda;
 
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin;
-        $tipo_venta = $request->tipo_venta;
-        $id_tienda = $request->id_tienda;
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-        $y=DB::select("SELECT p.fecha, p.fecha_final,p.monto,p.saldo,p.id, c.nombre as cliente, t.nombre as tienda, p.id_tipo_pago, p.estado
-        FROM pago p, venta v, cliente c, tienda t
-        WHERE p.id_venta=v.id AND v.id_cliente=c.id AND v.id_tienda=t.id AND p.id_tipo_pago=2
-        AND p.fecha>='$fecha_inicio' AND p.fecha<='$fecha_fin' AND p.estado=1 AND v.tipo_venta='$tipo_venta'");
-        $obj2 = json_decode(json_encode($y), true);
+            $baseCuotas = DB::table('pago as p')
+                ->join('venta as v', 'p.id_venta', '=', 'v.id')
+                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
+                ->where('p.id_tipo_pago', 2)
+                ->where('p.estado', 1)
+                ->where('v.tipo_venta', $tipo_venta)
+                ->where('v.id_tienda', $id_tienda)
+                ->whereDate('p.fecha', '>=', $fecha_inicio)
+                ->whereDate('p.fecha', '<=', $fecha_fin);
+            $totalCuotas = (clone $baseCuotas)->count();
 
-        $x=DB::select("SELECT i.nombre cliente,c.fecha, c.amortizacion,c.saldo,id_pago,c.descripcion
-        FROM c_x_cobrar c, pago p, venta v, cliente i
-        WHERE c.id_pago=p.id AND p.id_venta=v.id AND v.id_cliente=i.id");
-        $obj = json_decode(json_encode($x), true);
-        
+            $baseAmortizaciones = DB::table('c_x_cobrar as c')
+                ->join('pago as p', 'c.id_pago', '=', 'p.id')
+                ->join('venta as v', 'p.id_venta', '=', 'v.id')
+                ->join('cliente as i', 'v.id_cliente', '=', 'i.id')
+                ->whereDate('c.fecha', '>=', $fecha_inicio)
+                ->whereDate('c.fecha', '<=', $fecha_fin);
+            $totalAmortizaciones = (clone $baseAmortizaciones)->count();
 
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
+            $title = 'LISTADO DE PAGOS AL CRÉDITO';
 
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
+            ]);
 
-        $title='LISTADO DE PAGOS AL CRÉDITO';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
-        $detalles=$obj;
-        $venta_pago=$obj2;
-        
-        $cont=Pago::count();
-        $pdf = \PDF::loadView('pdf.reportes.venta.venta_pago', [
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Cuentas por cobrar',
+                'documentLabel' => 'Cuotas de venta',
+                'sectionTitle' => 'Cuotas al crédito y amortizaciones',
+                'description' => 'Cuotas de venta pendientes y amortizaciones registradas en el período seleccionado.',
+                'recordCount' => $totalCuotas + $totalAmortizaciones,
+                'recordLabel' => 'Registros',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => 'Cuotas de venta',
+            ];
 
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
 
-            'tipo_venta'=>$tipo_venta,
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            'detalles'=>$detalles,
-            'venta_pago'=>$venta_pago
-            
-        ]);
-        //return $pdf->stream('Pagos.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Pagos.pdf');
+            $mpdf->WriteHTML('<h3 style="margin:0 0 6px;color:#173f32;font-size:10.5px;">Cuotas pendientes en el período</h3>', \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:14%">Fecha</th><th style="width:14%">Vencimiento</th><th style="width:26%">Cliente</th>'
+                . '<th style="width:16%">Monto</th><th style="width:16%">Saldo</th><th style="width:14%">Estado</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
 
+            (clone $baseCuotas)
+                ->select('p.fecha', 'p.fecha_final', 'c.nombre as cliente', 'p.monto', 'p.saldo', 'p.estado')
+                ->orderBy('p.id')
+                ->chunk(300, function ($rows) use ($mpdf) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $html .= '<tr>'
+                            . '<td>' . e($row->fecha) . '</td>'
+                            . '<td>' . e($row->fecha_final) . '</td>'
+                            . '<td class="is-strong">' . e($row->cliente) . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->monto, 2, ',', '.') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->saldo, 2, ',', '.') . '</td>'
+                            . '<td><span class="fc-status ' . ((int) $row->estado === 0 ? 'fc-status--closed' : '') . '">' . ((int) $row->estado === 1 ? 'Pendiente' : 'Cancelado') . '</span></td>'
+                            . '</tr>';
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+            if ($totalCuotas === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="6">No existen cuotas pendientes para el período seleccionado.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $mpdf->WriteHTML('<h3 style="margin:14px 0 6px;color:#173f32;font-size:10.5px;">Historial de amortizaciones</h3>', \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:14%">Fecha</th><th style="width:26%">Cliente</th><th style="width:16%">Amortizado</th>'
+                . '<th style="width:16%">Saldo</th><th style="width:28%">Descripción</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            (clone $baseAmortizaciones)
+                ->select('c.fecha', 'i.nombre as cliente', 'c.amortizacion', 'c.saldo', 'c.descripcion')
+                ->orderBy('c.id')
+                ->chunk(300, function ($rows) use ($mpdf) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $html .= '<tr>'
+                            . '<td>' . e($row->fecha) . '</td>'
+                            . '<td class="is-strong">' . e($row->cliente) . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->amortizacion, 2, ',', '.') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->saldo, 2, ',', '.') . '</td>'
+                            . '<td class="is-muted">' . e($row->descripcion ?: '—') . '</td>'
+                            . '</tr>';
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+            if ($totalAmortizaciones === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="5">No existen amortizaciones registradas.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $content = $mpdf->Output('Cuotas_Venta.pdf', 'S');
+
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="Cuotas_Venta.pdf"',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en pdfPagoVenta: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de cuotas de venta'], 500);
+        }
     }
     
+    private function pdfClienteBlade()
+    {
+        $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+        abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
+
+        $clientes = Cliente::select('nombre as cliente', 'direccion', 'telefono', 'matricula')
+            ->where('estado', '!=', 0)
+            ->where('id', '!=', 1)
+            ->orderBy('nombre')
+            ->get();
+
+        $pdf = \PDF::loadView('pdf.reportes.cliente.cliente', [
+            'title' => 'LISTA DE CLIENTES',
+            'nombre_empresa' => $empresa->nombre,
+            'direccion_empresa' => $empresa->direccion,
+            'telefono_empresa' => $empresa->telefono,
+            'foto_empresa' => $empresa->foto,
+            'logo_sistema' => $empresa->logo_sistema,
+            'clientes' => $clientes,
+            'total_clientes' => $clientes->count(),
+        ]);
+
+        return $pdf->setPaper('letter', 'portrait')->stream('Lista_Clientes.pdf');
+    }
+
     public function pdfCliente()
+    {
+        try {
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
+
+            $query = Cliente::select('nombre as cliente', 'direccion', 'telefono', 'matricula')
+                ->where('estado', '!=', 0)
+                ->where('id', '!=', 1)
+                ->orderBy('nombre');
+            $totalCount = (clone $query)->count();
+            $title = 'LISTA DE CLIENTES';
+
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8',
+                'format' => 'Letter',
+                'margin_top' => 10,
+                'margin_bottom' => 16,
+                'margin_left' => 10,
+                'margin_right' => 10,
+            ]);
+
+            // mPDF's HEADER_CSS parser only applies CSS rules to every page (headers/footers
+            // included) when the stylesheet keeps its <style> wrapper; stripping it breaks
+            // repeating footers after page 1.
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
+
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Directorio comercial',
+                'documentLabel' => 'Reporte de clientes',
+                'sectionTitle' => 'Clientes activos',
+                'description' => 'Directorio de clientes habilitados para las operaciones comerciales del sistema.',
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Clientes',
+                'footerLabel' => 'Directorio de clientes',
+            ];
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
+
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr><th style="width:6%">N.º</th><th style="width:27%">Cliente</th><th style="width:16%">Documento</th><th style="width:17%">Teléfono</th><th style="width:34%">Dirección</th></tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $index = 1;
+            $query->chunk(500, function ($clientes) use ($mpdf, &$index) {
+                $rows = '';
+                foreach ($clientes as $cliente) {
+                    $rows .= '<tr>'
+                        . '<td class="is-center">' . $index++ . '</td>'
+                        . '<td class="is-strong">' . e($cliente->cliente ?: '—') . '</td>'
+                        . '<td>' . e($cliente->matricula ?: '—') . '</td>'
+                        . '<td>' . e($cliente->telefono ?: '—') . '</td>'
+                        . '<td>' . e($cliente->direccion ?: '—') . '</td>'
+                        . '</tr>';
+                }
+                $mpdf->WriteHTML($rows, \Mpdf\HTMLParserMode::HTML_BODY);
+            });
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="5">No existen clientes activos registrados.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $content = $mpdf->Output('Lista_Clientes.pdf', 'S');
+
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="Lista_Clientes.pdf"',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en pdfCliente: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de clientes'], 500);
+        }
+    }
+
+    private function pdfClienteLegacy()
     {
         try {
             // === 1. DATOS DE LA EMPRESA ===
@@ -2567,6 +2189,7 @@ class ReporteController extends BitacoraController
             }
             ";
             $mpdf->WriteHTML('<style>' . $css . '</style>', \Mpdf\HTMLParserMode::HEADER_CSS);
+            $this->aplicarTemaReporte($mpdf);
 
             $title='Lista de clientes';
 
@@ -2750,57 +2373,124 @@ class ReporteController extends BitacoraController
         
     }
     public function pdfPagoCompra(Request $request){
+        try {
+            $fecha_inicio = $request->fecha_inicio;
+            $fecha_fin = $request->fecha_fin;
 
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin;
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-        $y=DB::select("SELECT p.fecha, p.fecha_final,p.monto,p.saldo,p.id, pr.nombre as proveedor, p.id_tipo_pago, p.estado
-        FROM pago_compra p, compra c, proveedor pr
-        WHERE p.id_compra=c.id AND c.id_proveedor=pr.id  AND p.id_tipo_pago=2
-        AND p.fecha>='$fecha_inicio' AND p.fecha<='$fecha_fin' AND c.estado='Registrado'");
-        $obj2 = json_decode(json_encode($y), true);
+            $baseCuotas = DB::table('pago_compra as p')
+                ->join('compra as c', 'p.id_compra', '=', 'c.id')
+                ->join('proveedor as pr', 'c.id_proveedor', '=', 'pr.id')
+                ->where('p.id_tipo_pago', 2)
+                ->where('c.estado', 'Registrado')
+                ->whereDate('p.fecha', '>=', $fecha_inicio)
+                ->whereDate('p.fecha', '<=', $fecha_fin);
+            $totalCuotas = (clone $baseCuotas)->count();
 
-        $x=DB::select("SELECT i.nombre cliente,c.fecha, c.amortizacion,c.saldo,id_pago,c.descripcion
-        FROM c_x_pagar c, pago_compra p, compra v, proveedor i
-        WHERE c.id_pago=p.id AND p.id_compra=v.id AND v.id_proveedor=i.id");
-        $obj = json_decode(json_encode($x), true);
+            $baseAmortizaciones = DB::table('c_x_pagar as c')
+                ->join('pago_compra as p', 'c.id_pago', '=', 'p.id')
+                ->join('compra as v', 'p.id_compra', '=', 'v.id')
+                ->join('proveedor as i', 'v.id_proveedor', '=', 'i.id')
+                ->whereDate('c.fecha', '>=', $fecha_inicio)
+                ->whereDate('c.fecha', '<=', $fecha_fin);
+            $totalAmortizaciones = (clone $baseAmortizaciones)->count();
 
+            $title = 'LISTADO DE PAGOS AL CRÉDITO';
 
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
-        $title='LISTADO DE PAGOS AL CRÉDITO';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
+            ]);
 
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
-        $detalles=$obj;
-        $venta_pago=$obj2;
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Cuentas por pagar',
+                'documentLabel' => 'Cuotas de compra',
+                'sectionTitle' => 'Cuotas al crédito y amortizaciones',
+                'description' => 'Cuotas de compra pendientes y amortizaciones registradas en el período seleccionado.',
+                'recordCount' => $totalCuotas + $totalAmortizaciones,
+                'recordLabel' => 'Registros',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => 'Cuotas de compra',
+            ];
 
-        //dd($detalles);
-        
-        $cont=PagoCompra::count();
-        $pdf = \PDF::loadView('pdf.reportes.compra.compra_pago', [
-            
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
 
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            'detalles'=>$detalles,
-            'venta_pago'=>$venta_pago
-            
-        ]);
-        return $pdf->stream('Pagos.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Pagos.pdf');
+            $mpdf->WriteHTML('<h3 style="margin:0 0 6px;color:#173f32;font-size:10.5px;">Cuotas pendientes en el período</h3>', \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:14%">Fecha</th><th style="width:14%">Vencimiento</th><th style="width:26%">Proveedor</th>'
+                . '<th style="width:16%">Monto</th><th style="width:16%">Saldo</th><th style="width:14%">Estado</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
 
+            (clone $baseCuotas)
+                ->select('p.fecha', 'p.fecha_final', 'pr.nombre as proveedor', 'p.monto', 'p.saldo', 'p.estado')
+                ->orderBy('p.id')
+                ->chunk(300, function ($rows) use ($mpdf) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $html .= '<tr>'
+                            . '<td>' . e($row->fecha) . '</td>'
+                            . '<td>' . e($row->fecha_final) . '</td>'
+                            . '<td class="is-strong">' . e($row->proveedor) . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->monto, 2, ',', '.') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->saldo, 2, ',', '.') . '</td>'
+                            . '<td><span class="fc-status ' . ($row->estado === 'Cancelado' ? 'fc-status--closed' : '') . '">' . e($row->estado ?: '—') . '</span></td>'
+                            . '</tr>';
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+            if ($totalCuotas === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="6">No existen cuotas pendientes para el período seleccionado.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $mpdf->WriteHTML('<h3 style="margin:14px 0 6px;color:#173f32;font-size:10.5px;">Historial de amortizaciones</h3>', \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:14%">Fecha</th><th style="width:26%">Proveedor</th><th style="width:16%">Amortizado</th>'
+                . '<th style="width:16%">Saldo</th><th style="width:28%">Descripción</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            (clone $baseAmortizaciones)
+                ->select('c.fecha', 'i.nombre as proveedor', 'c.amortizacion', 'c.saldo', 'c.descripcion')
+                ->orderBy('c.id')
+                ->chunk(300, function ($rows) use ($mpdf) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $html .= '<tr>'
+                            . '<td>' . e($row->fecha) . '</td>'
+                            . '<td class="is-strong">' . e($row->proveedor) . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->amortizacion, 2, ',', '.') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->saldo, 2, ',', '.') . '</td>'
+                            . '<td class="is-muted">' . e($row->descripcion ?: '—') . '</td>'
+                            . '</tr>';
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+            if ($totalAmortizaciones === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="5">No existen amortizaciones registradas.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $content = $mpdf->Output('Cuotas_Compra.pdf', 'S');
+
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="Cuotas_Compra.pdf"',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en pdfPagoCompra: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de cuotas de compra'], 500);
+        }
     }
     public function pdfProductoMinimo(Request $request){
 
@@ -4204,67 +3894,96 @@ class ReporteController extends BitacoraController
     }
 
     public function pdfVentaClienteCredito(Request $request){
+        try {
+            $fecha_inicio = $request->fecha_inicio;
+            $fecha_fin = $request->fecha_fin;
 
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin; 
-        //dd($id_cliente);
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
+            $base = DB::table('venta')
+                ->join('pago', 'pago.id_venta', '=', 'venta.id')
+                ->join('cliente', 'venta.id_cliente', '=', 'cliente.id')
+                ->join('c_x_cobrar', 'c_x_cobrar.id_pago', '=', 'pago.id')
+                ->leftJoin('forma_pago', 'c_x_cobrar.id_forma_pago', '=', 'forma_pago.id')
+                ->where('c_x_cobrar.amortizacion', '>', 0)
+                ->whereDate('c_x_cobrar.fecha', '>=', $fecha_inicio)
+                ->whereDate('c_x_cobrar.fecha', '<=', $fecha_fin);
 
-        $x=DB::select("SELECT pago.id,c_x_cobrar.fecha,cliente.nombre as cliente,c_x_cobrar.amortizacion as total,users.name as usuario,forma_pago.nombre as forma
-        FROM venta  INNER JOIN pago
-        ON pago.id_venta=venta.id 
-        INNER JOIN cliente 
-        ON venta.id_cliente=cliente.id 
-        INNER JOIN c_x_cobrar 
-        ON c_x_cobrar.id_pago=pago.id 
-        LEFT JOIN users
-        ON c_x_cobrar.id_usuario=users.id 
-        LEFT JOIN forma_pago
-        ON c_x_cobrar.id_forma_pago=forma_pago.id 
-        WHERE c_x_cobrar.amortizacion>0 
-        and c_x_cobrar.fecha>='$fecha_inicio' AND c_x_cobrar.fecha<='$fecha_fin'
-        ORDER BY c_x_cobrar.id");
-        $obj = json_decode(json_encode($x), true);
+            $totales = (clone $base)->selectRaw('SUM(c_x_cobrar.amortizacion) as totalGeneral')->first();
+            $totalGeneral = (float) ($totales->totalGeneral ?? 0);
+            $totalCount = (clone $base)->count();
 
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
+            $title = 'LISTADO DE PAGO AL CRÉDITO';
 
-        $title='LISTADO DE PAGO AL CREDITO';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
+            ]);
 
-        //dd($nombre_empresa);
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
-        $detalles=$obj;
-        //dd($detalles);
-        $total_general = 0;
-        foreach($detalles as $det)
-        {
-            $total_general=$total_general+$det['total'];
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Cuentas por cobrar',
+                'documentLabel' => 'Pago a crédito',
+                'sectionTitle' => 'Amortizaciones de clientes',
+                'description' => 'Pagos al crédito realizados por clientes en el período seleccionado.',
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Pagos',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => 'Pago a crédito de ventas',
+            ];
+
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
+
+            $summaryItems = [
+                ['label' => 'Total general', 'value' => 'Bs ' . number_format($totalGeneral, 2, ',', '.')],
+            ];
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-summary-cards', ['items' => $summaryItems])->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:18%">Fecha</th><th style="width:36%">Cliente</th>'
+                . '<th style="width:24%">Forma de pago</th><th style="width:22%">Monto</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            (clone $base)
+                ->select('c_x_cobrar.fecha', 'cliente.nombre as cliente', 'c_x_cobrar.amortizacion as total', 'forma_pago.nombre as forma')
+                ->orderBy('c_x_cobrar.id')
+                ->chunk(300, function ($rows) use ($mpdf) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $html .= '<tr>'
+                            . '<td>' . e($row->fecha) . '</td>'
+                            . '<td class="is-strong">' . e($row->cliente) . '</td>'
+                            . '<td>' . e($row->forma ?: '—') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->total, 2, ',', '.') . '</td>'
+                            . '</tr>';
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="4">No existen pagos al crédito para el período seleccionado.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $content = $mpdf->Output('Pago_Credito_Venta.pdf', 'S');
+
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="Pago_Credito_Venta.pdf"',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en pdfVentaClienteCredito: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de pago a crédito'], 500);
         }
-
-        $cont=Venta::count();
-        $pdf = \PDF::loadView('pdf.reportes.venta.venta_credito', [
-
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            'detalles'=>$detalles,
-            'total_general'=>$total_general,
-            
-        ]);
-        //return $pdf->stream('Ventas.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Venta.pdf');
-
     }
 
     public function pdfVentaClienteCreditoUsuario(Request $request){
@@ -4327,60 +4046,96 @@ class ReporteController extends BitacoraController
 
     }
     public function pdfCompraProveedorCredito(Request $request){
+        try {
+            $fecha_inicio = $request->fecha_inicio;
+            $fecha_fin = $request->fecha_fin;
 
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin; 
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-        $x=DB::select("SELECT pago_compra.id,c_x_pagar.fecha,proveedor.nombre as proveedor,c_x_pagar.amortizacion as total,forma_pago.nombre as forma
-        FROM compra INNER JOIN pago_compra
-        ON pago_compra.id_compra=compra.id  INNER JOIN proveedor
-        ON compra.id_proveedor=proveedor.id INNER JOIN c_x_pagar
-        ON c_x_pagar.id_pago=pago_compra.id LEFT JOIN forma_pago
-        ON c_x_pagar.id_forma_pago=forma_pago.id
-        WHERE c_x_pagar.amortizacion>0 
-        and c_x_pagar.fecha>='$fecha_inicio' AND c_x_pagar.fecha<='$fecha_fin'
-        ORDER BY c_x_pagar.id");
-        $obj = json_decode(json_encode($x), true);
+            $base = DB::table('compra')
+                ->join('pago_compra', 'pago_compra.id_compra', '=', 'compra.id')
+                ->join('proveedor', 'compra.id_proveedor', '=', 'proveedor.id')
+                ->join('c_x_pagar', 'c_x_pagar.id_pago', '=', 'pago_compra.id')
+                ->leftJoin('forma_pago', 'c_x_pagar.id_forma_pago', '=', 'forma_pago.id')
+                ->where('c_x_pagar.amortizacion', '>', 0)
+                ->whereDate('c_x_pagar.fecha', '>=', $fecha_inicio)
+                ->whereDate('c_x_pagar.fecha', '<=', $fecha_fin);
 
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
+            $totales = (clone $base)->selectRaw('SUM(c_x_pagar.amortizacion) as totalGeneral')->first();
+            $totalGeneral = (float) ($totales->totalGeneral ?? 0);
+            $totalCount = (clone $base)->count();
 
-        $title='LISTADO DE PAGO AL CREDITO COMPRA';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
+            $title = 'LISTADO DE PAGO AL CRÉDITO COMPRA';
 
-        $detalles=$obj;
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
+            ]);
 
-        $total_general = 0;
-        foreach($detalles as $det)
-        {
-            $total_general=$total_general+$det['total'];
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Cuentas por pagar',
+                'documentLabel' => 'Pago a crédito',
+                'sectionTitle' => 'Amortizaciones a proveedores',
+                'description' => 'Pagos al crédito realizados a proveedores en el período seleccionado.',
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Pagos',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => 'Pago a crédito de compras',
+            ];
+
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
+
+            $summaryItems = [
+                ['label' => 'Total general', 'value' => 'Bs ' . number_format($totalGeneral, 2, ',', '.')],
+            ];
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-summary-cards', ['items' => $summaryItems])->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:18%">Fecha</th><th style="width:36%">Proveedor</th>'
+                . '<th style="width:24%">Forma de pago</th><th style="width:22%">Monto</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            (clone $base)
+                ->select('c_x_pagar.fecha', 'proveedor.nombre as proveedor', 'c_x_pagar.amortizacion as total', 'forma_pago.nombre as forma')
+                ->orderBy('c_x_pagar.id')
+                ->chunk(300, function ($rows) use ($mpdf) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $html .= '<tr>'
+                            . '<td>' . e($row->fecha) . '</td>'
+                            . '<td class="is-strong">' . e($row->proveedor) . '</td>'
+                            . '<td>' . e($row->forma ?: '—') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->total, 2, ',', '.') . '</td>'
+                            . '</tr>';
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="4">No existen pagos al crédito para el período seleccionado.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $content = $mpdf->Output('Pago_Credito_Compra.pdf', 'S');
+
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="Pago_Credito_Compra.pdf"',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en pdfCompraProveedorCredito: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de pago a crédito'], 500);
         }
-
-        $cont=Venta::count();
-        $pdf = \PDF::loadView('pdf.reportes.compra.compra_credito', [
-
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            'detalles'=>$detalles,
-            'total_general'=>$total_general,
-            
-        ]);
-        //return $pdf->stream('Ventas.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Venta.pdf');
-
     }
     //Cantidad Venta
     public function pdfHistorialProductoUsuario(Request $request){

@@ -1,0 +1,11 @@
+/* El scroll pertenece al menú completo. Los submenús no deben crear áreas de
+   desplazamiento anidadas porque dificultan llegar a los accesos inferiores. */
+#sidebar .sidebar-nav {
+    min-height: 0;
+    overscroll-behavior: contain;
+}
+
+#sidebar .nav-group-items {
+    max-height: none;
+    overflow: visible;
+}

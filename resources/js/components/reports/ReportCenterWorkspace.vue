@@ -25,20 +25,20 @@
                     label="Reportes disponibles"
                     :value="reportCount"
                     hint="Documentos configurados"
-                    icon="img/menu/reportes.png"
+                    icon="/icons/chart-line.svg"
                 />
                 <app-metric-card
                     label="Categorías"
                     :value="allSections.length + 3"
                     hint="Información organizada por área"
-                    icon="img/menu/configuracion.png"
+                    icon="/icons/storage.svg"
                     tone="cyan"
                 />
                 <app-metric-card
                     label="Período seleccionado"
                     :value="rangeDays"
                     hint="Días incluidos en la consulta"
-                    icon="img/menu/historial.png"
+                    icon="/icons/calendar.svg"
                     tone="neutral"
                 />
             </section>
@@ -50,19 +50,10 @@
                     subtitle="Estas fechas se aplican a compras, ventas, caja y reportes personalizados."
                 >
                     <div class="report-center__filters">
-                        <label>
-                            <span>Desde</span>
-                            <input v-model="dates.fecha_inicio" type="date">
-                        </label>
+                        <app-input v-model="dates.fecha_inicio" type="date" label="Desde" />
                         <span class="report-center__range-line"></span>
-                        <label>
-                            <span>Hasta</span>
-                            <input v-model="dates.fecha_fin" type="date">
-                        </label>
-                        <label class="report-center__search">
-                            <span>Buscar reporte</span>
-                            <input v-model.trim="reportSearch" type="search" placeholder="Ej. ventas, inventario, cuotas…">
-                        </label>
+                        <app-input v-model="dates.fecha_fin" type="date" label="Hasta" />
+                        <app-input v-model.trim="reportSearch" class="report-center__search" type="search" label="Buscar reporte" placeholder="Ej. ventas, inventario, cuotas…" />
                     </div>
                 </app-data-panel>
 
@@ -92,7 +83,7 @@
                     <div class="report-center__segments">
                         <article v-for="segment in segments" :key="segment.type">
                             <header>
-                                <span><i :class="segment.icon"></i></span>
+                                <span><img :src="segment.icon" alt="" aria-hidden="true"></span>
                                 <div>
                                     <strong>{{ segment.title }}</strong>
                                     <small>{{ selectedName(segment.type) || 'Ninguna selección' }}</small>
@@ -108,9 +99,9 @@
                                     type="button"
                                     @click="runReport(report)"
                                 >
-                                    <i :class="report.icon"></i>
+                                    <img :src="report.icon" alt="" aria-hidden="true">
                                     <span>{{ report.label }}</span>
-                                    <i class="fas fa-file-pdf"></i>
+                                    <img src="/icons/file.svg" alt="PDF" aria-hidden="true">
                                 </button>
                             </div>
                         </article>
@@ -126,21 +117,15 @@
                     flush
                 >
                     <div class="report-center__cash-filters">
-                        <label>
-                            <span>Desde</span>
-                            <input v-model="cashFilters.fecha_inicio" type="date">
-                        </label>
-                        <label>
-                            <span>Hasta</span>
-                            <input v-model="cashFilters.fecha_fin" type="date">
-                        </label>
-                        <label>
-                            <span>Usuario</span>
-                            <select v-model="cashFilters.id_usuario">
-                                <option value="">Todos los usuarios</option>
-                                <option v-for="user in users" :key="user.id" :value="user.id">{{ user.nombre }}</option>
-                            </select>
-                        </label>
+                        <app-input v-model="cashFilters.fecha_inicio" type="date" label="Desde" />
+                        <app-input v-model="cashFilters.fecha_fin" type="date" label="Hasta" />
+                        <app-select
+                            v-model="cashFilters.id_usuario"
+                            :options="userOptions"
+                            label="Usuario"
+                            placeholder="Todos los usuarios"
+                            :disable-placeholder="false"
+                        />
                         <app-button :loading="cashLoading" @click="$emit('load-cash')">Aplicar filtros</app-button>
                     </div>
                     <app-table
@@ -202,7 +187,7 @@
                             <strong>{{ item.nombre }}</strong>
                             <small v-if="item.matricula">Matrícula: {{ item.matricula }}</small>
                         </div>
-                        <i class="fas fa-check"></i>
+                        <img class="report-center__check" src="/icons/check.svg" alt="Seleccionado">
                     </button>
                     <p v-if="!filteredSelectorItems.length">No existen coincidencias.</p>
                 </div>
@@ -274,9 +259,9 @@ export default {
         },
         segments() {
             return [
-                { type: 'user', title: 'Por usuario', icon: 'fas fa-user-shield', reports: this.userReports },
-                { type: 'client', title: 'Por cliente', icon: 'fas fa-user-tag', reports: this.clientReports },
-                { type: 'laboratory', title: 'Por laboratorio', icon: 'fas fa-flask', reports: this.laboratoryReports },
+                { type: 'user', title: 'Por usuario', icon: '/icons/people.svg', reports: this.userReports },
+                { type: 'client', title: 'Por cliente', icon: '/icons/people.svg', reports: this.clientReports },
+                { type: 'laboratory', title: 'Por laboratorio', icon: '/icons/storage.svg', reports: this.laboratoryReports },
             ];
         },
         selectorItems() {
@@ -314,6 +299,9 @@ export default {
                 { key: 'actions', label: 'Reportes disponibles' },
             ];
         },
+        userOptions() {
+            return this.users.map(user => ({ value: user.id, label: user.nombre }));
+        },
         cashReportTypes() {
             return [
                 { value: 'efectivo', label: 'Efectivo' },
@@ -345,16 +333,16 @@ export default {
         },
         sectionIcon(title) {
             const icons = {
-                Productos: 'fas fa-boxes',
-                Datos: 'fas fa-database',
-                Compras: 'fas fa-shopping-cart',
-                Ventas: 'fas fa-chart-line',
-                'Forma de Pago Venta': 'fas fa-wallet',
+                Productos: '/icons/basket.svg',
+                Datos: '/icons/storage.svg',
+                Compras: '/icons/truck.svg',
+                Ventas: '/icons/cart.svg',
+                'Forma de Pago Venta': '/icons/money.svg',
             };
-            return icons[title] || 'fas fa-file-alt';
+            return icons[title] || '/icons/chart-line.svg';
         },
         runReport(report) {
-            if (report && typeof report.method === 'function') report.method();
+            if (report) this.$emit('run-report', report);
         },
         selectedName(type) {
             if (type === 'user') return this.selectedUser && this.selectedUser.nombre;
@@ -516,6 +504,7 @@ export default {
     color: #1b8c5b;
     background: #dcf2e6;
 }
+.report-center__segments header > span img { width: 18px; height: 18px; opacity: 0.8; }
 
 .report-center__segments header div { display: grid; min-width: 0; }
 .report-center__segments header strong { color: #17362b; font-size: 0.78rem; }
@@ -537,8 +526,8 @@ export default {
 }
 
 .report-center__segments article > div button:hover { background: #eff8f3; }
-.report-center__segments article > div button > i:first-child { color: #19935e; }
-.report-center__segments article > div button > i:last-child { color: #cf5962; }
+.report-center__segments article > div button > img:first-child { width: 16px; height: 16px; opacity: 0.78; }
+.report-center__segments article > div button > img:last-child { width: 15px; height: 15px; opacity: 0.55; }
 
 .report-center__cash-filters {
     display: grid;
@@ -634,8 +623,8 @@ export default {
 .report-center__selector-list button > span { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; color: #fff; background: linear-gradient(145deg, #1f965e, #1ca3ba); font-size: 0.66rem; font-weight: 900; }
 .report-center__selector-list button div { display: grid; }
 .report-center__selector-list button small { color: #788b83; font-size: 0.66rem; }
-.report-center__selector-list button > i { visibility: hidden; color: #1b925d; }
-.report-center__selector-list button.selected > i { visibility: visible; }
+.report-center__check { visibility: hidden; width: 17px; height: 17px; }
+.report-center__selector-list button.selected .report-center__check { visibility: visible; }
 .report-center__selector-list > p { padding: 2rem; color: #778a83; text-align: center; }
 .report-center__dialog footer { display: flex; justify-content: flex-end; gap: 0.65rem; padding: 0.9rem 1rem; border-top: 1px solid #e2ece7; }
 

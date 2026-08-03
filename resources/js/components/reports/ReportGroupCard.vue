@@ -1,7 +1,7 @@
 <template>
     <article class="report-group">
         <header>
-            <span class="report-group__icon"><i :class="icon"></i></span>
+            <span class="report-group__icon"><img :src="icon" alt="" aria-hidden="true"></span>
             <div>
                 <h3>{{ title }}</h3>
                 <p>{{ description }}</p>
@@ -16,10 +16,10 @@
                 class="report-group__item"
                 @click="$emit('run', report)"
             >
-                <span><i :class="report.icon"></i></span>
+                <span><img :src="report.icon" alt="" aria-hidden="true"></span>
                 <strong>{{ report.label }}</strong>
                 <small>{{ reportHint(report) }}</small>
-                <i class="fas fa-arrow-right report-group__arrow"></i>
+                <img class="report-group__arrow" src="/icons/arrow-right.svg" alt="" aria-hidden="true">
             </button>
         </div>
     </article>
@@ -31,13 +31,12 @@ export default {
     props: {
         title: { type: String, required: true },
         description: { type: String, default: 'Genera y consulta la información del módulo.' },
-        icon: { type: String, default: 'fas fa-chart-bar' },
+        icon: { type: String, default: '/icons/chart-line.svg' },
         reports: { type: Array, default: () => [] },
     },
     methods: {
         reportHint(report) {
-            const text = `${report.label} ${report.icon || ''}`.toLowerCase();
-            return text.includes('excel') || text.includes('boxes') || text.includes('warehouse')
+            return report.mode === 'excel'
                 ? 'Archivo Excel'
                 : 'Documento PDF';
         },
@@ -73,6 +72,7 @@ export default {
     color: #fff;
     background: linear-gradient(145deg, #1f965e, #1ca3ba);
 }
+.report-group__icon img { width: 20px; height: 20px; filter: brightness(0) invert(1); }
 
 .report-group h3 {
     margin: 0;
@@ -130,8 +130,9 @@ export default {
     color: #19865a;
     background: #e5f5ed;
 }
+.report-group__item > span img { width: 17px; height: 17px; opacity: 0.82; }
 
 .report-group__item strong { font-size: 0.77rem; }
 .report-group__item small { color: #81918b; font-size: 0.64rem; }
-.report-group__arrow { color: #36a6bd; font-size: 0.65rem; }
+.report-group__arrow { width: 13px; height: 13px; opacity: 0.62; }
 </style>

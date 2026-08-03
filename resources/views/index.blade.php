@@ -26,6 +26,7 @@
     <meta name="msapplication-TileImage" content="{{ asset('img/favicon/ms-icon-144x144.png') }}">
     <meta name="theme-color" content="#1f8a4c">
     <link href="{{ asset('css/plantilla.css') }}" rel="stylesheet">
+    <link href="{{ asset('css/fontawesome.min.css') }}" rel="stylesheet">
     <link href="{{ asset('css/farmaclick-theme.css') }}" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"
     integrity="sha512-pumBsjNRGGqkPzKHndZMaAG+bir374sORyzM3uulLV14lN5LyykqNk8eEeUlUkB3U0M4FApyaHraT65ihJhDpQ=="

@@ -1,3 +1,4 @@
+@include('pdf.reportes.partials.system-theme')
 <!DOCTYPE html>
 <html lang="en">
 <head>

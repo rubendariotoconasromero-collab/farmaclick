@@ -9,6 +9,8 @@ use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithDrawings;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use App\Exports\Concerns\StylesFarmaClickReport;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use App\Models\Tienda;
 use App\Models\MiEmpresa;
@@ -16,8 +18,9 @@ use App\Models\Articulo;
 use DateTime;
 use DB;
 
-class ProductoStockExport implements FromView, ShouldAutoSize, WithTitle, WithColumnFormatting
+class ProductoStockExport implements FromView, ShouldAutoSize, WithTitle, WithColumnFormatting, WithEvents
 {
+    use StylesFarmaClickReport;
     private $consulta;
     public function __construct(Request $consulta)
     {
@@ -61,7 +64,12 @@ class ProductoStockExport implements FromView, ShouldAutoSize, WithTitle, WithCo
     public function title(): string
     {
         return 'LISTA DE PRODUCTOS STOCK MINIMO';
-    }  
+    }
+
+    protected function reportHeaderRow(): int
+    {
+        return 4;
+    }
 
     // Formato de celdas específicas
     public function columnFormats(): array

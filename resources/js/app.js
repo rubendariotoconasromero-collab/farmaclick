@@ -170,10 +170,12 @@ const app = new Vue({
     el: '#app',
     router,
     data : {
-        menu : 0
+        menu : 0,
+        sidebarNavigationHandler: null,
     },
     mounted() {
         this.syncRouteState(this.$route);
+        this.setupSidebarNavigation();
     },
     watch: {
         $route: {
@@ -184,6 +186,62 @@ const app = new Vue({
         },
     },
     methods: {
+        setupSidebarNavigation() {
+            this.$nextTick(() => {
+                const sidebar = this.$el.querySelector('#sidebar');
+
+                if (!sidebar || this.sidebarNavigationHandler) {
+                    return;
+                }
+
+                this.sidebarNavigationHandler = event => {
+                    const toggle = event.target.closest('.nav-group-toggle');
+
+                    if (!toggle || !sidebar.contains(toggle)) {
+                        return;
+                    }
+
+                    const group = toggle.closest('.nav-group');
+                    const willOpen = group && !group.classList.contains('show');
+
+                    if (!willOpen) {
+                        return;
+                    }
+
+                    sidebar.querySelectorAll('.nav-group.show').forEach(openGroup => {
+                        if (openGroup === group) return;
+                        openGroup.classList.remove('show');
+                        openGroup.setAttribute('aria-expanded', 'false');
+                    });
+
+                    window.setTimeout(() => this.revealSidebarGroup(group), 220);
+                };
+
+                sidebar.addEventListener('click', this.sidebarNavigationHandler, true);
+            });
+        },
+        revealSidebarGroup(group) {
+            if (!group) return;
+
+            const sidebar = this.$el.querySelector('#sidebar');
+            const navigation = sidebar && sidebar.querySelector('.sidebar-nav');
+            const scroller = navigation && (
+                navigation.querySelector('.simplebar-content-wrapper') || navigation
+            );
+
+            if (!scroller) return;
+
+            const groupRect = group.getBoundingClientRect();
+            const scrollerRect = scroller.getBoundingClientRect();
+            const topLimit = scrollerRect.top + 8;
+            const bottomLimit = scrollerRect.bottom - 12;
+
+            if (groupRect.bottom > bottomLimit) {
+                scroller.scrollBy({ top: groupRect.bottom - bottomLimit, behavior: 'smooth' });
+            } else if (groupRect.top < topLimit) {
+                scroller.scrollBy({ top: groupRect.top - topLimit, behavior: 'smooth' });
+            }
+        },
         syncRouteState(route) {
             this.menu = route.meta && Number.isInteger(route.meta.menu)
                 ? route.meta.menu
@@ -231,8 +289,15 @@ const app = new Vue({
                 if (parentGroup) {
                     parentGroup.classList.add('show');
                     parentGroup.setAttribute('aria-expanded', 'true');
+                    window.setTimeout(() => this.revealSidebarGroup(parentGroup), 220);
                 }
             });
         },
-    }
+    },
+    beforeDestroy() {
+        const sidebar = this.$el.querySelector('#sidebar');
+        if (sidebar && this.sidebarNavigationHandler) {
+            sidebar.removeEventListener('click', this.sidebarNavigationHandler, true);
+        }
+    },
 });

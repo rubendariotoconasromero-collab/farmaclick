@@ -1,3 +1,4 @@
+@include('pdf.reportes.partials.system-theme')
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -96,21 +97,22 @@
 </head>
 <body>
 
-<!-- Encabezado -->
-<div class="header">
-    <div class="logo">
-        @if($foto_empresa)
-            <img src="{{ public_path('img/logo/' . $foto_empresa) }}" alt="Logo">
-        @else
-            <div class="logo-placeholder">LOGO</div>
-        @endif
-    </div>
-    {{-- <div class="info-empresa">
-        <h1>{{ $title }}</h1>
-        <p>{{ $nombre_empresa }}</p>
-        <p>{{ $direccion_empresa }} | Tel: {{ $telefono_empresa }}</p>
-    </div> --}}
-</div>
+<header>
+    <table class="header-table">
+        <tr>
+            <td style="width: 22%; text-align: left;">
+                @if($logo_sistema)
+                    <img src="{{ public_path('img/logo/' . $logo_sistema) }}" alt="FarmaClick">
+                @endif
+            </td>
+            <td class="header-title">{{ $title }}</td>
+            <td style="width: 22%; text-align: right;">
+                <strong>{{ $nombre_empresa }}</strong><br>
+                <small>{{ $direccion_empresa }}<br>{{ $telefono_empresa }}</small>
+            </td>
+        </tr>
+    </table>
+</header>
 
 <!-- Resumen -->
 <div class="resumen">
@@ -124,6 +126,7 @@
             <tr>
                 <th>N°</th>
                 <th>Nombre del Cliente</th>
+                <th>Documento</th>
                 <th>Teléfono</th>
                 <th>Dirección</th>
             </tr>
@@ -133,6 +136,7 @@
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
                     <td class="text-left">{{ $cliente->cliente ?? '—' }}</td>
+                    <td class="text-center">{{ $cliente->matricula ?? '—' }}</td>
                     <td class="text-left">{{ $cliente->telefono ?? '—' }}</td>
                     <td class="text-left">{{ $cliente->direccion ?? '—' }}</td>
                 </tr>
@@ -142,7 +146,7 @@
 @else
     <table>
         <tr>
-            <td class="no-data" colspan="4">
+            <td class="no-data" colspan="5">
                 No hay clientes registrados.
             </td>
         </tr>
