@@ -35,6 +35,19 @@ use Mpdf\Mpdf;
 
 class ReporteController extends BitacoraController
 {
+    /**
+     * mPDF mantiene todo el documento renderizado en memoria hasta el Output() final,
+     * sin importar cómo se lean los datos de la BD (chunk() solo acota la consulta).
+     * En reportes muy extensos esto agota el límite por defecto de PHP; se sube a un
+     * valor generoso pero razonable (no los ini_set de cientos de GB que había antes)
+     * y se amplía el tiempo de ejecución para evitar timeouts en reportes lentos.
+     */
+    private function prepararEntornoReporte(): void
+    {
+        ini_set('memory_limit', '2048M');
+        set_time_limit(180);
+    }
+
     private function aplicarTemaReporte(Mpdf $mpdf): void
     {
         $theme = view('pdf.reportes.partials.system-theme')->render();
@@ -219,6 +232,7 @@ class ReporteController extends BitacoraController
 
     private function buildGastoReport(Request $request, bool $soloEfectivo)
     {
+        $this->prepararEntornoReporte();
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
@@ -357,6 +371,7 @@ class ReporteController extends BitacoraController
         return $pdf->setPaper('letter', 'portrait')->stream('Proveedor.pdf');
     }
     public function pdfCompraGeneral(Request $request){
+        $this->prepararEntornoReporte();
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
@@ -471,6 +486,7 @@ class ReporteController extends BitacoraController
 
     private function buildCompraDetalladaReport(Request $request, bool $soloAnuladas)
     {
+        $this->prepararEntornoReporte();
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
@@ -496,6 +512,13 @@ class ReporteController extends BitacoraController
             ')->first();
 
             $totalCount = (clone $base)->count();
+
+            if ($totalCount > 4000) {
+                return response()->json([
+                    'error' => 'El período seleccionado es demasiado amplio (' . number_format($totalCount) . ' compras). Reduzca el rango de fechas e intente nuevamente.',
+                ], 422);
+            }
+
             $title = $soloAnuladas ? 'LISTADO DE COMPRAS DETALLADA ANULADAS' : 'LISTADO DE COMPRAS DETALLADA';
 
             $mpdf = new Mpdf([
@@ -607,64 +630,27 @@ class ReporteController extends BitacoraController
         return $this->buildCompraDetalladaReport($request, true);
     }
     
-    private function pdfVentaGeneralBlade(Request $request)
+    public function pdfVentaGeneral(Request $request)
     {
-        $validated = $request->validate([
+        return $this->buildVentaGeneralReport($request);
+    }
+
+    public function pdfVentaGeneralUsuario(Request $request)
+    {
+        $request->validate([
             'fecha_inicio' => 'required|date',
             'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
             'tipo_venta' => 'required|string',
-            'id_tienda' => 'required|exists:tienda,id',
+            'id_tienda' => 'required|integer|exists:tienda,id',
+            'id_usuario' => 'required|integer|exists:users,id',
         ]);
 
-        $baseQuery = DB::table('venta as v')
-            ->where('v.estado', '!=', 'Anulado')
-            ->where('v.tipo_venta', $validated['tipo_venta'])
-            ->whereBetween('v.fecha', [$validated['fecha_inicio'], $validated['fecha_fin']])
-            ->where('v.id_tienda', $validated['id_tienda']);
-
-        $totales = (clone $baseQuery)
-            ->selectRaw('SUM(v.total) as totalV')
-            ->selectRaw('SUM(CASE WHEN v.id_tipo_pago = 1 THEN v.total ELSE 0 END) as totalC')
-            ->selectRaw('SUM(CASE WHEN v.id_tipo_pago = 2 THEN v.total ELSE 0 END) as totalCr')
-            ->selectRaw('SUM(v.total_efectivo) as totalEf')
-            ->selectRaw('SUM(v.total_deposito) as totalDep')
-            ->get();
-
-        $detalles = (clone $baseQuery)
-            ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-            ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-            ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-            ->join('users as u', 'v.id_usuario', '=', 'u.id')
-            ->select(
-                'v.sub_total', 'v.descuento', 'v.total',
-                'c.nombre as cliente', 't.nombre as tipo_pago',
-                'f.nombre as forma_pago', 'u.name as usuario'
-            )
-            ->orderBy('v.fecha')
-            ->orderBy('v.id')
-            ->get();
-
-        $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
-        abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
-
-        $pdf = \PDF::loadView('pdf.reportes.venta.venta_general', [
-            'title' => 'LISTADO DE VENTAS',
-            'nombre_empresa' => $empresa->nombre,
-            'direccion_empresa' => $empresa->direccion,
-            'telefono_empresa' => $empresa->telefono,
-            'foto_empresa' => $empresa->foto,
-            'logo_sistema' => $empresa->logo_sistema,
-            'fecha_inicio' => $validated['fecha_inicio'],
-            'fecha_fin' => $validated['fecha_fin'],
-            'totales' => $totales,
-            'detalles' => $detalles,
-        ]);
-
-        return $pdf->setPaper('letter', 'landscape')->stream('Venta_General.pdf');
+        return $this->buildVentaGeneralReport($request, (int) $request->id_usuario);
     }
 
-    public function pdfVentaGeneral(Request $request)
+    private function buildVentaGeneralReport(Request $request, ?int $idUsuario = null)
     {
+        $this->prepararEntornoReporte();
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
@@ -684,6 +670,10 @@ class ReporteController extends BitacoraController
                 ->where('v.id_tienda', $id_tienda)
                 ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin]);
 
+            if ($idUsuario !== null) {
+                $base->where('v.id_usuario', $idUsuario);
+            }
+
             $totales = (clone $base)->selectRaw('
                 SUM(v.total) as totalV,
                 SUM(CASE WHEN v.id_tipo_pago = 1 THEN v.total ELSE 0 END) as totalCo,
@@ -694,6 +684,10 @@ class ReporteController extends BitacoraController
 
             $totalCount = (clone $base)->count();
             $title = 'LISTADO DE VENTAS';
+
+            $usuarioNombre = $idUsuario !== null
+                ? optional(DB::table('users')->find($idUsuario))->name
+                : null;
 
             $mpdf = new Mpdf([
                 'mode' => 'utf-8', 'format' => 'Letter',
@@ -709,9 +703,11 @@ class ReporteController extends BitacoraController
                 'telefono_empresa' => $empresa->telefono,
                 'logo_sistema' => $empresa->logo_sistema,
                 'eyebrow' => 'Movimientos de venta',
-                'documentLabel' => 'Reporte de ventas',
+                'documentLabel' => $usuarioNombre ? 'Usuario: ' . $usuarioNombre : 'Reporte de ventas',
                 'sectionTitle' => 'Ventas registradas',
-                'description' => 'Listado general de las ventas registradas en el período seleccionado.',
+                'description' => $usuarioNombre
+                    ? 'Listado de ventas registradas por ' . $usuarioNombre . ' en el período seleccionado.'
+                    : 'Listado general de las ventas registradas en el período seleccionado.',
                 'recordCount' => $totalCount,
                 'recordLabel' => 'Ventas',
                 'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
@@ -782,13 +778,21 @@ class ReporteController extends BitacoraController
         return $this->buildVentaDetalladaReport($request, 'detallada');
     }
 
+    public function pdfVentaDetalladaUsuario(Request $request)
+    {
+        $request->validate(['id_usuario' => 'required|integer|exists:users,id']);
+        return $this->buildVentaDetalladaReport($request, 'detallada', (int) $request->id_usuario);
+    }
+
     /**
      * Construye los reportes de venta con detalle de productos/paquetes por venta
      * (Detallada, Anuladas y Devolución comparten exactamente la misma estructura,
-     * solo cambia el filtro de estado y los textos).
+     * solo cambia el filtro de estado y los textos). $idUsuario, cuando se indica,
+     * acota el listado a las ventas registradas por ese usuario (reportes "por usuario").
      */
-    private function buildVentaDetalladaReport(Request $request, string $variant)
+    private function buildVentaDetalladaReport(Request $request, string $variant, ?int $idUsuario = null, ?int $idCliente = null)
     {
+        $this->prepararEntornoReporte();
         try {
             $request->validate([
                 'fecha_inicio' => 'required|date',
@@ -805,6 +809,14 @@ class ReporteController extends BitacoraController
             $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
             abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
+            $usuarioNombre = $idUsuario !== null
+                ? optional(DB::table('users')->find($idUsuario))->name
+                : null;
+
+            $clienteNombre = $idCliente !== null
+                ? optional(DB::table('cliente')->find($idCliente))->nombre
+                : null;
+
             $base = DB::table('venta as v')
                 ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
                 ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
@@ -813,6 +825,14 @@ class ReporteController extends BitacoraController
                 ->where('v.tipo_venta', $tipo_venta)
                 ->where('v.id_tienda', $id_tienda)
                 ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin]);
+
+            if ($idUsuario !== null) {
+                $base->where('v.id_usuario', $idUsuario);
+            }
+
+            if ($idCliente !== null) {
+                $base->where('v.id_cliente', $idCliente);
+            }
 
             if ($variant === 'anuladas') {
                 $base->where('v.estado', 'Anulado');
@@ -831,6 +851,12 @@ class ReporteController extends BitacoraController
             ')->first();
 
             $totalCount = (clone $base)->count();
+
+            if ($totalCount > 4000) {
+                return response()->json([
+                    'error' => 'El período seleccionado es demasiado amplio (' . number_format($totalCount) . ' ventas). Reduzca el rango de fechas e intente nuevamente.',
+                ], 422);
+            }
 
             $textos = [
                 'detallada' => [
@@ -876,9 +902,13 @@ class ReporteController extends BitacoraController
                 'telefono_empresa' => $empresa->telefono,
                 'logo_sistema' => $empresa->logo_sistema,
                 'eyebrow' => 'Movimientos de venta',
-                'documentLabel' => $textos['documentLabel'],
+                'documentLabel' => $usuarioNombre
+                    ? 'Usuario: ' . $usuarioNombre
+                    : ($clienteNombre ? 'Cliente: ' . $clienteNombre : $textos['documentLabel']),
                 'sectionTitle' => $textos['sectionTitle'],
-                'description' => $textos['description'],
+                'description' => $usuarioNombre
+                    ? $textos['description'] . ' Filtrado por el usuario ' . $usuarioNombre . '.'
+                    : ($clienteNombre ? $textos['description'] . ' Filtrado por el cliente ' . $clienteNombre . '.' : $textos['description']),
                 'recordCount' => $totalCount,
                 'recordLabel' => 'Ventas',
                 'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
@@ -970,74 +1000,123 @@ class ReporteController extends BitacoraController
         }
     }
 
-    public function pdfProductoLaboratorio(Request $request){
+    public function pdfProductoLaboratorio(Request $request)
+    {
+        $this->prepararEntornoReporte();
+        try {
+            $request->validate(['id_proveedor' => 'required|integer|exists:proveedor,id']);
+            $idProveedor = (int) $request->id_proveedor;
 
- 
-        $id_proveedor = $request->id_proveedor;
-        //dd($id_proveedor);
-        $proveedor_listado= Proveedor::select('nombre')
-        ->where('id','=',$id_proveedor)
-        ->get();
+            $proveedor = DB::table('proveedor')->where('id', $idProveedor)->first(['nombre']);
+            abort_if(!$proveedor, 404, 'Laboratorio no encontrado.');
 
-        $x=DB::select("SELECT articulo.id,articulo.id as id_producto,articulo.nombre_comercial as producto, tienda_articulo.stock,unidad_medida.nombre as presentacion
-        FROM articulo INNER JOIN tienda_articulo
-        ON tienda_articulo.id_articulo=articulo.id
-        INNER JOIN unidad_medida
-        ON articulo.id_unidad = unidad_medida.id
-        WHERE tienda_articulo.stock>0 AND articulo.id_proveedor= '$id_proveedor' AND articulo.estado=1 ORDER BY articulo.nombre_comercial");
-        $obj = json_decode(json_encode($x), true);
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-       //dd($obj);
-        $y=DB::select("SELECT articulo.id as id_producto,lote.lote,lote.cantidad,lote.fecha_vecimiento
-        FROM lote INNER JOIN tienda_articulo
-        ON lote.id_producto=tienda_articulo.id
-        INNER JOIN articulo
-        ON tienda_articulo.id_articulo=articulo.id
-        WHERE  lote.estado!=0 and lote.cantidad> 0");
-        $obj2 = json_decode(json_encode($y), true);
-       // dd($obj2);
-   
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
+            $base = DB::table('articulo as a')
+                ->join('tienda_articulo as ta', 'ta.id_articulo', '=', 'a.id')
+                ->join('unidad_medida as um', 'a.id_unidad', '=', 'um.id')
+                ->where('ta.stock', '>', 0)
+                ->where('a.id_proveedor', $idProveedor)
+                ->where('a.estado', 1);
 
+            $totalCount = (clone $base)->count();
 
+            if ($totalCount > 4000) {
+                return response()->json([
+                    'error' => 'El laboratorio seleccionado tiene demasiados productos (' . number_format($totalCount) . '). Reduzca el catálogo o contacte al administrador.',
+                ], 422);
+            }
 
+            $title = 'LISTADO DE PRODUCTO DETALLADO';
 
-        $title='LISTADO DE PRODUCTO DETALLADO';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
-        $proveedor=$proveedor_listado[0]->nombre;
-        //$totalC=$obj5[0]->totalC;
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
+            ]);
 
-        //dd($totalC);
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
-        $venta=$obj;
-        //dd($venta);
-        $detalles=$obj2;
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Inventario',
+                'documentLabel' => 'Laboratorio: ' . $proveedor->nombre,
+                'sectionTitle' => 'Productos y lotes',
+                'description' => 'Productos con stock disponible del laboratorio ' . $proveedor->nombre . ', con el detalle de lotes y fechas de vencimiento.',
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Productos',
+                'periodLabel' => null,
+                'footerLabel' => 'Inventario por laboratorio',
+            ];
 
-        
-        $cont=Venta::count();
-        $pdf = \PDF::loadView('pdf.reportes.producto.producto_detallada', [
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
 
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-            'proveedor'=>$proveedor,
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:46%">Producto</th><th style="width:20%">Presentación</th>'
+                . '<th style="width:16%">Stock</th><th style="width:18%">Lotes</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
 
-            'venta'=>$venta,
-            'detalles'=>$detalles,
+            (clone $base)
+                ->select('a.id', 'a.nombre_comercial as producto', 'ta.stock', 'um.nombre as presentacion')
+                ->orderBy('a.nombre_comercial')
+                ->chunk(300, function ($productos) use ($mpdf) {
+                    $ids = $productos->pluck('id')->all();
 
-        ]);
-        //return $pdf->stream('Ventas.pdf');
-        return $pdf->setPaper('letter', 'portrait')->stream('Venta.pdf');
+                    $lotesPorProducto = DB::table('lote as l')
+                        ->join('tienda_articulo as ta', 'l.id_producto', '=', 'ta.id')
+                        ->whereIn('ta.id_articulo', $ids)
+                        ->where('l.estado', '!=', 0)
+                        ->where('l.cantidad', '>', 0)
+                        ->select('ta.id_articulo', 'l.lote', 'l.cantidad', 'l.fecha_vecimiento')
+                        ->orderBy('l.fecha_vecimiento')
+                        ->get()
+                        ->groupBy('id_articulo');
 
+                    $html = '';
+                    foreach ($productos as $producto) {
+                        $html .= '<tr class="fc-group-row">'
+                            . '<td colspan="2">' . e($producto->producto) . '</td>'
+                            . '<td>' . e($producto->presentacion) . '</td>'
+                            . '<td class="is-right">Stock: ' . (float) $producto->stock . '</td>'
+                            . '</tr>';
+
+                        $lotes = $lotesPorProducto->get($producto->id, collect());
+                        if ($lotes->isEmpty()) {
+                            $html .= '<tr class="fc-subrow"><td colspan="4" class="is-muted">Sin lotes registrados.</td></tr>';
+                            continue;
+                        }
+                        foreach ($lotes as $lote) {
+                            $html .= '<tr class="fc-subrow">'
+                                . '<td colspan="2">Lote: ' . e($lote->lote) . '</td>'
+                                . '<td>Vence: ' . e($lote->fecha_vecimiento) . '</td>'
+                                . '<td class="is-right">' . (float) $lote->cantidad . '</td>'
+                                . '</tr>';
+                        }
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="4">No existen productos con stock disponible para este laboratorio.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $content = $mpdf->Output('Producto_Laboratorio.pdf', 'S');
+
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="Producto_Laboratorio.pdf"',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en pdfProductoLaboratorio: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de productos por laboratorio'], 500);
+        }
     }
     public function pdfVentaDetalladaDevolucion(Request $request){
         return $this->buildVentaDetalladaReport($request, 'devolucion');
@@ -1051,7 +1130,49 @@ class ReporteController extends BitacoraController
     
     public function pdfVentaDetalladaEfectivo(Request $request)
     {
-        ini_set('memory_limit', '200048M');
+        return $this->buildVentaFormaPagoReport($request, 'efectivo');
+    }
+
+    public function pdfVentaDetalladaEfectivoUsuario(Request $request)
+    {
+        $request->validate(['id_usuario' => 'required|integer|exists:users,id']);
+        return $this->buildVentaFormaPagoReport($request, 'efectivo', (int) $request->id_usuario);
+    }
+
+    public function pdfVentaDetalladaTransfenciaUsuario(Request $request)
+    {
+        $request->validate(['id_usuario' => 'required|integer|exists:users,id']);
+        return $this->buildVentaFormaPagoReport($request, 'transferencia', (int) $request->id_usuario);
+    }
+
+    public function pdfVentaDetalladaQrUsuario(Request $request)
+    {
+        $request->validate(['id_usuario' => 'required|integer|exists:users,id']);
+        return $this->buildVentaFormaPagoReport($request, 'qr', (int) $request->id_usuario);
+    }
+
+    public function pdfVentaDetalladaDepositoUsuario(Request $request)
+    {
+        $request->validate(['id_usuario' => 'required|integer|exists:users,id']);
+        return $this->buildVentaFormaPagoReport($request, 'deposito', (int) $request->id_usuario);
+    }
+
+    public function pdfVentaDetalladaMixtaUsuario(Request $request)
+    {
+        $request->validate(['id_usuario' => 'required|integer|exists:users,id']);
+        return $this->buildVentaFormaPagoReport($request, 'mixta', (int) $request->id_usuario);
+    }
+
+    /**
+     * Reportes de venta segmentados por forma de pago (Efectivo, Transferencia, QR,
+     * Depósito, Mixta). Comparten la misma estructura de venta + detalle de productos
+     * y paquetes agrupados; solo cambia el filtro de id_forma_pago y los textos.
+     * $idUsuario, cuando se indica, acota el listado a las ventas de ese usuario
+     * (reportes "por usuario").
+     */
+    private function buildVentaFormaPagoReport(Request $request, string $variant, ?int $idUsuario = null)
+    {
+        $this->prepararEntornoReporte();
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
@@ -1062,720 +1183,190 @@ class ReporteController extends BitacoraController
                 return response()->json(['error' => 'Parámetros requeridos faltantes'], 400);
             }
 
-            // === 1. DATOS DE LA EMPRESA ===
-            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'logo_sistema']);
-            if (!$empresa) {
-                return response()->json(['error' => 'Datos de la empresa no configurados'], 500);
-            }
+            $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
 
-            // === 2. TOTAL EN EFECTIVO ===
-            $totalVentas = DB::table('venta as v')
+            $usuarioNombre = $idUsuario !== null
+                ? optional(DB::table('users')->find($idUsuario))->name
+                : null;
+
+            $config = [
+                'efectivo' => [
+                    'id_forma_pago' => 2, 'sumField' => 'total_efectivo', 'label' => 'Efectivo',
+                    'title' => 'LISTADO DE VENTAS EFECTIVO DETALLADO', 'filename' => 'Ventas_Efectivo.pdf',
+                ],
+                'transferencia' => [
+                    'id_forma_pago' => 3, 'sumField' => 'total_deposito', 'label' => 'Transferencia',
+                    'title' => 'LISTADO DE VENTAS TRANSFERENCIA DETALLADO', 'filename' => 'Ventas_Transferencia.pdf',
+                    'extraTipoPago' => 1,
+                ],
+                'qr' => [
+                    'id_forma_pago' => 4, 'sumField' => 'total_deposito', 'label' => 'QR',
+                    'title' => 'LISTADO DE VENTAS QR DETALLADO', 'filename' => 'Ventas_QR.pdf',
+                ],
+                'deposito' => [
+                    'id_forma_pago' => 5, 'sumField' => 'total_deposito', 'label' => 'Depósito',
+                    'title' => 'LISTADO DE VENTAS DEPÓSITO DETALLADO', 'filename' => 'Ventas_Deposito.pdf',
+                ],
+                'mixta' => [
+                    'id_forma_pago' => 6, 'sumField' => 'total', 'label' => 'Mixta',
+                    'title' => 'LISTADO DE VENTAS MIXTA DETALLADO', 'filename' => 'Ventas_Mixta.pdf',
+                ],
+            ][$variant];
+
+            $base = DB::table('venta as v')
+                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
+                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
+                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
+                ->join('users as u', 'v.id_usuario', '=', 'u.id')
                 ->where('v.estado', '!=', 'Anulado')
                 ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
                 ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_forma_pago', 2) // Efectivo
-                ->sum('v.total_efectivo');
+                ->where('v.id_forma_pago', $config['id_forma_pago'])
+                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin]);
 
-            // === 3. CONFIGURAR MPDF ===
+            if (!empty($config['extraTipoPago'])) {
+                $base->where('v.id_tipo_pago', $config['extraTipoPago']);
+            }
+
+            if ($idUsuario !== null) {
+                $base->where('v.id_usuario', $idUsuario);
+            }
+
+            $totalMonto = (float) (clone $base)->sum('v.' . $config['sumField']);
+            $totalCount = (clone $base)->count();
+
+            if ($totalCount > 4000) {
+                return response()->json([
+                    'error' => 'El período seleccionado es demasiado amplio (' . number_format($totalCount) . ' ventas). Reduzca el rango de fechas e intente nuevamente.',
+                ], 422);
+            }
+
             $mpdf = new Mpdf([
-                'mode' => 'utf-8',
-                'format' => 'Letter',
-                'margin_top' => 10,
-                'margin_bottom' => 10,
-                'margin_left' => 10,
-                'margin_right' => 10,
+                'mode' => 'utf-8', 'format' => 'Letter',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
             ]);
 
-            // === 4. CSS ===
-            $css = "
-                @page { font-size: 12px; }
-                body { font-family: Arial, sans-serif; font-size: 11px; color: #000; }
-                .table { width: 100%; border:none;}
-                .table th, .table td { vertical-align: top; border:1px solid #000}
-            ";
-            $mpdf->WriteHTML('<style>' . $css . '</style>', \Mpdf\HTMLParserMode::HEADER_CSS);
-            $this->aplicarTemaReporte($mpdf);
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
-            // === 5. HEADER ===
-            $title = 'LISTADO DE VENTAS EFECTIVO DETALLADO';
-            $logoHtml = $empresa->logo_sistema
-                ? '<img src="img/logo/' . $empresa->logo_sistema . '" style="height: 60px; width: auto; display: block; margin: 0 auto;">'
-                : '<div style="width: 60px; height: 60px; background-color: #f0f0f0; border: 1px solid #ccc; margin: 0 auto;"></div>';
+            $viewData = [
+                'title' => $config['title'],
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Movimientos de venta',
+                'documentLabel' => $usuarioNombre ? 'Usuario: ' . $usuarioNombre : 'Forma de pago: ' . $config['label'],
+                'sectionTitle' => 'Ventas por ' . $config['label'],
+                'description' => 'Ventas registradas con forma de pago ' . $config['label'] . ' en el período seleccionado.'
+                    . ($usuarioNombre ? ' Filtrado por el usuario ' . $usuarioNombre . '.' : ''),
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Ventas',
+                'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
+                'footerLabel' => 'Ventas · ' . $config['label'],
+            ];
 
-            $header = "
-                <table style='width: 100%; border-collapse: collapse; margin-bottom: 10px;'>
-                    <tr>
-                        <td style='width: 80px; text-align: center; padding: 10px;'>{$logoHtml}</td>
-                        <td style='text-align: center; padding: 10px;'>
-                            <div style='font-size: 20px; font-weight: bold; color: #001843;'>" . strtoupper($title) . "</div>
-                            <small style='font-size:12px;'>DESDE: {$fecha_inicio} HASTA: {$fecha_fin}</small>
-                        </td>
-                        <td style='width: 165px;'></td>
-                    </tr>
-                </table>
-                <table style='width: 100%; margin-bottom: 15px;'>
-                    <tr>
-                        <th style='background-color: #001843; color: #fff; padding: 10px; text-align: left; border: 1px solid black;'>
-                            TOTAL VENTAS EFECTIVO: Bs. " . number_format($totalVentas, 2) . "
-                        </th>
-                    </tr>
-                </table>
-            ";
-            $mpdf->WriteHTML($header, \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
 
-            // === 6. PROCESAR VENTAS CON CHUNK ===
-            $queryVentas = DB::table('venta as v')
-                ->leftJoin('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->leftJoin('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->leftJoin('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->leftJoin('users as u', 'v.id_usuario', '=', 'u.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_forma_pago', 2)
-                ->select(
-                    'v.id', 'v.fecha', 'v.descuento', 'v.total_efectivo',
-                    DB::raw('COALESCE(c.nombre, "Cliente no encontrado") as cliente'),
-                    DB::raw('COALESCE(t.nombre, "Contado") as tipo_pago'),
-                    DB::raw('COALESCE(f.nombre, "Efectivo") as forma_pago'),
-                    DB::raw('COALESCE(u.name, "Usuario no encontrado") as usuario')
-                )
-                ->orderBy('v.id', 'asc');
+            $summaryItems = [
+                ['label' => 'Total ' . $config['label'], 'value' => 'Bs ' . number_format($totalMonto, 2, ',', '.')],
+            ];
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-summary-cards', ['items' => $summaryItems])->render(), \Mpdf\HTMLParserMode::HTML_BODY);
 
-            $ventasCount = $queryVentas->count();
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:46%">Venta / Producto</th><th style="width:18%">Costo unit.</th>'
+                . '<th style="width:14%">Cantidad</th><th style="width:22%">Subtotal</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
 
-            if ($ventasCount > 0) {
-                $queryVentas->chunk(100, function ($ventasChunk) use ($mpdf) {
-                    foreach ($ventasChunk as $venta) {
-                        $detalles = DB::table('detalle_venta as d')
-                            ->leftJoin('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                            ->leftJoin('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                            ->where('d.id_venta', $venta->id)
-                            ->where('d.estado', '!=', '1')
-                            ->select('d.cantidad', DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'), 'd.costo_venta', 'd.sub_total')
-                            ->get();
+            (clone $base)
+                ->select('v.id', 'v.fecha', 'c.nombre as cliente', 'u.name as usuario', 'v.total', 't.nombre as tipo_pago', 'f.nombre as forma_pago')
+                ->orderBy('v.fecha')
+                ->orderBy('v.id')
+                ->chunk(100, function ($ventas) use ($mpdf) {
+                    $ids = $ventas->pluck('id')->all();
 
-                        $tabla = "
-                            <table style='width: 100%; margin-bottom: 15px; border-collapse: collapse;'>
-                                <thead>
-                                    <tr>
-                                        <th style='margin:0px; background-color: #001843; color: #fff; font-size: 10px; border: 1px solid black; padding: 6px; text-align: left;'>Cliente: " . e($venta->cliente) . "</th>
-                                        <th style='margin:0px; background-color: #001843; color: #fff; font-size: 10px; border: 1px solid black; padding: 6px;'>Tipo P.: " . e($venta->tipo_pago) . "</th>
-                                        <th style='margin:0px; background-color: #001843; color: #fff; font-size: 10px; border: 1px solid black; padding: 6px;'>Forma P.: " . e($venta->forma_pago) . "</th>
-                                        <th style='margin:0px; background-color: #001843; color: #fff; font-size: 10px; border: 1px solid black; padding: 6px;'>Desc.: " . number_format($venta->descuento, 2) . "</th>
-                                        <th style='margin:0px; background-color: #001843; color: #fff; font-size: 10px; border: 1px solid black; padding: 6px;'>Total: " . number_format($venta->total_efectivo, 2) . " Bs.</th>
-                                    </tr>
-                                    <tr>
-                                        <th style='margin:0px; background-color: #FF0107; color: #fff; font-size: 10px; border: 1px solid black; padding: 3px;'>Producto</th>
-                                        <th style='margin:0px; background-color: #FF0107; color: #fff; font-size: 10px; border: 1px solid black; padding: 3px;'>Cantidad</th>
-                                        <th style='margin:0px; background-color: #FF0107; color: #fff; font-size: 10px; border: 1px solid black; padding: 3px;'>P.U.</th>
-                                        <th style='margin:0px; background-color: #FF0107; color: #fff; font-size: 10px; border: 1px solid black; padding: 3px;'>Sub Total</th>
-                                        <th style='margin:0px; background-color: #FF0107; color: #fff; font-size: 10px; border: 1px solid black; padding: 3px;'>Fecha</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                        ";
+                    $productos = DB::table('detalle_venta as d')
+                        ->join('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
+                        ->join('articulo as p', 'ta.id_articulo', '=', 'p.id')
+                        ->where('d.estado', '!=', '1')
+                        ->whereIn('d.id_venta', $ids)
+                        ->select('d.id_venta', 'd.cantidad', 'p.nombre_comercial as producto', 'd.costo_venta', 'd.sub_total')
+                        ->get();
 
-                        $subtotal = 0;
-                        if ($detalles->isNotEmpty()) {
-                            foreach ($detalles as $det) {
-                                $subtotal += $det->sub_total;
-                                $tabla .= "
-                                    <tr>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px;'>" . e($det->producto) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: center;'>" . e($det->cantidad) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: right;'>" . number_format($det->costo_venta, 2) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: right;'>" . number_format($det->sub_total, 2) . "</td>
-                                        <td style='font-size: 10px; border: 1px solid black; padding: 4px; text-align: center;'>" . \Carbon\Carbon::parse($venta->fecha)->format('d/m/Y') . "</td>
-                                    </tr>
-                                ";
-                            }
-                            $tabla .= "
-                                <tr style='background-color: #f8f8f8;'>
-                                    <td colspan='3' style='text-align: right; font-weight: bold; border: 1px solid black; padding: 8px;'>TOTAL:</td>
-                                    <td style='text-align: right; font-weight: bold; border: 1px solid black; padding: 8px;'>" . number_format($subtotal, 2) . " Bs.</td>
-                                    <td style='border: 1px solid black;'></td>
-                                </tr>
-                            ";
-                        } else {
-                            $tabla .= "<tr><td colspan='5' style='text-align: center; padding: 15px; border: 1px solid black;'>No se encontraron detalles</td></tr>";
+                    $paquetes = DB::table('detalle_venta_paquete as dvp')
+                        ->join('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
+                        ->whereIn('dvp.id_venta', $ids)
+                        ->select('dvp.id_venta', 'dvp.cantidad', 'pqt.nombre as producto', 'dvp.costo_venta', 'dvp.sub_total')
+                        ->get();
+
+                    $lineasPorVenta = $productos->concat($paquetes)->groupBy('id_venta');
+
+                    $html = '';
+                    foreach ($ventas as $venta) {
+                        $html .= '<tr class="fc-group-row">'
+                            . '<td colspan="3">' . e(\Carbon\Carbon::parse($venta->fecha)->format('d/m/Y')) . ' &middot; ' . e($venta->cliente)
+                            . '<div class="is-muted">' . e($venta->tipo_pago) . ' / ' . e($venta->forma_pago) . ' &middot; ' . e($venta->usuario) . '</div></td>'
+                            . '<td class="is-right">Total: Bs ' . number_format((float) $venta->total, 2, ',', '.') . '</td>'
+                            . '</tr>';
+
+                        $lineas = $lineasPorVenta->get($venta->id, collect());
+                        if ($lineas->isEmpty()) {
+                            $html .= '<tr class="fc-subrow"><td colspan="4" class="is-muted">Sin líneas de producto registradas.</td></tr>';
+                            continue;
                         }
-
-                        $tabla .= "</tbody></table>";
-                        $mpdf->WriteHTML($tabla, \Mpdf\HTMLParserMode::HTML_BODY);
+                        foreach ($lineas as $linea) {
+                            $html .= '<tr class="fc-subrow">'
+                                . '<td>' . e($linea->producto) . '</td>'
+                                . '<td class="is-right">Bs ' . number_format((float) $linea->costo_venta, 2, ',', '.') . '</td>'
+                                . '<td class="is-center">' . (float) $linea->cantidad . '</td>'
+                                . '<td class="is-right">Bs ' . number_format((float) $linea->sub_total, 2, ',', '.') . '</td>'
+                                . '</tr>';
+                        }
                     }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
                 });
-            } else {
-                $mpdf->WriteHTML("<table style='border: 1px solid black;'><tr><td style='text-align: center; padding: 20px;'>No se encontraron registros</td></tr></table>", \Mpdf\HTMLParserMode::HTML_BODY);
+
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="4">No existen ventas con forma de pago ' . e($config['label']) . ' para el período seleccionado.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
             }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
 
-            return response($mpdf->Output('Venta_Efectivo.pdf', 'I'))->header('Content-Type', 'application/pdf');
+            $content = $mpdf->Output($config['filename'], 'S');
 
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $config['filename'] . '"',
+            ]);
         } catch (\Exception $e) {
-            \Log::error('Error en pdfVentaDetalladaEfectivo: ' . $e->getMessage());
-            return response()->json(['error' => 'Error al generar el reporte', 'message' => $e->getMessage()], 500);
+            \Log::error('Error en reporte de ventas por forma de pago (' . $variant . '): ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte'], 500);
         }
     }
 
     public function pdfVentaDetalladaTransfencia(Request $request)
     {
-        try {
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin = $request->fecha_fin;
-            $tipo_venta = $request->tipo_venta;
-            $id_tienda = $request->id_tienda;
-            $id_caja = $request->id_caja;
-
-            if (!$fecha_inicio || !$fecha_fin || !$tipo_venta || !$id_tienda) {
-                return response()->json(['error' => 'Parámetros requeridos faltantes'], 400);
-            }
-
-            $ventas = DB::table('venta as v')
-                ->leftJoin('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->leftJoin('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->leftJoin('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->leftJoin('users as u', 'v.id_usuario', '=', 'u.id')
-                ->leftJoin('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_tipo_pago', 1)
-                ->where('v.id_forma_pago', 3) // Transferencia
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_efectivo',
-                    'v.total_deposito',
-                    DB::raw('COALESCE(c.nombre, "Cliente no encontrado") as cliente'),
-                    DB::raw('COALESCE(t.nombre, "Tipo no encontrado") as tipo_pago'),
-                    DB::raw('COALESCE(f.nombre, "Forma no encontrada") as forma_pago'),
-                    DB::raw('COALESCE(u.name, "Usuario no encontrado") as usuario'),
-                    DB::raw('COALESCE(td.nombre, "Tienda no encontrada") as tienda')
-                )
-                ->orderBy('v.id', 'asc')
-                ->get();
-
-
-            // Total en depósito (transferencia)
-            $totalVentas = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_tipo_pago', 1)
-                ->where('v.id_forma_pago', 3)
-                ->sum('v.total_deposito');
-
-            // Detalles de venta
-            $ventasIds = $ventas->pluck('id')->toArray();
-            $detalles = collect();
-
-            if (!empty($ventasIds)) {
-                $detalles = DB::table('detalle_venta as d')
-                    ->leftJoin('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->leftJoin('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->where('d.estado', '!=', '1')
-                    ->select(
-                        'd.id_venta',
-                        'd.cantidad',
-                        DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
-                        'd.costo_venta',
-                        'd.sub_total'
-                    )
-                    ->get();
-            }
-
-            // Empresa
-            $mi_empresa = MiEmpresa::select(
-                'nombre',
-                'direccion',
-                'telefono',
-                'logo_sistema',
-                'logo_login as foto'
-            )->first();
-
-            if (!$mi_empresa) {
-                $mi_empresa = (object) [
-                    'nombre' => 'Mi Empresa',
-                    'direccion' => 'Dirección no disponible',
-                    'telefono' => 'Teléfono no disponible',
-                    'foto' => null,
-                    'logo_sistema' => null,
-                ];
-            }
-
-            $title = 'LISTADO DE VENTAS TRANSFERENCIA DETALLADO';
-            $nombre_empresa = $mi_empresa->nombre ?? 'Mi Empresa';
-            $direccion_empresa = $mi_empresa->direccion ?? 'Dirección no disponible';
-            $telefono_empresa = $mi_empresa->telefono ?? 'Teléfono no disponible';
-            $foto_empresa = $mi_empresa->foto ?? null;
-            $logo_sistema = $mi_empresa->logo_sistema ?? null;
-
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_forma', [
-                'title' => $title,
-                'nombre_empresa' => $nombre_empresa,
-                'direccion_empresa' => $direccion_empresa,
-                'telefono_empresa' => $telefono_empresa,
-                'foto_empresa' => $foto_empresa,
-                'logo_sistema' => $logo_sistema,
-                'tipo_venta' => $tipo_venta,
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin,
-                'venta' => $ventas,
-                'detalles' => $detalles,
-                'totalVentas' => $totalVentas ?? 0,
-            ]);
-
-            return $pdf->setPaper('letter', 'portrait')->stream('Venta_Transferencia.pdf');
-
-        } catch (\Exception $e) {
-            \Log::error('Error generando reporte de ventas por transferencia: ' . $e->getMessage(), [
-                'fecha_inicio' => $request->fecha_inicio,
-                'fecha_fin' => $request->fecha_fin,
-                'tipo_venta' => $request->tipo_venta,
-                'id_tienda' => $request->id_tienda,
-            ]);
-
-            return response()->json([
-                'error' => 'Error al generar el reporte',
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return $this->buildVentaFormaPagoReport($request, 'transferencia');
     }
 
     public function pdfVentaDetalladaQr(Request $request) {
-        try {
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin = $request->fecha_fin;
-            $tipo_venta = $request->tipo_venta;
-            $id_tienda = $request->id_tienda;
-            $id_caja = $request->id_caja;
-         
-            if (!$fecha_inicio || !$fecha_fin || !$tipo_venta || !$id_tienda) {
-                return response()->json(['error' => 'Parámetros requeridos faltantes'], 400);
-            }
-     
-            $ventas = DB::table('venta as v')
-                ->leftJoin('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->leftJoin('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->leftJoin('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->leftJoin('users as u', 'v.id_usuario', '=', 'u.id')
-                ->leftJoin('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_forma_pago', 4) // Forma de pago QR
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_deposito',
-                    'v.total_efectivo',
-                    DB::raw('COALESCE(c.nombre, "Cliente no encontrado") as cliente'),
-                    DB::raw('COALESCE(t.nombre, "Tipo no encontrado") as tipo_pago'),
-                    DB::raw('COALESCE(f.nombre, "Forma no encontrada") as forma_pago'),
-                    DB::raw('COALESCE(u.name, "Usuario no encontrado") as usuario'),
-                    DB::raw('COALESCE(td.nombre, "Tienda no encontrada") as tienda')
-                )
-                // ->orderBy('v.fecha', 'desc')
-                ->orderBy('v.id', 'asc')
-                ->get();
-
-            
-            $totalVentas = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_forma_pago', 4)
-                ->sum('v.total_deposito');
-
-            $ventasIds = $ventas->pluck('id')->toArray();
-            
-            $detalles = collect(); // Inicializar como colección vacía
-            
-            if (!empty($ventasIds)) {
-                $detalles = DB::table('detalle_venta as d')
-                    ->leftJoin('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->leftJoin('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->where('d.estado', '!=', '1') 
-                    ->select(
-                        'd.id_venta',
-                        'd.cantidad',
-                        DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
-                        'd.costo_venta',
-                        'd.sub_total'
-                    )
-                    ->get();
-            }
-
-           
-            $mi_empresa = MiEmpresa::select(
-                'nombre',
-                'nit',
-                'representante',
-                'direccion',
-                'telefono',
-                'localidad',
-                'Correo',
-                'sitio_web',
-                'foto',
-                'logo_sistema',
-            )->first();
-
-            
-            if (!$mi_empresa) {
-                $mi_empresa = (object) [
-                    'nombre' => 'Mi Empresa',
-                    'direccion' => 'Dirección no disponible',
-                    'telefono' => 'Teléfono no disponible',
-                    'foto' => null,
-                    'logo_sistema' => null,
-                ];
-            }
-
-            // Preparar datos para la vista
-            $title = 'LISTADO DE VENTAS DETALLADO QR';
-            $nombre_empresa = $mi_empresa->nombre ?? 'Mi Empresa';
-            $direccion_empresa = $mi_empresa->direccion ?? 'Dirección no disponible';
-            $telefono_empresa = $mi_empresa->telefono ?? 'Teléfono no disponible';
-            $foto_empresa = $mi_empresa->foto ?? null;
-            $logo_sistema = $mi_empresa->logo_sistema ?? null;
-
-            // Generar el PDF con manejo de errores
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_forma_qr_general', [
-                'title' => $title,
-                'nombre_empresa' => $nombre_empresa,
-                'direccion_empresa' => $direccion_empresa,
-                'telefono_empresa' => $telefono_empresa,
-                'foto_empresa' => $foto_empresa,
-                'logo_sistema' => $logo_sistema,
-                'tipo_venta' => $tipo_venta,
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin,
-                'venta' => $ventas,
-                'totalVentas' => $totalVentas ?? 0,
-                'detalles' => $detalles,
-            ]);
-
-            return $pdf->setPaper('letter', 'portrait')->stream('Venta_QR.pdf');
-
-        } catch (\Exception $e) {
-        
-            \Log::error('Error generando reporte de ventas QR: ' . $e->getMessage(), [
-                'fecha_inicio' => $request->fecha_inicio,
-                'fecha_fin' => $request->fecha_fin,
-                'tipo_venta' => $request->tipo_venta,
-                'id_tienda' => $request->id_tienda,
-                'stack_trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'error' => 'Error al generar el reporte',
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return $this->buildVentaFormaPagoReport($request, 'qr');
     }
 
 
     public function pdfVentaDetalladaDeposito(Request $request)
     {
-        try {
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin = $request->fecha_fin;
-            $tipo_venta = $request->tipo_venta;
-            $id_tienda = $request->id_tienda;
-            $id_caja = $request->id_caja;
-
-            if (!$fecha_inicio || !$fecha_fin || !$tipo_venta || !$id_tienda) {
-                return response()->json(['error' => 'Parámetros requeridos faltantes'], 400);
-            }
-
-            $ventas = DB::table('venta as v')
-                ->leftJoin('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->leftJoin('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->leftJoin('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->leftJoin('users as u', 'v.id_usuario', '=', 'u.id')
-                ->leftJoin('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_forma_pago', 5) // Depósito
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_deposito',
-                    'v.total_efectivo',
-                    DB::raw('COALESCE(c.nombre, "Cliente no encontrado") as cliente'),
-                    DB::raw('COALESCE(t.nombre, "Tipo no encontrado") as tipo_pago'),
-                    DB::raw('COALESCE(f.nombre, "Forma no encontrada") as forma_pago'),
-                    DB::raw('COALESCE(u.name, "Usuario no encontrado") as usuario'),
-                    DB::raw('COALESCE(td.nombre, "Tienda no encontrada") as tienda')
-                )
-                ->orderBy('v.id', 'asc')
-                ->get();
-
-            // Total en depósito
-            $totalVentas = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_forma_pago', 5)
-                ->sum('v.total_deposito');
-
-            $ventasIds = $ventas->pluck('id')->toArray();
-            $detalles = collect();
-            $detallesPaquete = collect();
-
-            if (!empty($ventasIds)) {
-                // Detalles de productos
-                $detalles = DB::table('detalle_venta as d')
-                    ->leftJoin('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->leftJoin('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->where('d.estado', '!=', '1')
-                    ->select(
-                        'd.id_venta',
-                        'd.cantidad',
-                        DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
-                        'd.costo_venta',
-                        'd.sub_total'
-                    )
-                    ->get();
-
-                // Detalles de paquetes
-                $detallesPaquete = DB::table('detalle_venta_paquete as dvp')
-                    ->leftJoin('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
-                    ->whereIn('dvp.id_venta', $ventasIds)
-                    ->select(
-                        'dvp.id_venta',
-                        'dvp.cantidad',
-                        DB::raw('COALESCE(pqt.nombre, "Paquete no encontrado") as producto'),
-                        'dvp.costo_venta',
-                        'dvp.sub_total'
-                    )
-                    ->get();
-            }
-
-            // Empresa
-            $mi_empresa = MiEmpresa::select(
-                'nombre',
-                'direccion',
-                'telefono',
-                'logo_sistema',
-                'foto as logo_login'
-            )->first();
-
-            if (!$mi_empresa) {
-                $mi_empresa = (object) [
-                    'nombre' => 'Mi Empresa',
-                    'direccion' => 'Dirección no disponible',
-                    'telefono' => 'Teléfono no disponible',
-                    'logo_login' => null,
-                    'logo_sistema' => null,
-                ];
-            }
-
-            $title = 'LISTADO DE VENTAS DETALLADO DEPOSITO';
-            $nombre_empresa = $mi_empresa->nombre ?? 'Mi Empresa';
-            $direccion_empresa = $mi_empresa->direccion ?? 'Dirección no disponible';
-            $telefono_empresa = $mi_empresa->telefono ?? 'Teléfono no disponible';
-            $foto_empresa = $mi_empresa->logo_login ?? null;
-            $logo_sistema = $mi_empresa->logo_sistema ?? null;
-
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_forma', [
-                'title' => $title,
-                'nombre_empresa' => $nombre_empresa,
-                'direccion_empresa' => $direccion_empresa,
-                'telefono_empresa' => $telefono_empresa,
-                'foto_empresa' => $foto_empresa,
-                'logo_sistema' => $logo_sistema,
-                'tipo_venta' => $tipo_venta,
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin,
-                'venta' => $ventas,
-                'detalles' => $detalles,
-                'detallesPaquete' => $detallesPaquete,
-                'totalVentas' => $totalVentas ?? 0,
-            ]);
-
-            return $pdf->setPaper('letter', 'portrait')->stream('Venta_Deposito.pdf');
-
-        } catch (\Exception $e) {
-            \Log::error('Error generando reporte de ventas por depósito: ' . $e->getMessage(), [
-                'fecha_inicio' => $request->fecha_inicio,
-                'fecha_fin' => $request->fecha_fin,
-                'tipo_venta' => $request->tipo_venta,
-                'id_tienda' => $request->id_tienda,
-            ]);
-
-            return response()->json([
-                'error' => 'Error al generar el reporte',
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return $this->buildVentaFormaPagoReport($request, 'deposito');
     }
 
     public function pdfVentaDetalladaMixta(Request $request)
     {
-        try {
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin = $request->fecha_fin;
-            $tipo_venta = $request->tipo_venta;
-            $id_tienda = $request->id_tienda;
-            $id_caja = $request->id_caja;
-
-            if (!$fecha_inicio || !$fecha_fin || !$tipo_venta || !$id_tienda) {
-                return response()->json(['error' => 'Parámetros requeridos faltantes'], 400);
-            }
-
-            $ventas = DB::table('venta as v')
-                ->leftJoin('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->leftJoin('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->leftJoin('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->leftJoin('users as u', 'v.id_usuario', '=', 'u.id')
-                ->leftJoin('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_forma_pago', 6) // Mixta
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_efectivo',
-                    'v.total_deposito',
-                    DB::raw('COALESCE(c.nombre, "Cliente no encontrado") as cliente'),
-                    DB::raw('COALESCE(t.nombre, "Tipo no encontrado") as tipo_pago'),
-                    DB::raw('COALESCE(f.nombre, "Forma no encontrada") as forma_pago'),
-                    DB::raw('COALESCE(u.name, "Usuario no encontrado") as usuario'),
-                    DB::raw('COALESCE(td.nombre, "Tienda no encontrada") as tienda')
-                )
-                ->orderBy('v.id', 'asc')
-                ->get();
-
-
-            $totalVentas = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_forma_pago', 6)
-                ->sum('v.total'); // o sum('v.total_efectivo') + sum('v.total_deposito')
-
-
-            $ventasIds = $ventas->pluck('id')->toArray();
-            $detalles = collect();
-            $detallesPaquete = collect();
-
-            if (!empty($ventasIds)) {
-                // Productos
-                $detalles = DB::table('detalle_venta as d')
-                    ->leftJoin('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->leftJoin('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->where('d.estado', '!=', '1')
-                    ->select(
-                        'd.id_venta',
-                        'd.cantidad',
-                        DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
-                        'd.costo_venta',
-                        'd.sub_total'
-                    )
-                    ->get();
-
-                // Paquetes
-                $detallesPaquete = DB::table('detalle_venta_paquete as dvp')
-                    ->leftJoin('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
-                    ->whereIn('dvp.id_venta', $ventasIds)
-                    ->select(
-                        'dvp.id_venta',
-                        'dvp.cantidad',
-                        DB::raw('COALESCE(pqt.nombre, "Paquete no encontrado") as producto'),
-                        'dvp.costo_venta',
-                        'dvp.sub_total'
-                    )
-                    ->get();
-            }
-            // Empresa
-            $mi_empresa = MiEmpresa::select(
-                'nombre',
-                'direccion',
-                'telefono',
-                'logo_sistema',
-                'foto as logo_login'
-            )->first();
-
-            if (!$mi_empresa) {
-                $mi_empresa = (object) [
-                    'nombre' => 'Mi Empresa',
-                    'direccion' => 'Dirección no disponible',
-                    'telefono' => 'Teléfono no disponible',
-                    'logo_login' => null,
-                    'logo_sistema' => null,
-                ];
-            }
-
-            $title = 'LISTADO DE VENTAS DETALLADO MIXTA';
-            $nombre_empresa = $mi_empresa->nombre ?? 'Mi Empresa';
-            $direccion_empresa = $mi_empresa->direccion ?? 'Dirección no disponible';
-            $telefono_empresa = $mi_empresa->telefono ?? 'Teléfono no disponible';
-            $foto_empresa = $mi_empresa->logo_login ?? null;
-            $logo_sistema = $mi_empresa->logo_sistema ?? null;
-
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_mixta', [
-                'title' => $title,
-                'nombre_empresa' => $nombre_empresa,
-                'direccion_empresa' => $direccion_empresa,
-                'telefono_empresa' => $telefono_empresa,
-                'foto_empresa' => $foto_empresa,
-                'logo_sistema' => $logo_sistema,
-                'tipo_venta' => $tipo_venta,
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin,
-                'venta' => $ventas,
-                'detalles' => $detalles,
-                'detallesPaquete' => $detallesPaquete,
-                'totalVentas' => $totalVentas ?? 0,
-            ]);
-
-            return $pdf->setPaper('letter', 'portrait')->stream('Venta_Mixta.pdf');
-
-        } catch (\Exception $e) {
-            \Log::error('Error generando reporte de ventas mixtas: ' . $e->getMessage(), [
-                'fecha_inicio' => $request->fecha_inicio,
-                'fecha_fin' => $request->fecha_fin,
-                'tipo_venta' => $request->tipo_venta,
-                'id_tienda' => $request->id_tienda,
-            ]);
-
-            return response()->json([
-                'error' => 'Error al generar el reporte',
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return $this->buildVentaFormaPagoReport($request, 'mixta');
     }
     
     public function pdfPagoVenta(Request $request){
+        $this->prepararEntornoReporte();
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
@@ -1927,6 +1518,7 @@ class ReporteController extends BitacoraController
 
     public function pdfCliente()
     {
+        $this->prepararEntornoReporte();
         try {
             $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
             abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
@@ -2373,6 +1965,7 @@ class ReporteController extends BitacoraController
         
     }
     public function pdfPagoCompra(Request $request){
+        $this->prepararEntornoReporte();
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
@@ -2648,829 +2241,10 @@ class ReporteController extends BitacoraController
 
     }*/
 
-    public function pdfVentaGeneralUsuario(Request $request)
-    {
-        ini_set('memory_limit', '20048M');
-        // Validar los datos de entrada
-        $request->validate([
-            'fecha_inicio' => 'required|date',
-            'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
-            'tipo_venta' => 'required|string',
-            'id_tienda' => 'required|integer|exists:tienda,id',
-            'id_usuario' => 'required|integer|exists:users,id',
-        ]);
-
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin;
-        $tipo_venta = $request->tipo_venta;
-        $id_tienda = (int) $request->id_tienda;
-        $id_usuario = (int) $request->id_usuario;
-
-        // Consulta principal para los detalles de las ventas
-        $ventas = DB::table('venta as v')
-            ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-            ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-            ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-            ->join('users as u', 'v.id_usuario', '=', 'u.id')
-            ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-            ->select(
-                'v.sub_total',
-                'v.descuento',
-                'v.total',
-                'c.nombre as cliente',
-                't.nombre as tipo_pago',
-                'f.nombre as forma_pago',
-                'u.name as usuario',
-                'td.nombre as tienda'
-            )
-            ->where('v.estado', '!=', 'Anulado')
-            ->where('v.tipo_venta', $tipo_venta)
-            ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-            ->where('v.id_tienda', $id_tienda)
-            ->where('v.id_usuario', $id_usuario)
-            ->get();
-
-        // Consultas para totales resumidos
-        $totalesObj = DB::table('venta as v')
-            ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-            ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-            ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-            ->join('users as u', 'v.id_usuario', '=', 'u.id')
-            ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-            ->where('v.estado', '!=', 'Anulado')
-            ->where('v.tipo_venta', $tipo_venta)
-            ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-            ->where('v.id_tienda', $id_tienda)
-            ->where('v.id_usuario', $id_usuario)
-            ->select(
-                DB::raw('COALESCE(SUM(v.total), 0) as totalV'),
-                DB::raw("COALESCE(SUM(CASE WHEN v.id_tipo_pago = 1 THEN v.total ELSE 0 END), 0) as totalC"),
-                DB::raw("COALESCE(SUM(CASE WHEN v.id_tipo_pago = 2 THEN v.total ELSE 0 END), 0) as totalCr"),
-                DB::raw('COALESCE(SUM(v.total_efectivo), 0) as totalEf'),
-                DB::raw('COALESCE(SUM(v.total_deposito), 0) as totalDep')
-            )
-            ->first();
-
-        // Obtener datos adicionales
-        $usuario = User::select('id', 'name')->where('id', $id_usuario)->firstOrFail();
-        $mi_empresa = MiEmpresa::select(
-                'nombre',
-                'nit',
-                'representante',
-                'direccion',
-                'telefono',
-                'localidad',
-                'Correo',
-                'sitio_web',
-                'logo_sistema',
-                'foto'
-            )->firstOrFail();
-
-        // Datos para la vista del PDF
-        $data = [
-            'title' => 'LISTADO DE VENTAS',
-            'nombre_empresa' => $mi_empresa->nombre,
-            'direccion_empresa' => $mi_empresa->direccion,
-            'telefono_empresa' => $mi_empresa->telefono,
-            'foto_empresa' => $mi_empresa->foto,
-            'logo_sistema' => $mi_empresa->logo_sistema,
-            'tipo_venta' => $tipo_venta,
-            'fecha_inicio' => $fecha_inicio,
-            'fecha_fin' => $fecha_fin,
-            'detalles' => $ventas,
-            'totalV' => $totalesObj->totalV ?? 0,
-            'totalC' => $totalesObj->totalC ?? 0,
-            'totalCr' => $totalesObj->totalCr ?? 0,
-            'totalEf' => $totalesObj->totalEf ?? 0,
-            'totalDep' => $totalesObj->totalDep ?? 0,
-            'usuarioActual' => $usuario->name,
-        ];
-
-        // Generar el PDF
-        $pdf = \PDF::loadView('pdf.reportes.venta.venta_general_usuario', $data);
-        return $pdf->setPaper('letter', 'portrait')->stream('Venta.pdf');
-    }
 
     
-    public function pdfVentaDetalladaUsuario(Request $request)
-    {
 
-        // Obtener parámetros
-        ini_set('memory_limit', '20048M');
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin; 
-        $tipo_venta = $request->tipo_venta;
-        $id_tienda = $request->id_tienda;
-        $id_usuario = $request->id_usuario;
 
-        // Consulta de ventas detalladas
-        $ventas = DB::table('venta as v')
-        ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-        ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-        ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-        ->join('users as u', 'v.id_usuario', '=', 'u.id')
-        ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-        ->where('v.estado', '!=', 'Anulado')
-        ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-        ->where('v.id_tienda', $id_tienda)
-        ->where('v.id_usuario', $id_usuario)
-        ->select(
-            'v.id', 'v.fecha', 'v.sub_total', 'v.descuento', 'v.total', 
-            'v.total_efectivo', 'v.total_deposito', 'c.nombre as cliente', 
-            't.nombre as tipo_pago', 'f.nombre as forma_pago', 
-            'u.name as usuario', 'td.nombre as tienda'
-        )
-        ->get();
-
-
-        // Cálculo de totales
-        $totalVentas = Venta::where('estado', '!=', 'Anulado')
-            ->where('tipo_venta', $tipo_venta)
-            ->whereBetween('fecha', [$fecha_inicio, $fecha_fin])
-            ->where('id_tienda', $id_tienda)
-            ->where('id_usuario', $id_usuario)
-            ->sum('total');
-
-        $totalContado = Venta::where('estado', '!=', 'Anulado')
-            ->where('tipo_venta', $tipo_venta)
-            ->whereBetween('fecha', [$fecha_inicio, $fecha_fin])
-            ->where('id_tienda', $id_tienda)
-            ->where('id_tipo_pago', 1) // Contado
-            ->where('id_usuario', $id_usuario)
-            ->sum('total');
-
-        $totalCredito = Venta::where('estado', '!=', 'Anulado')
-            ->where('tipo_venta', $tipo_venta)
-            ->whereBetween('fecha', [$fecha_inicio, $fecha_fin])
-            ->where('id_tienda', $id_tienda)
-            ->where('id_tipo_pago', 2) // Crédito
-            ->where('id_usuario', $id_usuario)
-            ->sum('total');
-
-        $totalEfectivo = Venta::where('estado', '!=', 'Anulado')
-            ->where('tipo_venta', $tipo_venta)
-            ->whereBetween('fecha', [$fecha_inicio, $fecha_fin])
-            ->where('id_tienda', $id_tienda)
-            ->where('id_usuario', $id_usuario)
-            ->sum('total_efectivo');
-
-        $totalDeposito = Venta::where('estado', '!=', 'Anulado')
-            ->where('tipo_venta', $tipo_venta)
-            ->whereBetween('fecha', [$fecha_inicio, $fecha_fin])
-            ->where('id_tienda', $id_tienda)
-            ->where('id_usuario', $id_usuario)
-            ->sum('total_deposito');
-
-        // Detalle de ventas
-        $detalles = DB::table('detalle_venta as dv')
-        ->join('venta as v', 'dv.id_venta', '=', 'v.id')
-        ->join('tienda_articulo as ta', 'dv.id_producto', '=', 'ta.id')
-        ->join('articulo as a', 'ta.id_articulo', '=', 'a.id')
-        ->where('v.estado', '!=', 'Anulado')
-        ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-        ->where('v.id_tienda', $id_tienda)
-        ->where('v.id_usuario', $id_usuario)
-        ->select('dv.*', 'a.nombre_comercial as producto')
-        ->get();
-
-
-        // Detalle de ventas de paquetes
-        $detallesPaquete = DB::table('detalle_venta_paquete as dvp')
-        ->join('venta as v', 'dvp.id_venta', '=', 'v.id')
-        ->join('paquetes as p', 'dvp.id_paquete', '=', 'p.id')
-        ->where('v.estado', '!=', 'Anulado')
-        ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-        ->where('v.id_tienda', $id_tienda)
-        ->where('v.id_usuario', $id_usuario)
-        ->select('dvp.*', 'p.nombre as producto')
-        ->get();
-
-
-        // Información de la empresa
-        $mi_empresa = MiEmpresa::select('logo_sistema','nombre', 'nit', 'representante', 'direccion', 'telefono', 'localidad', 'Correo', 'sitio_web', 'foto')
-            ->first();
-
-        // Usuario actual
-        $usuarioActual = User::find($id_usuario)->name;
-
-        // Título y detalles
-        $title = 'LISTADO DE VENTAS DETALLADO';
-        $nombre_empresa = $mi_empresa->nombre;
-        $direccion_empresa = $mi_empresa->direccion;
-        $telefono_empresa = $mi_empresa->telefono;
-        $foto_empresa = $mi_empresa->foto;
-        $logo_sistema = $mi_empresa->logo_sistema;
- 
-        // Generar PDF
-        $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_usuario', [
-            'title' => $title,
-            'nombre_empresa' => $nombre_empresa,
-            'direccion_empresa' => $direccion_empresa,
-            'telefono_empresa' => $telefono_empresa,
-            'foto_empresa' => $foto_empresa,
-            'logo_sistema' => $logo_sistema,
-            'tipo_venta' => $tipo_venta,
-            'fecha_inicio' => $fecha_inicio,
-            'fecha_fin' => $fecha_fin,
-            'venta' => $ventas,
-            'detalles' => $detalles,
-            'detalles2' => [['totalV' => $totalVentas]],
-            'detallesPaquete' => $detallesPaquete,
-            'detalles5' => [['totalC' => $totalContado]],
-            'detalles6' => [['totalCr' => $totalCredito]],
-            'detalles7' => [['totalEf' => $totalEfectivo]],
-            'detalles8' => [['totalDep' => $totalDeposito]],
-            'usuarioActual' => $usuarioActual,
-        ]);
-
-        // Devolver el PDF generado
-        return $pdf->setPaper('letter', 'portrait')->stream('Venta.pdf');
-    }
-
-
-    public function pdfVentaDetalladaEfectivoUsuario(Request $request)
-    {
-        try {
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin = $request->fecha_fin;
-            $tipo_venta = $request->tipo_venta;
-            $id_tienda = $request->id_tienda;
-            $id_usuario = $request->id_usuario;
-
-            if (!$fecha_inicio || !$fecha_fin || !$tipo_venta || !$id_tienda || !$id_usuario) {
-                return response()->json(['error' => 'Parámetros requeridos faltantes'], 400);
-            }
-
-            $ventas = DB::table('venta as v')
-                ->leftJoin('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->leftJoin('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->leftJoin('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->leftJoin('users as u', 'v.id_usuario', '=', 'u.id')
-                ->leftJoin('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_usuario', $id_usuario)
-                ->where('v.id_forma_pago', 2) // Efectivo
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_efectivo',
-                    'v.total_deposito',
-                    DB::raw('COALESCE(c.nombre, "Cliente no encontrado") as cliente'),
-                    DB::raw('COALESCE(t.nombre, "Tipo no encontrado") as tipo_pago'),
-                    DB::raw('COALESCE(f.nombre, "Forma no encontrada") as forma_pago'),
-                    DB::raw('COALESCE(u.name, "Usuario no encontrado") as usuario'),
-                    DB::raw('COALESCE(td.nombre, "Tienda no encontrada") as tienda')
-                )
-                ->orderBy('v.id', 'asc')
-                ->get();
-
-            $totalVentas = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_usuario', $id_usuario)
-                ->where('v.id_forma_pago', 2)
-                ->sum('v.total_efectivo');
-
-            $ventasIds = $ventas->pluck('id')->toArray();
-            $detalles = collect();
-            $detallesPaquete = collect();
-
-            if (!empty($ventasIds)) {
-                $detalles = DB::table('detalle_venta as d')
-                    ->leftJoin('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->leftJoin('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->where('d.estado', '!=', '1')
-                    ->select(
-                        'd.id_venta',
-                        'd.cantidad',
-                        DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
-                        'd.costo_venta',
-                        'd.sub_total'
-                    )
-                    ->get();
-
-                $detallesPaquete = DB::table('detalle_venta_paquete as dvp')
-                    ->leftJoin('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
-                    ->whereIn('dvp.id_venta', $ventasIds)
-                    ->select(
-                        'dvp.id_venta',
-                        'dvp.cantidad',
-                        DB::raw('COALESCE(pqt.nombre, "Paquete no encontrado") as producto'),
-                        'dvp.costo_venta',
-                        'dvp.sub_total'
-                    )
-                    ->get();
-            }
-
-            $mi_empresa = MiEmpresa::select(
-                'nombre',
-                'direccion',
-                'telefono',
-                'foto as logo_login',
-                'logo_sistema',
-            )->first();
-
-            $usuarioActual=DB::table('users')->where('id', $id_usuario)->first()->name;
-
-            if (!$mi_empresa) {
-                $mi_empresa = (object) [
-                    'nombre' => 'Mi Empresa',
-                    'direccion' => 'Dirección no disponible',
-                    'telefono' => 'Teléfono no disponible',
-                    'logo_login' => null
-                ];
-            }
-
-            $title = 'LISTADO DE VENTAS DETALLADO EFECTIVO';
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_forma', [
-                'title' => $title,
-                'nombre_empresa' => $mi_empresa->nombre ?? 'Mi Empresa',
-                'direccion_empresa' => $mi_empresa->direccion ?? 'Dirección no disponible',
-                'telefono_empresa' => $mi_empresa->telefono ?? 'Teléfono no disponible',
-                'foto_empresa' => $mi_empresa->logo_login ?? null,
-                'logo_sistema' => $mi_empresa->logo_sistema ?? null,
-                'usuarioActual' => $usuarioActual ?? null,
-                'tipo_venta' => $tipo_venta,
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin,
-                'venta' => $ventas,
-                'detalles' => $detalles,
-                'detallesPaquete' => $detallesPaquete,
-                'totalVentas' => $totalVentas ?? 0,
-            ]);
-
-            return $pdf->setPaper('letter', 'portrait')->stream('Venta_Efectivo_Usuario.pdf');
-
-        } catch (\Exception $e) {
-            \Log::error('Error en pdfVentaDetalladaEfectivoUsuario: ' . $e->getMessage(), $request->all());
-            return response()->json(['error' => 'Error al generar el reporte'], 500);
-        }
-    }
-
-    public function pdfVentaDetalladaTransfenciaUsuario(Request $request)
-    {
-        try {
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin = $request->fecha_fin;
-            $tipo_venta = $request->tipo_venta;
-            $id_tienda = $request->id_tienda;
-            $id_usuario = $request->id_usuario;
-
-            if (!$fecha_inicio || !$fecha_fin || !$tipo_venta || !$id_tienda || !$id_usuario) {
-                return response()->json(['error' => 'Parámetros requeridos faltantes'], 400);
-            }
-
-            $ventas = DB::table('venta as v')
-                ->leftJoin('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->leftJoin('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->leftJoin('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->leftJoin('users as u', 'v.id_usuario', '=', 'u.id')
-                ->leftJoin('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_usuario', $id_usuario)
-                ->where('v.id_tipo_pago', 1)
-                ->where('v.id_forma_pago', 3) // Transferencia
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_efectivo',
-                    'v.total_deposito',
-                    DB::raw('COALESCE(c.nombre, "Cliente no encontrado") as cliente'),
-                    DB::raw('COALESCE(t.nombre, "Tipo no encontrado") as tipo_pago'),
-                    DB::raw('COALESCE(f.nombre, "Forma no encontrada") as forma_pago'),
-                    DB::raw('COALESCE(u.name, "Usuario no encontrado") as usuario'),
-                    DB::raw('COALESCE(td.nombre, "Tienda no encontrada") as tienda')
-                )
-                ->orderBy('v.id', 'asc')
-                ->get();
-
-            $totalVentas = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_usuario', $id_usuario)
-                ->where('v.id_tipo_pago', 1)
-                ->where('v.id_forma_pago', 3)
-                ->sum('v.total_deposito');
-
-            $ventasIds = $ventas->pluck('id')->toArray();
-            $detalles = collect();
-            $detallesPaquete = collect();
-
-            if (!empty($ventasIds)) {
-                $detalles = DB::table('detalle_venta as d')
-                    ->leftJoin('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->leftJoin('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->where('d.estado', '!=', '1')
-                    ->select(
-                        'd.id_venta',
-                        'd.cantidad',
-                        DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
-                        'd.costo_venta',
-                        'd.sub_total'
-                    )
-                    ->get();
-
-                $detallesPaquete = DB::table('detalle_venta_paquete as dvp')
-                    ->leftJoin('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
-                    ->whereIn('dvp.id_venta', $ventasIds)
-                    ->select(
-                        'dvp.id_venta',
-                        'dvp.cantidad',
-                        DB::raw('COALESCE(pqt.nombre, "Paquete no encontrado") as producto'),
-                        'dvp.costo_venta',
-                        'dvp.sub_total'
-                    )
-                    ->get();
-            }
-
-            $mi_empresa = MiEmpresa::select(
-                'nombre',
-                'direccion',
-                'telefono',
-                'logo_sistema',
-                'foto as logo_login'
-            )->first();
-
-            $usuarioActual=DB::table('users')->where('id', $id_usuario)->first()->name;
-
-
-            $title = 'LISTADO DE VENTAS DETALLADO TRANSFERENCIA';
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_forma', [
-                'title' => $title,
-                'nombre_empresa' => $mi_empresa->nombre ?? 'Mi Empresa',
-                'direccion_empresa' => $mi_empresa->direccion ?? 'Dirección no disponible',
-                'telefono_empresa' => $mi_empresa->telefono ?? 'Teléfono no disponible',
-                'foto_empresa' => $mi_empresa->logo_login ?? null,
-                'logo_sistema' => $mi_empresa->logo_sistema ?? null,
-                'tipo_venta' => $tipo_venta,
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin,
-                'venta' => $ventas,
-                'detalles' => $detalles,
-                'usuarioActual'=>$usuarioActual,
-                'detallesPaquete' => $detallesPaquete,
-                'totalVentas' => $totalVentas ?? 0,
-            ]);
-
-            return $pdf->setPaper('letter', 'portrait')->stream('Venta_Transferencia_Usuario.pdf');
-
-        } catch (\Exception $e) {
-            \Log::error('Error en pdfVentaDetalladaTransfenciaUsuario: ' . $e->getMessage(), $request->all());
-            return response()->json(['error' => 'Error al generar el reporte'], 500);
-        }
-    }
-
-    public function pdfVentaDetalladaDepositoUsuario(Request $request)
-    {
-        try {
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin = $request->fecha_fin;
-            $tipo_venta = $request->tipo_venta;
-            $id_tienda = $request->id_tienda;
-            $id_usuario = $request->id_usuario;
-
-            if (!$fecha_inicio || !$fecha_fin || !$tipo_venta || !$id_tienda || !$id_usuario) {
-                return response()->json(['error' => 'Parámetros requeridos faltantes'], 400);
-            }
-
-            $ventas = DB::table('venta as v')
-                ->leftJoin('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->leftJoin('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->leftJoin('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->leftJoin('users as u', 'v.id_usuario', '=', 'u.id')
-                ->leftJoin('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_usuario', $id_usuario)
-                ->where('v.id_forma_pago', 5) // Depósito
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_efectivo',
-                    'v.total_deposito',
-                    DB::raw('COALESCE(c.nombre, "Cliente no encontrado") as cliente'),
-                    DB::raw('COALESCE(t.nombre, "Tipo no encontrado") as tipo_pago'),
-                    DB::raw('COALESCE(f.nombre, "Forma no encontrada") as forma_pago'),
-                    DB::raw('COALESCE(u.name, "Usuario no encontrado") as usuario'),
-                    DB::raw('COALESCE(td.nombre, "Tienda no encontrada") as tienda')
-                )
-                ->orderBy('v.id', 'asc')
-                ->get();
-
-            $totalVentas = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_usuario', $id_usuario)
-                ->where('v.id_forma_pago', 5)
-                ->sum('v.total_deposito');
-
-            $ventasIds = $ventas->pluck('id')->toArray();
-            $detalles = collect();
-            $detallesPaquete = collect();
-
-            if (!empty($ventasIds)) {
-                $detalles = DB::table('detalle_venta as d')
-                    ->leftJoin('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->leftJoin('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->where('d.estado', '!=', '1')
-                    ->select(
-                        'd.id_venta',
-                        'd.cantidad',
-                        DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
-                        'd.costo_venta',
-                        'd.sub_total'
-                    )
-                    ->get();
-
-                $detallesPaquete = DB::table('detalle_venta_paquete as dvp')
-                    ->leftJoin('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
-                    ->whereIn('dvp.id_venta', $ventasIds)
-                    ->select(
-                        'dvp.id_venta',
-                        'dvp.cantidad',
-                        DB::raw('COALESCE(pqt.nombre, "Paquete no encontrado") as producto'),
-                        'dvp.costo_venta',
-                        'dvp.sub_total'
-                    )
-                    ->get();
-            }
-
-            $mi_empresa = MiEmpresa::select(
-                'nombre',
-                'direccion',
-                'telefono',
-                'logo_sistema',
-                'foto as logo_login'
-            )->first();
-
-            $usuarioActual=DB::table('users')->where('id', $id_usuario)->first()->name;
-
-            $title = 'LISTADO DE VENTAS DETALLADO DEPOSITO';
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_forma', [
-                'title' => $title,
-                'nombre_empresa' => $mi_empresa->nombre ?? 'Mi Empresa',
-                'direccion_empresa' => $mi_empresa->direccion ?? 'Dirección no disponible',
-                'telefono_empresa' => $mi_empresa->telefono ?? 'Teléfono no disponible',
-                'foto_empresa' => $mi_empresa->logo_login ?? null,
-                'logo_sistema' => $mi_empresa->logo_sistema ?? null,
-                'usuarioActual' => $usuarioActual ?? null,
-                'tipo_venta' => $tipo_venta,
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin,
-                'venta' => $ventas,
-                'detalles' => $detalles,
-                'detallesPaquete' => $detallesPaquete,
-                'totalVentas' => $totalVentas ?? 0,
-            ]);
-
-            return $pdf->setPaper('letter', 'portrait')->stream('Venta_Deposito_Usuario.pdf');
-
-        } catch (\Exception $e) {
-            \Log::error('Error en pdfVentaDetalladaDepositoUsuario: ' . $e->getMessage(), $request->all());
-            return response()->json(['error' => 'Error al generar el reporte'], 500);
-        }
-    }
-
-    public function pdfVentaDetalladaMixtaUsuario(Request $request)
-    {
-        try {
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin = $request->fecha_fin;
-            $tipo_venta = $request->tipo_venta;
-            $id_tienda = $request->id_tienda;
-            $id_usuario = $request->id_usuario;
-
-            if (!$fecha_inicio || !$fecha_fin || !$tipo_venta || !$id_tienda || !$id_usuario) {
-                return response()->json(['error' => 'Parámetros requeridos faltantes'], 400);
-            }
-
-            $ventas = DB::table('venta as v')
-                ->leftJoin('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->leftJoin('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->leftJoin('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->leftJoin('users as u', 'v.id_usuario', '=', 'u.id')
-                ->leftJoin('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_usuario', $id_usuario)
-                ->where('v.id_forma_pago', 6) // Mixta
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_efectivo',
-                    'v.total_deposito',
-                    DB::raw('COALESCE(c.nombre, "Cliente no encontrado") as cliente'),
-                    DB::raw('COALESCE(t.nombre, "Tipo no encontrado") as tipo_pago'),
-                    DB::raw('COALESCE(f.nombre, "Forma no encontrada") as forma_pago'),
-                    DB::raw('COALESCE(u.name, "Usuario no encontrado") as usuario'),
-                    DB::raw('COALESCE(td.nombre, "Tienda no encontrada") as tienda')
-                )
-                ->orderBy('v.id', 'asc')
-                ->get();
-
-            $totalVentas = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_usuario', $id_usuario)
-                ->where('v.id_forma_pago', 6)
-                ->sum('v.total');
-
-            $ventasIds = $ventas->pluck('id')->toArray();
-            $detalles = collect();
-            $detallesPaquete = collect();
-
-            if (!empty($ventasIds)) {
-                $detalles = DB::table('detalle_venta as d')
-                    ->leftJoin('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->leftJoin('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->where('d.estado', '!=', '1')
-                    ->select(
-                        'd.id_venta',
-                        'd.cantidad',
-                        DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
-                        'd.costo_venta',
-                        'd.sub_total'
-                    )
-                    ->get();
-
-                $detallesPaquete = DB::table('detalle_venta_paquete as dvp')
-                    ->leftJoin('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
-                    ->whereIn('dvp.id_venta', $ventasIds)
-                    ->select(
-                        'dvp.id_venta',
-                        'dvp.cantidad',
-                        DB::raw('COALESCE(pqt.nombre, "Paquete no encontrado") as producto'),
-                        'dvp.costo_venta',
-                        'dvp.sub_total'
-                    )
-                    ->get();
-            }
-
-            $mi_empresa = MiEmpresa::select(
-                'nombre',
-                'direccion',
-                'telefono',
-                'logo_sistema',
-                'foto as logo_login'
-            )->first();
-
-            $usuarioActual=DB::table('users')->where('id', $id_usuario)->first()->name;
-
-
-            $title = 'LISTADO DE VENTAS DETALLADO MIXTA';
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_mixta', [
-                'title' => $title,
-                'nombre_empresa' => $mi_empresa->nombre ?? 'Mi Empresa',
-                'direccion_empresa' => $mi_empresa->direccion ?? 'Dirección no disponible',
-                'telefono_empresa' => $mi_empresa->telefono ?? 'Teléfono no disponible',
-                'foto_empresa' => $mi_empresa->logo_login ?? null,
-                'logo_sistema' => $mi_empresa->logo_sistema ?? null,
-                'usuarioActual' => $usuarioActual ?? null,
-                'tipo_venta' => $tipo_venta,
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin,
-                'venta' => $ventas,
-                'detalles' => $detalles,
-                'detallesPaquete' => $detallesPaquete,
-                'totalVentas' => $totalVentas ?? 0,
-            ]);
-
-            return $pdf->setPaper('letter', 'portrait')->stream('Venta_Mixta_Usuario.pdf');
-
-        } catch (\Exception $e) {
-            \Log::error('Error en pdfVentaDetalladaMixtaUsuario: ' . $e->getMessage(), $request->all());
-            return response()->json(['error' => 'Error al generar el reporte'], 500);
-        }
-    }
-   
-
-    public function pdfVentaDetalladaQrUsuario(Request $request)
-    {
-        // Obtener parámetros
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin; 
-        $tipo_venta = $request->tipo_venta;
-        $id_tienda = $request->id_tienda;
-        $id_usuario = $request->id_usuario;
-
-        // Consulta de ventas detalladas para la forma de pago 4 (Pago por QR)
-        $ventas = DB::table('venta as v')
-            ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-            ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-            ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-            ->join('users as u', 'v.id_usuario', '=', 'u.id')
-            ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-            ->where('v.estado', '!=', 'Anulado')
-            ->where('v.id_forma_pago', 4) // Forma de pago 4 (QR)
-            ->where('v.tipo_venta', $tipo_venta)
-            ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-            ->where('v.id_tienda', $id_tienda)
-            ->where('v.id_usuario', $id_usuario)
-            ->select(
-                'v.id', 'v.fecha', 'v.sub_total', 'v.descuento', 'v.total', 
-                'v.total_deposito', 'c.nombre as cliente', 't.nombre as tipo_pago', 
-                'f.nombre as forma_pago', 'u.name as usuario', 'td.nombre as tienda'
-            )
-            ->get();
-
-        // Sumar total del depósito para la forma de pago 4 (Pago por QR)
-        $totalVentasDeposito = DB::table('venta as v')
-            ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-            ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-            ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-            ->join('users as u', 'v.id_usuario', '=', 'u.id')
-            ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-            ->where('v.estado', '!=', 'Anulado')
-            ->where('v.id_forma_pago', 4) // Forma de pago 4 (QR)
-            ->where('v.tipo_venta', $tipo_venta)
-            ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-            ->where('v.id_tienda', $id_tienda)
-            ->where('v.id_usuario', $id_usuario)
-            ->sum('v.total_deposito');
-
-        // Detalle de ventas
-        $detallesVenta = DB::table('detalle_venta as dv')
-            ->join('venta as v', 'dv.id_venta', '=', 'v.id')
-            ->join('tienda_articulo as ta', 'dv.id_producto', '=', 'ta.id')
-            ->join('articulo as a', 'ta.id_articulo', '=', 'a.id')
-            ->where('dv.estado', '!=', '1') // No anulado
-            ->whereIn('v.id_forma_pago', [4]) // Solo forma de pago QR
-            ->select('dv.id_venta', 'dv.cantidad', 'a.nombre_comercial as producto', 'dv.costo_venta', 'dv.sub_total')
-            ->get();
-
-
-        // Información de la empresa
-        $mi_empresa = MiEmpresa::select(
-            'nombre', 'nit', 'representante', 'direccion', 'telefono', 
-            'localidad', 'Correo', 'sitio_web', 'foto', 'logo_sistema'
-        )->first();
-
-        $usuarioActual = User::find($id_usuario)->name;
-
-        // Título y detalles
-        $title = 'LISTADO DE VENTAS DETALLADO QR';
-        $nombre_empresa = $mi_empresa->nombre;
-        $direccion_empresa = $mi_empresa->direccion;
-        $telefono_empresa = $mi_empresa->telefono;
-        $foto_empresa = $mi_empresa->foto;
-        $logo_sistema = $mi_empresa->logo_sistema;
-
-        // Preparar datos para el PDF
-        $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_forma_qr', [
-            'title' => $title,
-            'nombre_empresa' => $nombre_empresa,
-            'direccion_empresa' => $direccion_empresa,
-            'telefono_empresa' => $telefono_empresa,
-            'foto_empresa' => $foto_empresa,
-            'logo_sistema' => $logo_sistema,
-            'tipo_venta' => $tipo_venta,
-            'fecha_inicio' => $fecha_inicio,
-            'fecha_fin' => $fecha_fin,
-            'venta' => $ventas,
-            'detalles' => $detallesVenta,
-            'totalVentasDeposito' => $totalVentasDeposito,
-            'usuarioActual'=> $usuarioActual
-        ]);
-
-        // Devolver el PDF generado
-        return $pdf->setPaper('letter', 'portrait')->stream('Venta.pdf');
-    }
-
-    
     //Dashboard
     /*public function listarProductoMes(Request $request){
             $anio = $request->anio;
@@ -3560,56 +2334,7 @@ class ReporteController extends BitacoraController
     }
 
     public function listarProductoMes1(Request $request){
-        $anio = $request->anio;
-        $id_proveedor = $request->id_proveedor;
-        $id_tienda = $request->id_tienda;
-        $tienda_articulo = Lote::join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
-        ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-        ->join('categoria','articulo.id_categoria','=','categoria.id')
-        ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
-        ->join('unidad_medida','articulo.id_unidad','=','unidad_medida.id')
-        ->select('lote.id','tienda_articulo.id as id_articulo','tienda_articulo.id_tienda',
-        'articulo.nombre_comercial','articulo.nombre_generico',
-        'articulo.costo_compra','articulo.costo_unitario','articulo.costo_mayorista','articulo.precio_blister','articulo.precio_caja',
-        'articulo.costo_preferencial','articulo.id_categoria','categoria.nombre as categoria','lote.cantidad as stock','lote.fecha_vecimiento',
-        'articulo.descripcion','articulo.cod_proveedor','articulo.cantidad_blister','articulo.cantidad_caja','articulo.venta_presentacion',
-        'articulo.ubicacion','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion') 
-        ->where('lote.cantidad', '!=', 0)
-        ->where('lote.estado', '!=', 0)
-        ->where('proveedor.id',$id_proveedor)
-        ->where('tienda_articulo.id_tienda',$id_tienda)
-        ->whereYear('lote.fecha_vecimiento',$anio)
-        ->orderBy('lote.fecha_vecimiento', 'asc')
-        ->get();
-
-
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
-
-        $title='LISTA DE PRODUCTOS';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
-
-        $detalles=$tienda_articulo;
-        
-        $cont=Articulo::count();
-        $pdf = \PDF::loadView('pdf.reportes.producto.producto_mes', [
-
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-
-            'detalles'=>$detalles,
-            
-        ]);
-        return $pdf->setPaper('letter', 'landscape')->stream('Producto.pdf');
+        return $this->buildProductoVencimientoReport($request, false);
     }
 
     /*public function listarProductoMeses(Request $request){
@@ -3703,203 +2428,159 @@ class ReporteController extends BitacoraController
     }
 
     public function listarProductoMeses1(Request $request){
-        $anio = $request->anio;
-        $fecha1 = now()->toDateString();
-        $fecha2 = now()->addDays(90)->toDateString();
-        $id_proveedor = $request->id_proveedor;
-        $id_tienda = $request->id_tienda;
-        //dd($anio);
-        $tienda_articulo = Lote::join('tienda_articulo','lote.id_producto','=','tienda_articulo.id')
-        ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
-        ->join('categoria','articulo.id_categoria','=','categoria.id')
-        ->join('proveedor','articulo.id_proveedor','=','proveedor.id')
-        ->join('unidad_medida','articulo.id_unidad','=','unidad_medida.id')
-        ->select('lote.id','tienda_articulo.id as id_articulo','tienda_articulo.id_tienda',
-        'articulo.nombre_comercial','articulo.nombre_generico',
-        'articulo.costo_compra','articulo.costo_unitario','articulo.costo_mayorista','articulo.precio_blister','articulo.precio_caja',
-        'articulo.costo_preferencial','articulo.id_categoria','categoria.nombre as categoria','lote.cantidad as stock','lote.fecha_vecimiento',
-        'articulo.descripcion','articulo.cod_proveedor','articulo.cantidad_blister','articulo.cantidad_caja','articulo.venta_presentacion',
-        'articulo.ubicacion','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion') 
-        ->where('lote.cantidad', '!=', 0)
-        ->where('lote.estado', '!=', 0)
-        ->where('proveedor.id',$id_proveedor)
-        ->where('tienda_articulo.id_tienda',$id_tienda)
-        ->whereBetween('lote.fecha_vecimiento', [$fecha1, $fecha2])
-        ->whereYear('lote.fecha_vecimiento',$anio)
-        ->orderBy('lote.fecha_vecimiento', 'asc')
-        ->get();
-        // dd($tienda_articulo);
-        //->get();
-
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
-
-        $title='LISTA DE PRODUCTOS';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
-
-        $detalles=$tienda_articulo;
-        
-        $cont=Articulo::count();
-        $pdf = \PDF::loadView('pdf.reportes.producto.producto_mes', [
-
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-
-            'detalles'=>$detalles,
-            
-        ]);
-        //return $pdf->stream('Producto.pdf');
-        return $pdf->setPaper('letter', 'landscape')->stream('Producto.pdf');
+        return $this->buildProductoVencimientoReport($request, true);
     }
-    
-    public function pdfVentaDetalladaCliente(Request $request)
+
+    private function buildProductoVencimientoReport(Request $request, bool $limitarRango90Dias)
     {
+        $this->prepararEntornoReporte();
         try {
-            // Validar entrada
             $request->validate([
-                'fecha_inicio' => 'required|date',
-                'fecha_fin'     => 'required|date|after_or_equal:fecha_inicio',
-                'tipo_venta'    => 'required|string',
-                'id_tienda'     => 'required|exists:tienda,id',
-                'id_cliente'    => 'required|exists:cliente,id',
+                'anio' => 'required|integer',
+                'id_proveedor' => 'required|integer|exists:proveedor,id',
+                'id_tienda' => 'required|exists:tienda,id',
             ]);
 
-            $fecha_inicio = $request->fecha_inicio;
-            $fecha_fin    = $request->fecha_fin;
-            $tipo_venta   = $request->tipo_venta;
-            $id_tienda    = $request->id_tienda;
-            $id_cliente   = $request->id_cliente;
+            $anio = $request->anio;
+            $idProveedor = (int) $request->id_proveedor;
+            $idTienda = $request->id_tienda;
 
-            // === 1. Datos de la empresa ===
+            $proveedor = DB::table('proveedor')->where('id', $idProveedor)->first(['nombre']);
+            abort_if(!$proveedor, 404, 'Laboratorio no encontrado.');
+
             $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
-            if (!$empresa) {
-                return response()->json(['error' => 'Datos de la empresa no configurados'], 500);
+            abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
+
+            $base = DB::table('lote as l')
+                ->join('tienda_articulo as ta', 'l.id_producto', '=', 'ta.id')
+                ->join('articulo as a', 'ta.id_articulo', '=', 'a.id')
+                ->join('unidad_medida as um', 'a.id_unidad', '=', 'um.id')
+                ->where('l.cantidad', '!=', 0)
+                ->where('l.estado', '!=', 0)
+                ->where('a.id_proveedor', $idProveedor)
+                ->where('ta.id_tienda', $idTienda)
+                ->whereYear('l.fecha_vecimiento', $anio);
+
+            if ($limitarRango90Dias) {
+                $fecha1 = now()->toDateString();
+                $fecha2 = now()->addDays(90)->toDateString();
+                $base->whereBetween('l.fecha_vecimiento', [$fecha1, $fecha2]);
             }
 
-            // === 2. Cliente ===
-            $cliente = DB::table('cliente')
-                ->where('id', $id_cliente)
-                ->first(['nombre']);
+            $totalCount = (clone $base)->count();
 
-            if (!$cliente) {
-                return response()->json(['error' => 'Cliente no encontrado'], 404);
+            if ($totalCount > 4000) {
+                return response()->json([
+                    'error' => 'El laboratorio seleccionado tiene demasiados lotes por vencer (' . number_format($totalCount) . '). Contacte al administrador.',
+                ], 422);
             }
 
-            // === 3. Ventas del cliente en el rango ===
-            $ventas = DB::table('venta as v')
-                ->join('cliente as c', 'v.id_cliente', '=', 'c.id')
-                ->join('tipo_pago as t', 'v.id_tipo_pago', '=', 't.id')
-                ->join('forma_pago as f', 'v.id_forma_pago', '=', 'f.id')
-                ->join('users as u', 'v.id_usuario', '=', 'u.id')
-                ->join('tienda as td', 'v.id_tienda', '=', 'td.id')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('td.id', $id_tienda)
-                ->where('v.id_cliente', $id_cliente)
-                ->select(
-                    'v.id',
-                    'v.fecha',
-                    'v.sub_total',
-                    'v.descuento',
-                    'v.total',
-                    'v.total_efectivo',
-                    'v.total_deposito',
-                    'c.nombre as cliente',
-                    't.nombre as tipo_pago',
-                    'f.nombre as forma_pago',
-                    'u.name as usuario',
-                    'td.nombre as tienda'
-                )
-                ->orderBy('v.fecha', 'desc')
-                ->get();
+            $title = 'LISTA DE PRODUCTOS';
 
-       
-
-            // === 4. Totales del cliente ===
-            $totales = DB::table('venta as v')
-                ->where('v.estado', '!=', 'Anulado')
-                ->where('v.tipo_venta', $tipo_venta)
-                ->whereBetween('v.fecha', [$fecha_inicio, $fecha_fin])
-                ->where('v.id_tienda', $id_tienda)
-                ->where('v.id_cliente', $id_cliente)
-                ->select(
-                    DB::raw('SUM(v.total) as totalV'),
-                    DB::raw('SUM(CASE WHEN v.id_tipo_pago = 1 THEN v.total ELSE 0 END) as totalC'),
-                    DB::raw('SUM(CASE WHEN v.id_tipo_pago = 2 THEN v.total ELSE 0 END) as totalCr'),
-                    DB::raw('SUM(v.total_efectivo) as totalEf'),
-                    DB::raw('SUM(v.total_deposito) as totalDep')
-                )
-                ->first();
-
-            // === 5. Detalles de productos y paquetes ===
-            $ventasIds = $ventas->pluck('id')->toArray();
-            $detalles = [];
-            $detallesPaquete = [];
-
-            if (!empty($ventasIds)) {
-                // Productos
-                $detalles = DB::table('detalle_venta as d')
-                    ->join('tienda_articulo as ta', 'd.id_producto', '=', 'ta.id')
-                    ->join('articulo as p', 'ta.id_articulo', '=', 'p.id')
-                    ->whereIn('d.id_venta', $ventasIds)
-                    ->select('d.id_venta', 'd.cantidad', 'p.nombre_comercial as producto', 'd.costo_venta', 'd.sub_total')
-                    ->get()
-                    ->groupBy('id_venta');
-
-                // Paquetes
-                $detallesPaquete = DB::table('detalle_venta_paquete as dvp')
-                    ->join('paquetes as pqt', 'dvp.id_paquete', '=', 'pqt.id')
-                    ->whereIn('dvp.id_venta', $ventasIds)
-                    ->select('dvp.id_venta', 'dvp.cantidad', 'pqt.nombre as producto', 'dvp.costo_venta', 'dvp.sub_total')
-                    ->get()
-                    ->groupBy('id_venta');
-            }
-
-            // === 6. Generar PDF con DomPDF ===
-            $pdf = \PDF::loadView('pdf.reportes.venta.venta_detallada_cliente', [
-                'title'               => 'LISTADO DE VENTAS DETALLADO POR CLIENTE',
-                'nombre_empresa'      => $empresa->nombre,
-                'direccion_empresa'   => $empresa->direccion,
-                'telefono_empresa'    => $empresa->telefono,
-                'foto_empresa'        => $empresa->foto,
-                'logo_sistema'        => $empresa->logo_sistema,
-
-                'fecha_inicio'        => $fecha_inicio,
-                'fecha_fin'           => $fecha_fin,
-                'tipo_venta'          => $tipo_venta,
-                'nombre_cliente'      => $cliente->nombre,
-
-                'ventas'              => $ventas,
-                'totales'             => $totales,
-                'detalles'            => $detalles,
-                'detallesPaquete'     => $detallesPaquete,
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8', 'format' => 'Letter-L',
+                'margin_top' => 10, 'margin_bottom' => 16, 'margin_left' => 10, 'margin_right' => 10,
             ]);
 
-            return $pdf->setPaper('letter', 'portrait')->stream("Ventas_Cliente_{$cliente->nombre}.pdf");
+            $theme = trim(view('pdf.reportes.partials.corporate-letter-theme')->render());
 
+            $viewData = [
+                'title' => $title,
+                'nombre_empresa' => $empresa->nombre,
+                'direccion_empresa' => $empresa->direccion,
+                'telefono_empresa' => $empresa->telefono,
+                'logo_sistema' => $empresa->logo_sistema,
+                'eyebrow' => 'Vencimientos',
+                'documentLabel' => 'Laboratorio: ' . $proveedor->nombre,
+                'sectionTitle' => $limitarRango90Dias ? 'Productos por vencer en los próximos 3 meses' : 'Productos por vencer en el año',
+                'description' => 'Lotes con stock disponible del laboratorio ' . $proveedor->nombre . ' cuya fecha de vencimiento cae dentro del período seleccionado.',
+                'recordCount' => $totalCount,
+                'recordLabel' => 'Lotes',
+                'periodLabel' => 'Año ' . $anio,
+                'footerLabel' => 'Vencimiento de productos',
+            ];
+
+            $mpdf->WriteHTML($theme, \Mpdf\HTMLParserMode::HEADER_CSS);
+            $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
+            $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
+
+            $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
+                . '<th style="width:5%">N.º</th><th style="width:24%">Producto</th><th style="width:24%">Nombre genérico</th>'
+                . '<th style="width:9%">F. Venc.</th><th style="width:9%">Ubic.</th><th style="width:8%">P. Unidad</th>'
+                . '<th style="width:8%">P. Blister</th><th style="width:8%">P. Caja</th><th style="width:5%">Stock</th>'
+                . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $numero = 0;
+            (clone $base)
+                ->select(
+                    'a.nombre_comercial', 'a.nombre_generico', 'l.fecha_vecimiento', 'a.ubicacion',
+                    'a.costo_unitario', 'a.precio_blister', 'a.precio_caja', 'l.cantidad as stock'
+                )
+                ->orderBy('l.fecha_vecimiento')
+                ->chunk(300, function ($rows) use ($mpdf, &$numero) {
+                    $html = '';
+                    foreach ($rows as $row) {
+                        $numero++;
+                        $html .= '<tr>'
+                            . '<td class="is-center">' . $numero . '</td>'
+                            . '<td>' . e($row->nombre_comercial) . '</td>'
+                            . '<td>' . e($row->nombre_generico) . '</td>'
+                            . '<td class="is-center">' . e($row->fecha_vecimiento) . '</td>'
+                            . '<td class="is-center">' . e($row->ubicacion) . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->costo_unitario, 2, ',', '.') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->precio_blister, 2, ',', '.') . '</td>'
+                            . '<td class="is-right">Bs ' . number_format((float) $row->precio_caja, 2, ',', '.') . '</td>'
+                            . '<td class="is-center">' . (float) $row->stock . '</td>'
+                            . '</tr>';
+                    }
+                    $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
+                });
+
+            if ($totalCount === 0) {
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="9">No existen productos por vencer para los filtros seleccionados.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+            }
+            $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
+
+            $content = $mpdf->Output('Producto_Vencimiento.pdf', 'S');
+
+            return response($content, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="Producto_Vencimiento.pdf"',
+            ]);
         } catch (\Exception $e) {
-            Log::error('Error en pdfVentaDetalladaCliente: ' . $e->getMessage());
-            return response()->json(['error' => 'Error al generar el reporte'], 500);
+            \Log::error('Error en reporte de productos por vencer: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al generar el reporte de productos por vencer'], 500);
         }
     }
 
+    public function pdfVentaDetalladaCliente(Request $request)
+    {
+        $request->validate(['id_cliente' => 'required|integer|exists:cliente,id']);
+        return $this->buildVentaDetalladaReport($request, 'detallada', null, (int) $request->id_cliente);
+    }
+
     public function pdfVentaClienteCredito(Request $request){
+        return $this->buildVentaClienteCreditoReport($request);
+    }
+
+    public function pdfVentaClienteCreditoUsuario(Request $request){
+        $request->validate(['id_usuario' => 'required|integer|exists:users,id']);
+        return $this->buildVentaClienteCreditoReport($request, (int) $request->id_usuario);
+    }
+
+    private function buildVentaClienteCreditoReport(Request $request, ?int $idUsuario = null)
+    {
+        $this->prepararEntornoReporte();
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
 
             $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
             abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
+
+            $usuarioNombre = $idUsuario !== null
+                ? optional(DB::table('users')->find($idUsuario))->name
+                : null;
 
             $base = DB::table('venta')
                 ->join('pago', 'pago.id_venta', '=', 'venta.id')
@@ -3909,6 +2590,10 @@ class ReporteController extends BitacoraController
                 ->where('c_x_cobrar.amortizacion', '>', 0)
                 ->whereDate('c_x_cobrar.fecha', '>=', $fecha_inicio)
                 ->whereDate('c_x_cobrar.fecha', '<=', $fecha_fin);
+
+            if ($idUsuario !== null) {
+                $base->where('c_x_cobrar.id_usuario', $idUsuario);
+            }
 
             $totales = (clone $base)->selectRaw('SUM(c_x_cobrar.amortizacion) as totalGeneral')->first();
             $totalGeneral = (float) ($totales->totalGeneral ?? 0);
@@ -3930,9 +2615,10 @@ class ReporteController extends BitacoraController
                 'telefono_empresa' => $empresa->telefono,
                 'logo_sistema' => $empresa->logo_sistema,
                 'eyebrow' => 'Cuentas por cobrar',
-                'documentLabel' => 'Pago a crédito',
+                'documentLabel' => $usuarioNombre ? 'Usuario: ' . $usuarioNombre : 'Pago a crédito',
                 'sectionTitle' => 'Amortizaciones de clientes',
-                'description' => 'Pagos al crédito realizados por clientes en el período seleccionado.',
+                'description' => 'Pagos al crédito realizados por clientes en el período seleccionado.'
+                    . ($usuarioNombre ? ' Registrados por el usuario ' . $usuarioNombre . '.' : ''),
                 'recordCount' => $totalCount,
                 'recordLabel' => 'Pagos',
                 'periodLabel' => 'Del ' . \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') . ' al ' . \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y'),
@@ -3986,66 +2672,8 @@ class ReporteController extends BitacoraController
         }
     }
 
-    public function pdfVentaClienteCreditoUsuario(Request $request){
-
-        $fecha_inicio = $request->fecha_inicio;
-        $fecha_fin = $request->fecha_fin; 
-        $id_usuario = $request->id_usuario; 
-        $x=DB::select("SELECT pago.id,c_x_cobrar.fecha,cliente.nombre as cliente, c_x_cobrar.amortizacion as total,users.name as usuario,forma_pago.nombre as forma
-        FROM venta  INNER JOIN pago
-        ON pago.id_venta=venta.id 
-        INNER JOIN cliente 
-        ON venta.id_cliente=cliente.id 
-        INNER JOIN c_x_cobrar 
-        ON c_x_cobrar.id_pago=pago.id 
-        LEFT JOIN users
-        ON c_x_cobrar.id_usuario=users.id 
-        LEFT JOIN forma_pago
-        ON c_x_cobrar.id_forma_pago=forma_pago.id 
-        WHERE c_x_cobrar.amortizacion>0 
-        and c_x_cobrar.fecha>='$fecha_inicio' AND c_x_cobrar.fecha<='$fecha_fin' and c_x_cobrar.id_usuario = '$id_usuario'
-        ORDER BY c_x_cobrar.id");
-        $obj = json_decode(json_encode($x), true);
-
-        $mi_empresa= MiEmpresa::select('logo_sistema','mi_empresa.nombre','mi_empresa.nit','mi_empresa.representante','mi_empresa.direccion','mi_empresa.telefono'
-        ,'mi_empresa.localidad','mi_empresa.Correo','mi_empresa.sitio_web','mi_empresa.foto')
-        ->get();
-
-        $title='LISTADO DE PAGO AL CREDITO';
-        $nombre_empresa=$mi_empresa[0]->nombre;
-        $direccion_empresa=$mi_empresa[0]->direccion;
-        $telefono_empresa=$mi_empresa[0]->telefono;
-        $foto_empresa=$mi_empresa[0]->foto;
-        $logo_sistema=$mi_empresa[0]->logo_sistema;
-
-        $detalles=$obj;
-        //dd($detalles);
-        $total_general = 0;
-        foreach($detalles as $det)
-        {
-            $total_general=$total_general+$det['total'];
-        }
-
-        $cont=Venta::count();
-        $pdf = \PDF::loadView('pdf.reportes.venta.venta_credito', [
-
-            'title'=>$title,
-            'nombre_empresa'=>$nombre_empresa,
-            'direccion_empresa'=>$direccion_empresa,
-            'telefono_empresa'=>$telefono_empresa,
-            'foto_empresa'=>$foto_empresa,
-            'logo_sistema'=>$logo_sistema,
-
-            'fecha_inicio'=>$fecha_inicio,
-            'fecha_fin'=>$fecha_fin,
-            'detalles'=>$detalles,
-            'total_general'=>$total_general,
-            
-        ]);
-        return $pdf->setPaper('letter', 'portrait')->stream('Venta.pdf');
-
-    }
     public function pdfCompraProveedorCredito(Request $request){
+        $this->prepararEntornoReporte();
         try {
             $fecha_inicio = $request->fecha_inicio;
             $fecha_fin = $request->fecha_fin;
