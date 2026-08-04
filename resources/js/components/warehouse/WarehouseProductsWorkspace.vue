@@ -13,9 +13,9 @@
         </app-module-header>
 
         <section class="warehouse-products__metrics">
-            <app-metric-card label="Productos" :value="pagination.total || productCount || rows.length" hint="Catálogo registrado" icon="img/menu/Almacen.png" />
-            <app-metric-card label="Categorías" :value="categoryCount" hint="Clasificaciones disponibles" icon="img/menu/configuracion.png" tone="cyan" />
-            <app-metric-card label="Laboratorios" :value="providerCount" hint="Proveedores relacionados" icon="img/menu/control.png" tone="neutral" />
+            <app-metric-card label="Productos" :value="pagination.total || productCount || rows.length" hint="Catálogo registrado" icon="/icons/basket.svg" />
+            <app-metric-card label="Categorías" :value="categoryCount" hint="Clasificaciones disponibles" icon="/icons/tags.svg" tone="cyan" />
+            <app-metric-card label="Laboratorios" :value="providerCount" hint="Proveedores relacionados" icon="/icons/beaker.svg" tone="neutral" />
         </section>
 
         <app-data-panel v-if="view === 'list'" eyebrow="Consulta" title="Catálogo de productos" subtitle="Busca por nombre, categoría o laboratorio." flush>

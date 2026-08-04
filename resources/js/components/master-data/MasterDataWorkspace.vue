@@ -16,14 +16,14 @@
                 label="Registros"
                 :value="pagination.total || records.length"
                 hint="Total disponible"
-                icon="img/menu/configuracion.png"
+                icon="/icons/clipboard.svg"
                 :loading="loading"
             />
             <app-metric-card
                 label="Activos en página"
                 :value="activeCount"
                 hint="Disponibles para operar"
-                icon="img/menu/control.png"
+                icon="/icons/check.svg"
                 tone="cyan"
                 :loading="loading"
             />
@@ -31,7 +31,7 @@
                 label="Inactivos en página"
                 :value="inactiveCount"
                 hint="Temporalmente deshabilitados"
-                icon="img/menu/historial.png"
+                icon="/icons/ban.svg"
                 tone="neutral"
                 :loading="loading"
             />

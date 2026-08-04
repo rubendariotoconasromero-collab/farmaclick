@@ -4,14 +4,14 @@
             label="Registros"
             :value="total"
             hint="Total disponible"
-            icon="img/menu/usuario.png"
+            icon="/icons/clipboard.svg"
             :loading="loading"
         />
         <app-metric-card
             :label="activeLabel"
             :value="active"
             :hint="activeHint"
-            icon="img/menu/control.png"
+            icon="/icons/check.svg"
             tone="cyan"
             :loading="loading"
         />
@@ -19,7 +19,7 @@
             :label="inactiveLabel"
             :value="inactive"
             :hint="inactiveHint"
-            icon="img/menu/historial.png"
+            icon="/icons/ban.svg"
             tone="neutral"
             :loading="loading"
         />
