@@ -63,7 +63,6 @@
                             <div class="avatar avatar-md"><img class="avatar-img" src="{{ asset('img/FarmaClick_logo_cuadrado.png') }}" alt="FarmaClick"></div>
                             <span class="header-user-name">{{$user->name}}</span>
                         </a>
-                    <div class="text-center pt-1 text-uppercase text-medium-emphasis small header-user-name-mobile">{{$user->name}}</div>
                     <div class="dropdown-menu dropdown-menu-end pt-0">
                     <div class="dropdown-header bg-light py-1 text-uppercase text-center">
                         <strong>{{Auth::user()->name}}</strong>

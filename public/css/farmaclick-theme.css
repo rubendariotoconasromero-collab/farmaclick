@@ -136,15 +136,15 @@ textarea {
 }
 
 .header-user-name {
+  max-width: 130px;
+  overflow: hidden;
   color: #fff;
   font-size: 0.78rem;
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-}
-
-.header-user-name-mobile {
-  display: none;
 }
 
 .dropdown-action-icon {
@@ -680,12 +680,15 @@ textarea.form-control:focus {
 }
 
 @media (max-width: 767.98px) {
-  .header-user-name {
-    display: none;
+  .header-user-trigger {
+    flex-direction: column;
+    gap: 0.2rem;
   }
 
-  .header-user-name-mobile {
-    display: block;
+  .header-user-name {
+    max-width: 70px;
+    font-size: 0.6rem;
+    text-align: center;
   }
 
   .login-layout {
