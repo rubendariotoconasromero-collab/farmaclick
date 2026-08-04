@@ -10,9 +10,11 @@ const mix = require('laravel-mix');
  | file for the application as well as bundling up all the JS files.
  |
  */
-//  mix.browserSync({
-//     proxy: 'http://192.168.0.14:8000'
-// })
+mix.browserSync({
+    proxy: 'http://localhost:8000',
+    open: false,
+    notify: false
+});
 // mix.js('resources/js/app.js', 'public/js')
 //     .vue()
 //     .sass('resources/sass/app.scss', 'public/css');
