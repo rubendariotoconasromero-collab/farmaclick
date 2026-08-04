@@ -2437,16 +2437,21 @@ class ReporteController extends BitacoraController
         try {
             $request->validate([
                 'anio' => 'required|integer',
-                'id_proveedor' => 'required|integer|exists:proveedor,id',
+                'id_proveedor' => 'required|array|min:1',
+                'id_proveedor.*' => 'integer|exists:proveedor,id',
                 'id_tienda' => 'required|exists:tienda,id',
             ]);
 
             $anio = $request->anio;
-            $idProveedor = (int) $request->id_proveedor;
+            $idsProveedor = array_map('intval', $request->id_proveedor);
             $idTienda = $request->id_tienda;
 
-            $proveedor = DB::table('proveedor')->where('id', $idProveedor)->first(['nombre']);
-            abort_if(!$proveedor, 404, 'Laboratorio no encontrado.');
+            $proveedores = DB::table('proveedor')->whereIn('id', $idsProveedor)->pluck('nombre');
+            abort_if($proveedores->isEmpty(), 404, 'Laboratorio no encontrado.');
+
+            $nombreProveedores = $proveedores->count() > 3
+                ? $proveedores->take(3)->implode(', ') . ' y ' . ($proveedores->count() - 3) . ' más'
+                : $proveedores->implode(', ');
 
             $empresa = MiEmpresa::first(['nombre', 'direccion', 'telefono', 'foto', 'logo_sistema']);
             abort_if(!$empresa, 422, 'Configure los datos de la empresa antes de generar reportes.');
@@ -2455,9 +2460,10 @@ class ReporteController extends BitacoraController
                 ->join('tienda_articulo as ta', 'l.id_producto', '=', 'ta.id')
                 ->join('articulo as a', 'ta.id_articulo', '=', 'a.id')
                 ->join('unidad_medida as um', 'a.id_unidad', '=', 'um.id')
+                ->join('proveedor as p', 'a.id_proveedor', '=', 'p.id')
                 ->where('l.cantidad', '!=', 0)
                 ->where('l.estado', '!=', 0)
-                ->where('a.id_proveedor', $idProveedor)
+                ->whereIn('a.id_proveedor', $idsProveedor)
                 ->where('ta.id_tienda', $idTienda)
                 ->whereYear('l.fecha_vecimiento', $anio);
 
@@ -2491,9 +2497,9 @@ class ReporteController extends BitacoraController
                 'telefono_empresa' => $empresa->telefono,
                 'logo_sistema' => $empresa->logo_sistema,
                 'eyebrow' => 'Vencimientos',
-                'documentLabel' => 'Laboratorio: ' . $proveedor->nombre,
+                'documentLabel' => ($proveedores->count() > 1 ? 'Laboratorios: ' : 'Laboratorio: ') . $nombreProveedores,
                 'sectionTitle' => $limitarRango90Dias ? 'Productos por vencer en los próximos 3 meses' : 'Productos por vencer en el año',
-                'description' => 'Lotes con stock disponible del laboratorio ' . $proveedor->nombre . ' cuya fecha de vencimiento cae dentro del período seleccionado.',
+                'description' => 'Lotes con stock disponible ' . ($proveedores->count() > 1 ? 'de los laboratorios ' : 'del laboratorio ') . $nombreProveedores . ' cuya fecha de vencimiento cae dentro del período seleccionado.',
                 'recordCount' => $totalCount,
                 'recordLabel' => 'Lotes',
                 'periodLabel' => 'Año ' . $anio,
@@ -2504,20 +2510,24 @@ class ReporteController extends BitacoraController
             $mpdf->WriteHTML(view('pdf.reportes.partials.corporate-letter-header', $viewData)->render(), \Mpdf\HTMLParserMode::HTML_BODY);
             $mpdf->SetHTMLFooter(view('pdf.reportes.partials.corporate-mpdf-footer', $viewData)->render(), '', true);
 
+            $mostrarLaboratorio = $proveedores->count() > 1;
+
             $mpdf->WriteHTML('<table class="fc-table"><thead><tr>'
-                . '<th style="width:5%">N.º</th><th style="width:24%">Producto</th><th style="width:24%">Nombre genérico</th>'
+                . '<th style="width:5%">N.º</th><th style="width:' . ($mostrarLaboratorio ? '19' : '24') . '%">Producto</th>'
+                . '<th style="width:' . ($mostrarLaboratorio ? '19' : '24') . '%">Nombre genérico</th>'
                 . '<th style="width:9%">F. Venc.</th><th style="width:9%">Ubic.</th><th style="width:8%">P. Unidad</th>'
                 . '<th style="width:8%">P. Blister</th><th style="width:8%">P. Caja</th><th style="width:5%">Stock</th>'
+                . ($mostrarLaboratorio ? '<th style="width:9%">Laboratorio</th>' : '')
                 . '</tr></thead><tbody>', \Mpdf\HTMLParserMode::HTML_BODY);
 
             $numero = 0;
             (clone $base)
                 ->select(
                     'a.nombre_comercial', 'a.nombre_generico', 'l.fecha_vecimiento', 'a.ubicacion',
-                    'a.costo_unitario', 'a.precio_blister', 'a.precio_caja', 'l.cantidad as stock'
+                    'a.costo_unitario', 'a.precio_blister', 'a.precio_caja', 'l.cantidad as stock', 'p.nombre as laboratorio'
                 )
                 ->orderBy('l.fecha_vecimiento')
-                ->chunk(300, function ($rows) use ($mpdf, &$numero) {
+                ->chunk(300, function ($rows) use ($mpdf, &$numero, $mostrarLaboratorio) {
                     $html = '';
                     foreach ($rows as $row) {
                         $numero++;
@@ -2531,13 +2541,14 @@ class ReporteController extends BitacoraController
                             . '<td class="is-right">Bs ' . number_format((float) $row->precio_blister, 2, ',', '.') . '</td>'
                             . '<td class="is-right">Bs ' . number_format((float) $row->precio_caja, 2, ',', '.') . '</td>'
                             . '<td class="is-center">' . (float) $row->stock . '</td>'
+                            . ($mostrarLaboratorio ? '<td>' . e($row->laboratorio) . '</td>' : '')
                             . '</tr>';
                     }
                     $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
                 });
 
             if ($totalCount === 0) {
-                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="9">No existen productos por vencer para los filtros seleccionados.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
+                $mpdf->WriteHTML('<tr><td class="fc-empty" colspan="' . ($mostrarLaboratorio ? 10 : 9) . '">No existen productos por vencer para los filtros seleccionados.</td></tr>', \Mpdf\HTMLParserMode::HTML_BODY);
             }
             $mpdf->WriteHTML('</tbody></table>', \Mpdf\HTMLParserMode::HTML_BODY);
 

@@ -10,11 +10,9 @@
             :client-reports="clienteReports"
             :laboratory-reports="proveedorReports"
             :users="arrayUsuario"
-            :clients="arrayCliente"
-            :laboratories="arrayLaboratorio"
             :selected-user="usuarioSeleccionado"
             :selected-client="clienteSeleccionado"
-            :selected-laboratory="laboratorioSeleccionado"
+            :selected-laboratories="laboratoriosSeleccionados"
             :cash-records="arqueos"
             :cash-loading="arqueosLoading"
             @run-report="generarReporte"
@@ -45,7 +43,7 @@ export default {
             arqueosLoading: false,
             usuarioSeleccionado: null,
             clienteSeleccionado: null,
-            laboratorioSeleccionado: null,
+            laboratoriosSeleccionados: [],
             filtros: {
                 fecha_inicio: moment().subtract(7, 'days').format('YYYY-MM-DD'),
                 fecha_fin: moment().format('YYYY-MM-DD'),
@@ -56,7 +54,6 @@ export default {
                 fecha_fin: moment().format('YYYY-MM-DD'),
                 id_usuario: 0,
                 id_cliente: 0,
-                id_proveedor: 0,
                 anio: moment().format('YYYY'),
             },
             datosTienda: {
@@ -64,8 +61,6 @@ export default {
                 id_tienda: 1,
             },
             arrayUsuario: [],
-            arrayCliente: [],
-            arrayLaboratorio: [],
             arqueos: [],
             reportSections: [
                 {
@@ -152,8 +147,7 @@ export default {
                 this.clienteSeleccionado = item;
                 this.datos.id_cliente = item.id;
             } else if (type === 'laboratory') {
-                this.laboratorioSeleccionado = item;
-                this.datos.id_proveedor = item.id;
+                this.laboratoriosSeleccionados = item;
             }
         },
         validarFechas() {
@@ -183,10 +177,19 @@ export default {
                 return { ...sale, id_cliente: this.clienteSeleccionado.id };
             }
             if (item.mode === 'laboratory' || item.mode === 'laboratory-expiry') {
-                if (!this.laboratorioSeleccionado) return this.solicitarSeleccion('un laboratorio');
-                return item.mode === 'laboratory-expiry'
-                    ? { id_tienda: 1, id_proveedor: this.laboratorioSeleccionado.id, anio: this.datos.anio }
-                    : { id_proveedor: this.laboratorioSeleccionado.id };
+                if (!this.laboratoriosSeleccionados.length) return this.solicitarSeleccion('un laboratorio');
+                if (item.mode === 'laboratory-expiry') {
+                    return {
+                        id_tienda: 1,
+                        id_proveedor: this.laboratoriosSeleccionados.map(laboratorio => laboratorio.id),
+                        anio: this.datos.anio,
+                    };
+                }
+                if (this.laboratoriosSeleccionados.length > 1) {
+                    toast.fire({ icon: 'warning', title: 'Este reporte admite un único laboratorio, seleccione solo uno' });
+                    return null;
+                }
+                return { id_proveedor: this.laboratoriosSeleccionados[0].id };
             }
             if (item.mode === 'dates') return dates;
             if (item.mode === 'sale') return sale;
@@ -281,17 +284,11 @@ export default {
             });
         },
         async cargarCatalogos() {
-            const requests = [
-                axios.get('/usuario/selectUsuario'),
-                axios.get('/cliente/selectCliente'),
-                axios.get('/proveedor/selectProveedor'),
-            ];
-            const results = await Promise.allSettled(requests);
-            this.arrayUsuario = results[0].status === 'fulfilled' ? (results[0].value.data || []) : [];
-            this.arrayCliente = results[1].status === 'fulfilled' ? (results[1].value.data || []) : [];
-            this.arrayLaboratorio = results[2].status === 'fulfilled' ? (results[2].value.data || []) : [];
-            if (results.some(result => result.status === 'rejected')) {
-                toast.fire({ icon: 'warning', title: 'Algunos catálogos no pudieron cargarse' });
+            try {
+                const { data } = await axios.get('/usuario/selectUsuario');
+                this.arrayUsuario = data || [];
+            } catch (error) {
+                toast.fire({ icon: 'warning', title: 'No fue posible cargar el catálogo de usuarios' });
             }
         },
     },

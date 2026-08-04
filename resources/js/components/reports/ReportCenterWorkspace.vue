@@ -174,13 +174,14 @@
                     <span>Buscar</span>
                     <input v-model.trim="selectorSearch" type="search" :placeholder="selectorPlaceholder">
                 </label>
+                <p v-if="selectorMultiple" class="report-center__selector-hint">Puedes seleccionar más de un laboratorio.</p>
                 <div class="report-center__selector-list">
                     <button
                         v-for="item in filteredSelectorItems"
                         :key="item.id"
                         type="button"
-                        :class="{ selected: temporarySelection && temporarySelection.id === item.id }"
-                        @click="temporarySelection = item"
+                        :class="{ selected: isRowSelected(item) }"
+                        @click="toggleSelection(item)"
                     >
                         <span>{{ itemInitials(item) }}</span>
                         <div>
@@ -189,11 +190,13 @@
                         </div>
                         <img class="report-center__check" src="/icons/check.svg" alt="Seleccionado">
                     </button>
-                    <p v-if="!filteredSelectorItems.length">No existen coincidencias.</p>
+                    <p v-if="remoteSelectorLoading" class="report-center__selector-loading">Buscando…</p>
+                    <p v-else-if="!filteredSelectorItems.length && selectorType === 'client' && selectorSearch.trim().length < 2">Escribe al menos 2 letras para buscar un cliente.</p>
+                    <p v-else-if="!filteredSelectorItems.length">No existen coincidencias.</p>
                 </div>
                 <footer>
                     <app-button variant="ghost" @click="closeSelector">Cancelar</app-button>
-                    <app-button :disabled="!temporarySelection" @click="confirmSelection">Confirmar selección</app-button>
+                    <app-button :disabled="!hasTemporarySelection" @click="confirmSelection">Confirmar selección</app-button>
                 </footer>
             </section>
         </div>
@@ -213,11 +216,9 @@ export default {
         clientReports: { type: Array, default: () => [] },
         laboratoryReports: { type: Array, default: () => [] },
         users: { type: Array, default: () => [] },
-        clients: { type: Array, default: () => [] },
-        laboratories: { type: Array, default: () => [] },
         selectedUser: { type: Object, default: null },
         selectedClient: { type: Object, default: null },
-        selectedLaboratory: { type: Object, default: null },
+        selectedLaboratories: { type: Array, default: () => [] },
         cashRecords: { type: Array, default: () => [] },
         cashLoading: { type: Boolean, default: false },
     },
@@ -229,6 +230,14 @@ export default {
             selectorType: '',
             selectorSearch: '',
             temporarySelection: null,
+            remoteSelectorItems: [],
+            remoteSelectorLoading: false,
+            remoteSearchTimer: null,
+            remoteSearchSequence: 0,
+            remoteEndpoints: {
+                client: '/cliente/selectCliente',
+                laboratory: '/proveedor/selectProveedor',
+            },
         };
     },
     computed: {
@@ -264,18 +273,21 @@ export default {
                 { type: 'laboratory', title: 'Por laboratorio', icon: '/icons/storage.svg', reports: this.laboratoryReports },
             ];
         },
-        selectorItems() {
-            if (this.selectorType === 'user') return this.users;
-            if (this.selectorType === 'client') return this.clients;
-            if (this.selectorType === 'laboratory') return this.laboratories;
-            return [];
+        selectorMultiple() {
+            return this.selectorType === 'laboratory';
+        },
+        hasTemporarySelection() {
+            return this.selectorMultiple
+                ? Boolean(this.temporarySelection && this.temporarySelection.length)
+                : Boolean(this.temporarySelection);
         },
         filteredSelectorItems() {
-            const term = this.normalize(this.selectorSearch);
-            if (!term) return this.selectorItems;
-            return this.selectorItems.filter(item =>
-                this.normalize(`${item.nombre || ''} ${item.matricula || ''}`).includes(term)
-            );
+            if (this.selectorType === 'user') {
+                const term = this.normalize(this.selectorSearch);
+                if (!term) return this.users;
+                return this.users.filter(item => this.normalize(item.nombre || '').includes(term));
+            }
+            return this.remoteSelectorItems;
         },
         selectorTitle() {
             const titles = {
@@ -314,6 +326,16 @@ export default {
             ];
         },
     },
+    watch: {
+        selectorSearch(termino) {
+            if (!this.remoteEndpoints[this.selectorType]) return;
+            if (this.selectorType === 'client' && termino.trim().length < 2) {
+                this.remoteSelectorItems = [];
+                return;
+            }
+            this.buscarEntidadesRemotas(termino);
+        },
+    },
     methods: {
         normalize(value) {
             return String(value || '')
@@ -347,29 +369,79 @@ export default {
         selectedName(type) {
             if (type === 'user') return this.selectedUser && this.selectedUser.nombre;
             if (type === 'client') return this.selectedClient && this.selectedClient.nombre;
-            if (type === 'laboratory') return this.selectedLaboratory && this.selectedLaboratory.nombre;
+            if (type === 'laboratory') {
+                const labs = this.selectedLaboratories || [];
+                if (!labs.length) return '';
+                return labs.length === 1 ? labs[0].nombre : `${labs.length} laboratorios seleccionados`;
+            }
             return '';
         },
         currentSelection(type) {
             if (type === 'user') return this.selectedUser;
             if (type === 'client') return this.selectedClient;
-            if (type === 'laboratory') return this.selectedLaboratory;
+            if (type === 'laboratory') return [...(this.selectedLaboratories || [])];
             return null;
         },
         openSelector(type) {
             this.selectorType = type;
             this.selectorSearch = '';
             this.temporarySelection = this.currentSelection(type);
+            this.remoteSelectorItems = [];
             this.selectorOpen = true;
+            // El catálogo de laboratorios es pequeño: se puede listar completo de una vez.
+            // El de clientes es muy grande: solo se consulta cuando el usuario escribe una búsqueda.
+            if (type === 'laboratory') this.buscarEntidadesRemotas('');
         },
         closeSelector() {
             this.selectorOpen = false;
             this.selectorType = '';
             this.selectorSearch = '';
             this.temporarySelection = null;
+            this.remoteSelectorItems = [];
+            clearTimeout(this.remoteSearchTimer);
+        },
+        toggleSelection(item) {
+            if (!this.selectorMultiple) {
+                this.temporarySelection = item;
+                return;
+            }
+            const seleccion = this.temporarySelection || [];
+            const existe = seleccion.some(actual => actual.id === item.id);
+            this.temporarySelection = existe
+                ? seleccion.filter(actual => actual.id !== item.id)
+                : [...seleccion, item];
+        },
+        isRowSelected(item) {
+            if (this.selectorMultiple) {
+                return (this.temporarySelection || []).some(actual => actual.id === item.id);
+            }
+            return this.temporarySelection && this.temporarySelection.id === item.id;
+        },
+        buscarEntidadesRemotas(termino) {
+            const endpoint = this.remoteEndpoints[this.selectorType];
+            if (!endpoint) return;
+
+            const sequence = ++this.remoteSearchSequence;
+            clearTimeout(this.remoteSearchTimer);
+
+            this.remoteSearchTimer = setTimeout(async () => {
+                this.remoteSelectorLoading = true;
+                try {
+                    const { data } = await axios.get(endpoint, {
+                        params: termino ? { filtro: termino } : {},
+                    });
+                    if (sequence === this.remoteSearchSequence) {
+                        this.remoteSelectorItems = data.data || data || [];
+                    }
+                } catch (error) {
+                    if (sequence === this.remoteSearchSequence) this.remoteSelectorItems = [];
+                } finally {
+                    if (sequence === this.remoteSearchSequence) this.remoteSelectorLoading = false;
+                }
+            }, 250);
         },
         confirmSelection() {
-            if (!this.temporarySelection) return;
+            if (!this.hasTemporarySelection) return;
             this.$emit('select-entity', {
                 type: this.selectorType,
                 item: this.temporarySelection,
@@ -620,12 +692,27 @@ export default {
 
 .report-center__selector-list button:hover,
 .report-center__selector-list button.selected { border-color: #84c9a7; background: #eff9f4; }
-.report-center__selector-list button > span { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; color: #fff; background: linear-gradient(145deg, #1f965e, #1ca3ba); font-size: 0.66rem; font-weight: 900; }
+.report-center__selector-list button > span {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 2px solid #fff;
+    outline: 2px solid #1f965e;
+    outline-offset: 1px;
+    border-radius: 9px;
+    color: #fff;
+    background: linear-gradient(145deg, #1f965e, #1ca3ba);
+    font-size: 0.66rem;
+    font-weight: 900;
+}
 .report-center__selector-list button div { display: grid; }
 .report-center__selector-list button small { color: #788b83; font-size: 0.66rem; }
 .report-center__check { visibility: hidden; width: 17px; height: 17px; }
 .report-center__selector-list button.selected .report-center__check { visibility: visible; }
 .report-center__selector-list > p { padding: 2rem; color: #778a83; text-align: center; }
+.report-center__selector-hint { margin: 0; padding: 0.6rem 1rem 0; color: #557067; font-size: 0.68rem; }
+.report-center__selector-loading { padding: 1.2rem; color: #778a83; text-align: center; }
 .report-center__dialog footer { display: flex; justify-content: flex-end; gap: 0.65rem; padding: 0.9rem 1rem; border-top: 1px solid #e2ece7; }
 
 @media (max-width: 1050px) {

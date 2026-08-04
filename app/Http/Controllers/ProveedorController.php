@@ -89,9 +89,16 @@ class ProveedorController extends BitacoraController
         $proveedor->save();
     }
 
-    public function selectProveedor(){  
-        $obj = Proveedor::select('id', 'nombre')->orderBy('proveedor.id','desc')->get(); 
-        return $obj;
+    public function selectProveedor(Request $request){
+        $filtro = $request->filtro;
+
+        $query = Proveedor::select('id', 'nombre')->orderBy('proveedor.id', 'desc');
+
+        if (!empty($filtro)) {
+            $query->where('nombre', 'like', '%' . $filtro . '%');
+        }
+
+        return $query->get();
     }
 
     
