@@ -80,7 +80,7 @@ class CotizacionController1 extends BitacoraController
                 $cotizacion->id_tipo_pago=$request->id_tipo_pago;
                 $cotizacion->tipo_venta=$request->tipo_venta;
                 $cotizacion->nota=$request->nota;
-                $cotizacion->id_tienda=2;
+                $cotizacion->id_tienda=1;
                 if($request->id_tipo_pago == 1) {
                     $cotizacion->id_forma_pago=$request->id_forma_pago;
                 }else if ($request->id_tipo_pago == 2) {
@@ -126,19 +126,7 @@ class CotizacionController1 extends BitacoraController
     
                     // $articulo = Articulo::findOrFail($det['id_articulo']);
                     // $articulo->costo_venta=$det['costo_venta'];
-                    // $articulo->save(); 
-                }
-                if($request->tipo_venta=='Venta Cotizacion'){
-                    $ajuste = new Ajuste();
-                    $ajuste->stock=$det['cantidad'];
-                    $ajuste->costo_compra=0;
-                    $ajuste->costo_venta=$det['costo_unitario'];
-                    $ajuste->observacion=$request->descripcion;
-                    $ajuste->id_articulo=$det['id_articulo'];
-                    $ajuste->id_motivo_ajuste=6;
-                    $ajuste->save();
-                }else{
-                    //
+                    // $articulo->save();
                 }
 
                 if($request->tipo_venta == 'Venta Servicio') {
@@ -194,7 +182,7 @@ class CotizacionController1 extends BitacoraController
                 $cotizacion->id_tipo_pago=$request->id_tipo_pago;
                 $cotizacion->tipo_venta=$request->tipo_venta;
                 $cotizacion->nota=$request->nota;
-                $cotizacion->id_tienda=2;
+                $cotizacion->id_tienda=1;
                 if($request->id_tipo_pago == 1) {
                     $cotizacion->id_forma_pago=$request->id_forma_pago;
                 }else if ($request->id_tipo_pago == 2) {
@@ -310,7 +298,7 @@ class CotizacionController1 extends BitacoraController
     public function pdfCotizacionSimple(Request $request){
 
         $id = $request->id;
-        $id_tienda = 2;
+        $id_tienda = 1;
 
         $cotizacion= Cotizacion::join('users','cotizacion.id_usuario','=','users.id')
         ->join('cliente','cotizacion.id_cliente','=','cliente.id')
@@ -422,7 +410,7 @@ class CotizacionController1 extends BitacoraController
     public function pdfCotizacionReporte(Request $request){
 
         $id = $request->id;
-        $id_tienda = 2;
+        $id_tienda = 1;
 
         $var2=DB::select("SELECT  MAX(id) as venta from cotizacion");
         $id=$var2[0]->venta;
