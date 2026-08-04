@@ -25,6 +25,12 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
 
-        //
+        Gate::before(function ($user) {
+            return $user->isSuperAdmin() ? true : null;
+        });
+
+        foreach (array_keys(config('rbac.permissions', [])) as $ability) {
+            Gate::define($ability, fn ($user) => $user->hasPermissionTo($ability));
+        }
     }
 }

@@ -72,16 +72,10 @@ const router = new VueRouter({
 });
 
 router.beforeEach((to, from, next) => {
-    if (to.name === 'inicio') {
-        next();
-        return;
-    }
-
-    const permittedLink = document.querySelector(
-        `#sidebar [data-route-name="${to.name || ''}"]`
-    );
-
-    next(permittedLink ? undefined : { name: 'inicio' });
+    const auth = window.FarmaClickAuth || {};
+    const required = (auth.routePermissions || {})[to.name];
+    const allowed = auth.superAdmin || !required || (auth.permissions || []).includes(required);
+    next(allowed ? undefined : { name: 'inicio', query: { denied: '1' } });
 });
 
 export default router;

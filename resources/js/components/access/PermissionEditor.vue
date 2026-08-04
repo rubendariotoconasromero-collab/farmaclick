@@ -2,7 +2,7 @@
     <section class="permission-editor">
         <header class="permission-editor__header">
             <div>
-                <span>Formularios autorizados</span>
+                <span>Permisos autorizados</span>
                 <strong>{{ selected.length }} permisos seleccionados</strong>
             </div>
             <app-button v-if="!readonly && showAction" variant="secondary" @click="$emit('open-picker')">
@@ -13,12 +13,12 @@
             :columns="columns"
             :rows="selected"
             :loading="loading"
-            row-key="id_formulario"
+            row-key="id"
             min-width="520px"
             empty-title="Sin permisos asignados"
-            empty-message="Agrega al menos un formulario para definir el alcance del grupo."
+            empty-message="Agrega permisos para definir el alcance del rol."
         >
-            <template #cell-nombre="{ value }"><strong>{{ value }}</strong></template>
+            <template #cell-name="{ value }"><strong>{{ value }}</strong></template>
             <template v-if="!readonly" #cell-actions="{ row }">
                 <app-button variant="danger" @click="$emit('remove', row)">Quitar</app-button>
             </template>
@@ -38,7 +38,10 @@ export default {
     },
     computed: {
         columns() {
-            const columns = [{ key: 'nombre', label: 'Formulario / acceso' }];
+            const columns = [
+                { key: 'module', label: 'Módulo' },
+                { key: 'name', label: 'Permiso funcional' },
+            ];
             if (!this.readonly) columns.push({ key: 'actions', label: 'Acciones' });
             return columns;
         },

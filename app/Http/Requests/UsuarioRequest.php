@@ -3,43 +3,53 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UsuarioRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     *
-     * @return bool
-     */
     public function authorize()
     {
         return true;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array
-     */
     public function rules()
     {
+        $ignoreUserId = $this->isMethod('put') ? $this->input('id') : null;
+
         return [
-            'nombre'=>'required',
-            //'matricula'=>'required',
-            'password'=>'required',
-            'id_personal'=>'required',
-            'id_grupo'=>'required'
+            'id' => $this->isMethod('put') ? ['required', 'integer', 'exists:users,id'] : ['nullable'],
+            'nombre' => [
+                'required', 'string', 'max:255',
+                Rule::unique('users', 'name')->ignore($ignoreUserId),
+            ],
+            'email' => ['nullable', 'email', 'max:255'],
+            'password' => $this->isMethod('post')
+                ? ['required', 'string', 'min:8']
+                : ['nullable', 'string', 'min:8'],
+            'id_personal' => ['required', 'integer', 'exists:personal,id'],
+            'id_grupo' => [
+                'required',
+                'integer',
+                Rule::exists('grupo', 'id')->where(fn ($query) => $query
+                    ->where('estado', 1)
+                    ->where('is_super_admin', false)),
+            ],
+            'estado' => ['required', Rule::in([0, 1, '0', '1'])],
         ];
     }
+
     public function messages()
     {
         return [
-            'nombre.required'=>'El nombre no puede estar vacio',
-            //'matricula.required'=>'El codigo no puede estar vacio',
-            'password.required'=>'La contraseña no puede estar vacia',
-            'id_personal.required'=>'Seleccione un Personal',
-            'id_grupo.required'=>'Seleccione un Grupo',
-
+            'nombre.required' => 'El nombre no puede estar vacío.',
+            'nombre.unique' => 'El nombre de usuario ya está registrado.',
+            'email.email' => 'El correo electrónico no tiene un formato válido.',
+            'password.required' => 'La contraseña no puede estar vacía.',
+            'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
+            'id_personal.required' => 'Seleccione un personal.',
+            'id_personal.exists' => 'El personal seleccionado no existe.',
+            'id_grupo.required' => 'Seleccione un grupo.',
+            'id_grupo.exists' => 'El grupo seleccionado no está disponible.',
         ];
     }
 }

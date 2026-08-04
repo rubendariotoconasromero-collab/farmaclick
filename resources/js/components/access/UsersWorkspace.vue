@@ -90,23 +90,16 @@
                 <app-button variant="ghost" @click="closePermissions">Volver al listado</app-button>
             </template>
             <div class="users-workspace__permission-tools">
-                <p>
-                    Revisa los accesos asignados a la cuenta. Puedes restablecer la selección usando
-                    los permisos actuales de su grupo.
-                </p>
-                <app-button variant="secondary" :loading="permissionLoading" @click="loadGroupPermissions">
-                    Restablecer desde grupo
-                </app-button>
+                <p>Los accesos efectivos se heredan del rol y se administran de forma centralizada.</p>
             </div>
             <permission-editor
                 :selected="permissions"
                 :loading="permissionLoading"
                 :show-action="false"
-                @remove="removePermission"
+                readonly
             />
             <div class="users-workspace__permission-footer">
-                <app-button variant="ghost" @click="closePermissions">Cancelar</app-button>
-                <app-button :loading="savingPermissions" @click="savePermissions">Guardar permisos</app-button>
+                <app-button variant="ghost" @click="closePermissions">Volver</app-button>
             </div>
         </app-data-panel>
 
@@ -138,10 +131,10 @@
                         <app-input
                             v-model="form.password"
                             type="password"
-                            :label="editing ? 'Nueva contraseña obligatoria' : 'Contraseña'"
-                            :placeholder="editing ? 'Define la nueva contraseña' : 'Contraseña de acceso'"
+                            :label="editing ? 'Nueva contraseña (opcional)' : 'Contraseña'"
+                            :placeholder="editing ? 'Déjala vacía para conservar la actual' : 'Mínimo 8 caracteres'"
                             :error="fieldError('password')"
-                            required
+                            :required="!editing"
                         />
                         <label>
                             <span>Grupo de usuario <b>*</b></span>
@@ -155,12 +148,22 @@
                         </label>
                         <label>
                             <span>Personal vinculado <b>*</b></span>
-                            <select v-model="form.id_personal">
-                                <option value="0" disabled>Selecciona una persona</option>
-                                <option v-for="person in staff" :key="person.id" :value="person.id">
-                                    {{ person.nombre }}
-                                </option>
-                            </select>
+                            <div class="users-workspace__personal-picker">
+                                <select v-model="form.id_personal">
+                                    <option value="0" disabled>Selecciona una persona</option>
+                                    <option v-for="person in staff" :key="person.id" :value="person.id">
+                                        {{ person.nombre }}
+                                    </option>
+                                </select>
+                                <button
+                                    type="button"
+                                    class="users-workspace__personal-add"
+                                    title="Crear un nuevo personal"
+                                    @click="openPersonalCreator"
+                                >
+                                    + Nuevo
+                                </button>
+                            </div>
                             <small v-if="fieldError('id_personal')">{{ fieldError('id_personal') }}</small>
                         </label>
                         <label>
@@ -171,6 +174,41 @@
                             </select>
                         </label>
                     </div>
+
+                    <div v-if="personalCreatorOpen" class="users-workspace__personal-creator">
+                        <header>
+                            <strong>Nuevo personal</strong>
+                            <button type="button" aria-label="Cerrar" @click="closePersonalCreator">×</button>
+                        </header>
+                        <div class="users-workspace__personal-creator-fields">
+                            <app-input
+                                v-model.trim="personalForm.nombre"
+                                label="Nombre completo"
+                                placeholder="Nombre y apellido"
+                                :error="personalFieldError('nombre')"
+                                required
+                            />
+                            <label>
+                                <span>Cargo <b>*</b></span>
+                                <select v-model="personalForm.id_cargo">
+                                    <option value="0" disabled>Selecciona un cargo</option>
+                                    <option v-for="cargo in cargos" :key="cargo.id" :value="cargo.id">
+                                        {{ cargo.nombre }}
+                                    </option>
+                                </select>
+                                <small v-if="personalFieldError('id_cargo')">{{ personalFieldError('id_cargo') }}</small>
+                            </label>
+                            <app-input v-model.trim="personalForm.telefono" label="Teléfono" placeholder="Opcional" />
+                            <app-input v-model.trim="personalForm.direccion" label="Dirección" placeholder="Opcional" />
+                        </div>
+                        <footer>
+                            <app-button variant="ghost" type="button" @click="closePersonalCreator">Cancelar</app-button>
+                            <app-button type="button" :loading="personalSaving" @click="savePersonal">
+                                Guardar personal
+                            </app-button>
+                        </footer>
+                    </div>
+
                     <div v-if="!editing" class="users-workspace__permission-preview">
                         <span>Permisos heredados del grupo</span>
                         <strong>{{ editorPermissions.length }} accesos se asignarán a la cuenta</strong>
@@ -201,6 +239,11 @@ export default {
             users: [],
             groups: [],
             staff: [],
+            cargos: [],
+            personalCreatorOpen: false,
+            personalSaving: false,
+            personalErrors: {},
+            personalForm: this.blankPersonalForm(),
             permissions: [],
             editorPermissions: [],
             selectedUser: null,
@@ -213,7 +256,6 @@ export default {
             editing: false,
             saving: false,
             permissionLoading: false,
-            savingPermissions: false,
             view: 'list',
             errors: {},
             form: this.blankForm(),
@@ -270,6 +312,9 @@ export default {
                 id_grupo_cambio: '',
             };
         },
+        blankPersonalForm() {
+            return { nombre: '', id_cargo: '0', telefono: '', direccion: '', descripcion: '', estado: '1' };
+        },
         async loadUsers(page = 1) {
             this.loading = true;
             try {
@@ -293,14 +338,16 @@ export default {
         },
         async loadCatalogs() {
             try {
-                const [groups, staff] = await Promise.all([
+                const [groups, staff, cargos] = await Promise.all([
                     axios.get('/grupo/selectGrupo'),
                     axios.get('/personal/selectPersonal'),
+                    axios.get('/cargo/selectCargo'),
                 ]);
                 this.groups = groups.data || [];
                 this.staff = staff.data || [];
+                this.cargos = cargos.data || [];
             } catch (error) {
-                this.$toaster.error('No fue posible cargar los grupos o el personal.');
+                this.$toaster.error('No fue posible cargar los grupos, el personal o los cargos.');
             }
         },
         scheduleSearch() {
@@ -355,6 +402,53 @@ export default {
             this.form = this.blankForm();
             this.editorPermissions = [];
             this.errors = {};
+            this.closePersonalCreator();
+        },
+        openPersonalCreator() {
+            this.personalForm = this.blankPersonalForm();
+            this.personalErrors = {};
+            this.personalCreatorOpen = true;
+        },
+        closePersonalCreator() {
+            if (this.personalSaving) return;
+            this.personalCreatorOpen = false;
+            this.personalForm = this.blankPersonalForm();
+            this.personalErrors = {};
+        },
+        personalFieldError(field) {
+            return this.personalErrors[field] ? this.personalErrors[field][0] : '';
+        },
+        async savePersonal() {
+            const errors = {};
+            if (!this.personalForm.nombre) errors.nombre = ['El nombre es obligatorio.'];
+            if (Number(this.personalForm.id_cargo) === 0) errors.id_cargo = ['Selecciona un cargo.'];
+            if (Object.keys(errors).length) {
+                this.personalErrors = errors;
+                return;
+            }
+            this.personalSaving = true;
+            this.personalErrors = {};
+            try {
+                const { data } = await axios.post('/personal/guardar', this.personalForm);
+                if (data && data.id) {
+                    this.staff = [{ id: data.id, nombre: data.nombre }, ...this.staff];
+                    this.form.id_personal = data.id;
+                    this.personalCreatorOpen = false;
+                    this.personalForm = this.blankPersonalForm();
+                    this.$toaster.success('Personal creado y vinculado a la cuenta.');
+                } else {
+                    this.$toaster.error('No fue posible crear el personal.');
+                }
+            } catch (error) {
+                this.personalErrors = error.response && error.response.data && error.response.data.errors
+                    ? error.response.data.errors
+                    : {};
+                if (!Object.keys(this.personalErrors).length) {
+                    this.$toaster.error('No fue posible crear el personal.');
+                }
+            } finally {
+                this.personalSaving = false;
+            }
         },
         async loadEditorPermissions() {
             if (!this.form.id_grupo || Number(this.form.id_grupo) === 0) {
@@ -362,10 +456,8 @@ export default {
                 return;
             }
             try {
-                const response = await axios.get('/detalle_form', {
-                    params: { id_grupo: this.form.id_grupo, buscar: '' },
-                });
-                this.editorPermissions = response.data || [];
+                const response = await axios.get(`/rbac/roles/${this.form.id_grupo}`);
+                this.editorPermissions = response.data.permissions || [];
             } catch (error) {
                 this.$toaster.error('No fue posible cargar los permisos del grupo.');
             }
@@ -381,7 +473,6 @@ export default {
                     ...this.form,
                     id_grupo: Number(this.form.id_grupo) > 0 ? this.form.id_grupo : '',
                     id_personal: Number(this.form.id_personal) > 0 ? this.form.id_personal : '',
-                    detalle: this.editorPermissions,
                 };
                 const response = this.editing
                     ? await axios.put('/usuario/modificar', payload)
@@ -417,66 +508,25 @@ export default {
             };
             this.permissions = [];
             this.view = 'permissions';
-            await this.loadUserPermissions();
-        },
-        async loadUserPermissions() {
-            this.permissionLoading = true;
-            try {
-                const response = await axios.get('/usuario_permiso/obtenerDetalles', {
-                    params: { id: this.form.id },
-                });
-                this.permissions = response.data || [];
-            } catch (error) {
-                this.$toaster.error('No fue posible cargar los permisos actuales del usuario.');
-            } finally {
-                this.permissionLoading = false;
-            }
+            await this.loadGroupPermissions();
         },
         async loadGroupPermissions() {
             if (!this.form.id_grupo || Number(this.form.id_grupo) === 0) return;
             this.permissionLoading = true;
             try {
-                const response = await axios.get('/detalle_form', {
-                    params: { id_grupo: this.form.id_grupo, buscar: '' },
-                });
-                this.permissions = (response.data || []).map(permission => ({
-                    ...permission,
-                    id_permiso: permission.id_permiso || permission.id,
-                }));
+                const response = await axios.get(`/rbac/roles/${this.form.id_grupo}`);
+                this.permissions = response.data.permissions || [];
             } catch (error) {
                 this.$toaster.error('No fue posible cargar los permisos del usuario.');
             } finally {
                 this.permissionLoading = false;
             }
         },
-        removePermission(permission) {
-            this.permissions = this.permissions.filter(item => item !== permission);
-        },
         closePermissions() {
             this.view = 'list';
             this.selectedUser = null;
             this.permissions = [];
             this.form = this.blankForm();
-        },
-        async savePermissions() {
-            this.savingPermissions = true;
-            try {
-                await axios.delete(`/usuario_permiso/eliminar/${this.form.id}`);
-                await axios.post('/usuario_permiso/modificarPermisos', {
-                    ...this.form,
-                    detalle: this.permissions.map(permission => ({
-                        ...permission,
-                        id_permiso: permission.id_permiso || permission.id,
-                    })),
-                });
-                this.closePermissions();
-                await this.loadUsers(1);
-                this.$toaster.success('Permisos del usuario actualizados.');
-            } catch (error) {
-                this.$toaster.error('No fue posible actualizar los permisos.');
-            } finally {
-                this.savingPermissions = false;
-            }
         },
         async toggleStatus(user) {
             const active = Number(user.estado) === 1;
@@ -640,6 +690,87 @@ export default {
     background: #fff;
 }
 
+.users-workspace__personal-picker {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem;
+}
+
+.users-workspace__personal-add {
+    padding: 0 0.85rem;
+    border: 1px solid #1f9b63;
+    border-radius: 10px;
+    color: #1f9b63;
+    background: #eaf8f1;
+    font-size: 0.76rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.users-workspace__personal-add:hover { color: #fff; background: #1f9b63; }
+
+.users-workspace__personal-creator {
+    display: grid;
+    gap: 0.85rem;
+    padding: 1rem;
+    border: 1px solid #cfe0d8;
+    border-radius: 12px;
+    background: #f7faf8;
+}
+
+.users-workspace__personal-creator > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.users-workspace__personal-creator > header strong {
+    color: #17362b;
+    font-size: 0.85rem;
+}
+
+.users-workspace__personal-creator > header button {
+    border: 0;
+    color: #557067;
+    background: transparent;
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
+.users-workspace__personal-creator-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.users-workspace__personal-creator-fields label {
+    display: grid;
+    align-content: start;
+    gap: 0.38rem;
+    margin: 0;
+}
+
+.users-workspace__personal-creator-fields label > span {
+    color: #3e5c51;
+    font-size: 0.74rem;
+    font-weight: 800;
+}
+
+.users-workspace__personal-creator-fields select {
+    min-height: 42px;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid #cfe0d8;
+    border-radius: 10px;
+    color: #17362b;
+    background: #fff;
+}
+
+.users-workspace__personal-creator > footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+}
+
 .users-workspace__permission-preview {
     display: flex;
     justify-content: space-between;
@@ -661,5 +792,6 @@ export default {
     .users-workspace { padding: 0.9rem; }
     .users-workspace__form { grid-template-columns: 1fr; }
     .users-workspace__permission-tools { align-items: stretch; flex-direction: column; }
+    .users-workspace__personal-creator-fields { grid-template-columns: 1fr; }
 }
 </style>

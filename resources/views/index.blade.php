@@ -33,6 +33,16 @@
     crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
+@php
+    $rbacBootstrap = [
+        'permissions' => Auth::user()->permissionKeys(),
+        'superAdmin' => Auth::user()->isSuperAdmin(),
+        'routePermissions' => \App\Support\Navigation::routePermissions(),
+    ];
+@endphp
+<script>
+window.FarmaClickAuth = @json($rbacBootstrap);
+</script>
 <div id="app">
 @php
     $user = Auth::user();

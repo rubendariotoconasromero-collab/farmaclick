@@ -52,8 +52,10 @@ class PersonalController extends BitacoraController
                 'transaccion' => 'guardar',
             ];
             $this->guardarBitacora($datos);
-        
+
             DB::commit();
+
+            return $obj;
         } catch (Exception $e){
             DB::rollBack();
         }

@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\User;
-use App\Models\UsuarioPermiso;
-use App\Models\DetalleForm;
 use App\Http\Requests\UsuarioRequest;
 use DB;
 
@@ -17,15 +15,16 @@ class UsuarioController extends BitacoraController
      * @return \Illuminate\Http\Response
      */
     public function index(Request $request){
-        $nroPag = $request->pag;
+        $nroPag = min(max((int) ($request->pag ?: 15), 1), 100);
         $buscar = $request->buscar;
-        $criterio = $request->criterio;
+        $criterios = ['users.name', 'grupo.nombre', 'personal.nombre'];
+        $criterio = in_array($request->criterio, $criterios, true) ? $request->criterio : 'users.name';
         if ($buscar==''){
             $usuario = User::join('personal','users.id_personal','=','personal.id')
             ->join('grupo','users.id_grupo','=','grupo.id')
             ->select('users.id','users.name','users.matricula','users.email','users.id_personal','users.id_grupo','users.estado',
             'personal.nombre as personal','grupo.nombre as grupo')
-            ->where('users.id','!=',1)
+            ->where('grupo.is_super_admin', false)
             ->where('grupo.estado','=',1)
             ->orderBy('users.id', 'desc')->paginate($nroPag);
         }
@@ -35,7 +34,7 @@ class UsuarioController extends BitacoraController
             ->select('users.id','users.name','users.matricula','users.email','users.id_personal','users.id_grupo','users.estado',
             'personal.nombre as personal','grupo.nombre as grupo')
             ->where($criterio, 'like', '%'.$buscar.'%')
-            ->where('users.id','!=',1)
+            ->where('grupo.is_super_admin', false)
             ->where('grupo.estado','=',1)
             ->orderBy('users.id', 'desc')->paginate($nroPag);
         }
@@ -43,7 +42,9 @@ class UsuarioController extends BitacoraController
     }
 
     public function listarGrupoUsuario(Request $request){
-        $id = $request->id;
+        $id = $request->validate(['id' => ['required', 'integer', 'exists:grupo,id']])['id'];
+        $group = \App\Models\Grupo::findOrFail($id);
+        abort_if($group->is_super_admin, 403, 'El rol superadministrador es reservado.');
         $obj = User::select('users.id','users.name as nombre','users.estado','users.id_grupo')
         ->where('users.id_grupo', '=', $id)
         ->orderBy('users.id', 'desc')->get();
@@ -56,108 +57,61 @@ class UsuarioController extends BitacoraController
      * @return \Illuminate\Http\Response
      */
     public function guardar(UsuarioRequest $request){
-        // if (User::where('matricula', $request->matricula)->first()){
-        //     return ['error'=>0];
-        // } else {
-            if (User::where('name', $request->nombre)->first()){
-                return ['error'=>1];
-            } else {
-                try{
-                    DB::beginTransaction();
-                    $user= new User();
-                    $user->name=$request->nombre;
-                    $user->matricula=$request->matricula;
-                    $user->email=$request->email;
-                    $user->password=bcrypt($request->password);
-                    $user->id_grupo=$request->id_grupo;
-                    $user->id_personal=$request->id_personal;
-                    $user->estado=$request->estado;
-                    $user->save();
+        $user = DB::transaction(function () use ($request) {
+            $user = User::create([
+                'name' => $request->nombre,
+                'matricula' => $request->matricula,
+                'email' => $request->email,
+                'password' => bcrypt($request->password),
+                'id_grupo' => $request->id_grupo,
+                'id_personal' => $request->id_personal,
+                'estado' => $request->estado,
+            ]);
 
-                    $detalle_permiso = $request->detalle;
-                    foreach($detalle_permiso as $ep=>$det){
-                        $obj = new UsuarioPermiso();
-                        $obj->id_usuario = $user->id;
-                        $obj->id_permiso = $det['id'];
-                        $obj->save();
-                    }
+            $this->guardarBitacora([
+                'tabla' => 'users',
+                'codigo_tabla' => $user->id,
+                'transaccion' => 'guardar',
+            ]);
 
-                    $datos = [
-                        'tabla' => 'users',
-                        'codigo_tabla' => $user->id,
-                        'transaccion' => 'guardar',
-                    ];
-                    $this->guardarBitacora($datos);
+            return $user;
+        });
 
-                    DB::commit();
-                } catch (Exception $e){
-                    DB::rollBack();
-                }
-            }
-        //}
+        return response()->json(['message' => 'Usuario creado correctamente.', 'user' => $user], 201);
     }
 
     public function modificar(UsuarioRequest $request){
-        if (User::where('name', $request->nombre)
-            ->where('id','!=', $request->id)
-            ->first()){
-            return ['error'=>1];
-        } else {
-            try{
-                DB::beginTransaction();
-                $user= User::findOrFail($request->id);
+        $user = User::with('group')->findOrFail($request->id);
+        abort_if($user->isSuperAdmin(), 422, 'La cuenta superadministradora no puede modificarse desde este módulo.');
 
-                $user->name=$request->nombre;
-                $user->matricula=$request->matricula;
-                $user->email=$request->email;
-                $user->password=bcrypt($request->password);
-                $user->id_grupo=$request->id_grupo;
-                $user->id_personal=$request->id_personal;
-                $user->estado=$request->estado;
-                $user->save();
-
-                /*if($request->id_grupo != $request->id_grupo_cambio){
-                    $obj = UsuarioPermiso::where('usuario_permisos.id_usuario','=',$request->id);
-                    $obj->delete();
-                }*/
-
-                $formularios=DetalleForm::join('permiso_forms', 'detalle_forms.id_permiso_form', '=', 'permiso_forms.id')
-                ->join('formularios', 'detalle_forms.id_formulario', '=', 'formularios.id')
-                ->join('grupo', 'permiso_forms.id_grupo', '=', 'grupo.id')
-                ->select('formularios.nombre', 'formularios.id')
-                ->where('grupo.id', $user->id_grupo)->get();
-
-                 UsuarioPermiso::select('id_usuario', 'id_permiso')
-                ->where('id_usuario', $user->id)
-                ->delete();
-                
-    
-                
-                    foreach($formularios as $ep1=>$formulario){
-                        $usuario_permiso = new UsuarioPermiso();
-                        $usuario_permiso->id_usuario=$user->id;
-                        $usuario_permiso->id_permiso=$formulario['id'];
-                        $usuario_permiso->save();
-                    } 
-                
-
-
-                $datos = [
-                    'tabla' => 'users',
-                    'codigo_tabla' => $user->id,
-                    'transaccion' => 'modificar',
-                ];
-                $this->guardarBitacora($datos);
-
-                DB::commit();
-            } catch (Exception $e){
-                DB::rollBack();
+        DB::transaction(function () use ($request, $user) {
+            $user->fill([
+                'name' => $request->nombre,
+                'matricula' => $request->matricula,
+                'email' => $request->email,
+                'id_grupo' => $request->id_grupo,
+                'id_personal' => $request->id_personal,
+                'estado' => $request->estado,
+            ]);
+            if ($request->filled('password')) {
+                $user->password = bcrypt($request->password);
             }
-        }
+            $user->save();
+
+            $this->guardarBitacora([
+                'tabla' => 'users',
+                'codigo_tabla' => $user->id,
+                'transaccion' => 'modificar',
+            ]);
+        });
+
+        return response()->json(['message' => 'Usuario actualizado correctamente.', 'user' => $user->fresh()]);
     }
 
     public function desactivar(Request $request){
-        $obj = User::findOrFail($request->id);
+        $request->validate(['id' => ['required', 'integer', 'exists:users,id']]);
+        $obj = User::with('group')->findOrFail($request->id);
+        abort_if($obj->isSuperAdmin(), 422, 'La cuenta superadministradora no puede desactivarse.');
         $obj->estado = '0';
         $obj->save();
 
@@ -170,7 +124,9 @@ class UsuarioController extends BitacoraController
     }
 
     public function activar(Request $request){
-        $obj = User::findOrFail($request->id);
+        $request->validate(['id' => ['required', 'integer', 'exists:users,id']]);
+        $obj = User::with('group')->findOrFail($request->id);
+        abort_if($obj->isSuperAdmin(), 422, 'La cuenta superadministradora se administra de forma reservada.');
         $obj->estado = '1';
         $obj->save();
 

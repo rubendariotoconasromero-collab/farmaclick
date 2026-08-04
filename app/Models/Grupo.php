@@ -14,7 +14,21 @@ class Grupo extends Model
         'id',
         'nombre',
         'descripcion',
-        'estado'
+        'estado',
+        'slug',
+        'is_super_admin'
     ];
     public $timestamps = false;
+
+    protected $casts = ['is_super_admin' => 'boolean'];
+
+    public function permissions()
+    {
+        return $this->belongsToMany(Permission::class, 'group_permission', 'id_grupo', 'permission_id');
+    }
+
+    public function users()
+    {
+        return $this->hasMany(User::class, 'id_grupo');
+    }
 }

@@ -3,7 +3,7 @@
         <app-module-header
             eyebrow="Usuarios · Seguridad"
             title="Permisos"
-            subtitle="Define grupos de acceso y controla qué formularios puede utilizar cada perfil."
+            subtitle="Define roles y permisos funcionales con protección consistente en frontend y backend."
         >
             <template #actions>
                 <app-button icon="img/menu/configuracion.png" @click="openCreate">Nuevo grupo</app-button>
@@ -55,8 +55,9 @@
                 <template #cell-actions="{ row }">
                     <div class="permissions-workspace__actions">
                         <app-button variant="ghost" @click="openView(row)">Ver</app-button>
-                        <app-button variant="secondary" @click="openEdit(row)">Editar</app-button>
+                        <app-button v-if="!row.is_super_admin" variant="secondary" @click="openEdit(row)">Editar</app-button>
                         <app-button
+                            v-if="!row.is_super_admin"
                             :variant="Number(row.estado) === 1 ? 'danger' : 'secondary'"
                             @click="toggleStatus(row)"
                         >
@@ -72,7 +73,7 @@
             v-else
             :eyebrow="mode === 'view' ? 'Consulta de permisos' : 'Configuración'"
             :title="editorTitle"
-            subtitle="La selección se aplica a todos los usuarios que pertenecen al grupo."
+            subtitle="Los cambios se aplican inmediatamente a todos los usuarios que pertenecen al rol."
         >
             <template #actions>
                 <app-button variant="ghost" @click="closeEditor">Volver al listado</app-button>
@@ -123,7 +124,7 @@
             <section class="permissions-workspace__dialog" role="dialog" aria-modal="true" aria-label="Agregar permisos">
                 <header>
                     <div>
-                        <span>Catálogo de formularios</span>
+                        <span>Catálogo de permisos</span>
                         <h2>Agregar permisos</h2>
                     </div>
                     <button type="button" aria-label="Cerrar" @click="pickerOpen = false">×</button>
@@ -141,9 +142,9 @@
                     :loading="permissionLoading"
                     min-width="560px"
                     empty-title="Sin permisos disponibles"
-                    empty-message="Todos los formularios coincidentes ya fueron agregados."
+                    empty-message="Todos los permisos coincidentes ya fueron agregados."
                 >
-                    <template #cell-nombre="{ value }"><strong>{{ value }}</strong></template>
+                    <template #cell-name="{ value }"><strong>{{ value }}</strong></template>
                     <template #cell-actions="{ row }">
                         <app-button variant="secondary" @click="addPermission(row)">Agregar</app-button>
                     </template>
@@ -194,7 +195,8 @@ export default {
         },
         permissionColumns() {
             return [
-                { key: 'nombre', label: 'Formulario / acceso' },
+                { key: 'module', label: 'Módulo' },
+                { key: 'name', label: 'Permiso funcional' },
                 { key: 'actions', label: 'Acciones' },
             ];
         },
@@ -223,12 +225,12 @@ export default {
     },
     methods: {
         blankForm() {
-            return { id: 0, nombre: '', descripcion: '', estado: '1' };
+            return { id: 0, nombre: '', slug: '', descripcion: '', estado: '1' };
         },
         async loadGroups(page = 1) {
             this.loading = true;
             try {
-                const response = await axios.get('/grupo', {
+                const response = await axios.get('/rbac/roles', {
                     params: { page, buscar: this.search, criterio: this.criterion },
                 });
                 this.groups = response.data.data || [];
@@ -271,6 +273,7 @@ export default {
             this.form = {
                 id: group.id,
                 nombre: group.nombre || '',
+                slug: group.slug || '',
                 descripcion: group.descripcion || '',
                 estado: String(group.estado),
             };
@@ -278,8 +281,8 @@ export default {
             this.errors = {};
             this.detailLoading = true;
             try {
-                const response = await axios.get('/grupo/permiso/detalle', { params: { id: group.id } });
-                this.details = Array.isArray(response.data) ? response.data : [];
+                const response = await axios.get(`/rbac/roles/${group.id}`);
+                this.details = response.data.permissions || [];
             } catch (error) {
                 this.$toaster.error('No fue posible cargar el detalle de permisos.');
             } finally {
@@ -300,14 +303,15 @@ export default {
         async loadAvailablePermissions() {
             this.permissionLoading = true;
             try {
-                const response = await axios.get('/formulario/listar', {
-                    params: { buscar: this.permissionSearch },
-                });
-                const selectedIds = this.details.map(item => Number(item.id_formulario || item.id));
-                this.availablePermissions = (response.data || [])
-                    .filter(item => !selectedIds.includes(Number(item.id)));
+                const response = await axios.get('/rbac/permissions');
+                const selectedIds = this.details.map(item => Number(item.id));
+                const search = this.permissionSearch.toLocaleLowerCase();
+                this.availablePermissions = Object.keys(response.data || {}).reduce((items, module) => {
+                    return items.concat((response.data[module] || []).map(item => ({ ...item, module })));
+                }, []).filter(item => !selectedIds.includes(Number(item.id)))
+                    .filter(item => !search || `${item.name} ${item.key} ${item.module}`.toLocaleLowerCase().includes(search));
             } catch (error) {
-                this.$toaster.error('No fue posible cargar el catálogo de formularios.');
+                this.$toaster.error('No fue posible cargar el catálogo de permisos.');
             } finally {
                 this.permissionLoading = false;
             }
@@ -321,10 +325,7 @@ export default {
             this.loadAvailablePermissions();
         },
         addPermission(permission) {
-            this.details.push({
-                id_formulario: permission.id,
-                nombre: permission.nombre,
-            });
+            this.details.push(permission);
             this.availablePermissions = this.availablePermissions.filter(item => item.id !== permission.id);
         },
         removePermission(permission) {
@@ -341,11 +342,13 @@ export default {
             this.saving = true;
             this.errors = {};
             try {
-                const payload = { ...this.form, detalle: this.details };
+                const slug = (this.form.slug || this.form.nombre).normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+                const payload = { ...this.form, slug, permission_ids: this.details.map(item => item.id) };
                 if (this.mode === 'create') {
-                    await axios.post('/detalle_form/guardar', payload);
+                    await axios.post('/rbac/roles', payload);
                 } else {
-                    await axios.post('/detalle_form/modificar2', payload);
+                    await axios.put(`/rbac/roles/${this.form.id}`, payload);
                 }
                 this.$toaster.success(this.mode === 'create' ? 'Grupo creado correctamente.' : 'Permisos actualizados.');
                 this.closeEditor();
@@ -371,7 +374,7 @@ export default {
             });
             if (!result.isConfirmed) return;
             try {
-                await axios.put(active ? '/grupo/desactivar' : '/grupo/activar', { id: group.id });
+                await axios.put(`/rbac/roles/${group.id}/status`, { estado: active ? 0 : 1 });
                 await this.loadGroups(this.pagination.current_page || 1);
                 this.$toaster.success('Estado actualizado correctamente.');
             } catch (error) {

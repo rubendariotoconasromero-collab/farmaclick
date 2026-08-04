@@ -7,7 +7,6 @@ use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\CargoController;
 use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\GrupoController;
-use App\Http\Controllers\PermisoController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ArticuloController;
 use App\Http\Controllers\TiendaController;
@@ -24,10 +23,6 @@ use App\Http\Controllers\CXCobrarController;
 use App\Http\Controllers\CXPagarController;
 use App\Http\Controllers\MiEmpresaController;
 use App\Http\Controllers\UsuarioController;
-use App\Http\Controllers\FormularioController;
-use App\Http\Controllers\DetalleFormController;
-use App\Http\Controllers\UsuarioPermisoController;
-use App\Http\Controllers\PermisoFormController;
 use App\Http\Controllers\TraspasoController;
 use App\Http\Controllers\ArqueoCajaController;
 use App\Http\Controllers\UnidadMedidaController;
@@ -36,6 +31,7 @@ use App\Http\Controllers\PagoCompraController;
 use App\Http\Controllers\PaqueteController;
 use App\Http\Controllers\MarcaController;
 use App\Http\Controllers\LoteController;
+use App\Http\Controllers\RbacController;
 //use App\Http\Controllers\CotizacionController;
 
 //Historial Clinico
@@ -88,7 +84,7 @@ Route::group(['middleware'=>['guest']],function(){
     Route::post('/usuario',[LoginController::class, 'usuario'])->name('usuario');
 });
 Auth::routes();
-Route::group(['middleware'=>['auth']],function(){
+Route::group(['middleware'=>['auth', 'rbac']],function(){
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
     Route::get('/dashboard',[DashboardController::class,'__invoke']);
     Route::get('/dashboard/Producto',[DashboardController::class,'listarProductoMesDashboad']);
@@ -97,6 +93,17 @@ Route::group(['middleware'=>['auth']],function(){
     Route::get('/main/{path?}', function () {
         return view('contenido/contenido');
     })->where('path', '.*')->name('main');
+
+    Route::get('/rbac/roles/{role}', [RbacController::class, 'show'])
+        ->middleware('permission:users.manage,users.permissions.manage');
+    Route::prefix('rbac')->middleware('permission:users.permissions.manage')->group(function () {
+        Route::get('/roles', [RbacController::class, 'roles']);
+        Route::post('/roles', [RbacController::class, 'store']);
+        Route::put('/roles/{role}', [RbacController::class, 'update']);
+        Route::put('/roles/{role}/status', [RbacController::class, 'updateStatus']);
+        Route::put('/roles/{role}/permissions', [RbacController::class, 'updatePermissions']);
+        Route::get('/permissions', [RbacController::class, 'permissions']);
+    });
 
     //Rutas Cliente
     Route::get('/cliente', [ClienteController::class, 'index']);
@@ -148,25 +155,8 @@ Route::group(['middleware'=>['auth']],function(){
     Route::get('/personal/selectPersonal', [PersonalController::class, 'selectPersonal']);
     Route::get('/personal/selectPersonalDoctor', [PersonalController::class, 'selectPersonalDoctor']);
 
-    //Rutas Permiso
-    Route::get('/permiso', [PermisoController::class, 'index']);
-    Route::post('/permiso/guardar', [PermisoController::class, 'guardar']);
-    Route::put('/permiso/modificar', [PermisoController::class, 'modificar']);
-
-    //Rutas Permiso
-    Route::get('/permiso', [PermisoController::class, 'index']);
-    Route::get('/permiso/listarSinPaginate', [PermisoController::class, 'listarSinPaginate']);
-    Route::post('/permiso/guardar', [PermisoController::class, 'guardar']);
-    Route::put('/permiso/modificar', [PermisoController::class, 'modificar']);
-    Route::delete('/permiso/eliminar/{id}', [PermisoController::class, 'eliminar']);
-
     //Rutas Grupo
     Route::get('/grupo', [GrupoController::class, 'index']);
-    Route::get('/grupo/permiso/detalle', [GrupoController::class, 'detallePermiso']);
-    Route::post('/grupo/guardar', [GrupoController::class, 'guardar']);
-    Route::put('/grupo/modificar', [GrupoController::class, 'modificar']);
-    Route::put('/grupo/desactivar', [GrupoController::class, 'desactivar']);
-    Route::put('/grupo/activar', [GrupoController::class, 'activar']);
     Route::get('/grupo/selectGrupo', [GrupoController::class, 'selectGrupo']);
     Route::get('/grupo_listar', [GrupoController::class, 'listar']);
 
@@ -439,27 +429,6 @@ Route::group(['middleware'=>['auth']],function(){
 
 
 
-    //Rutas Formulario
-    Route::get('/formulario/listar', [FormularioController::class, 'listarFormulario']);
-
-    //Rutas DetalleForm
-    Route::get('/detalle_form', [DetalleFormController::class, 'listar']);
-    Route::get('/detalle_form/listar', [DetalleFormController::class, 'obtenerDetalles']);
-    Route::post('/detalle_form/guardar', [DetalleFormController::class, 'guardar']);
-    Route::delete('/detalle_form/eliminar/{id}', [DetalleFormController::class, 'eliminarDetalleForm']);
-    Route::delete('/detalle_form/eliminarGrupo/{id}', [DetalleFormController::class, 'eliminarDetllaGrupo']);
-    Route::put('/detalle_form/modificar', [DetalleFormController::class, 'modificar']);
-    Route::post('/detalle_form/modificar2', [DetalleFormController::class, 'modificar2']);
-
-    //Rutas UsuarioPermiso
-    Route::get('/usuario_permiso/obtenerDetalles', [UsuarioPermisoController::class, 'obtenerDetalles']);
-    Route::get('/usuario_permiso/verPermisos', [UsuarioPermisoController::class, 'verPermisos']);
-    Route::post('/usuario_permiso/modificarPermisos', [UsuarioPermisoController::class, 'modificarPermisos']);
-    Route::delete('/usuario_permiso/eliminar/{id}', [UsuarioPermisoController::class, 'eliminarPermisoUsuario']);
-
-    //Rutas PermisoForm
-    Route::get('/permiso_form/listarPermisos', [PermisoFormController::class, 'listarPermisos']);
-
     //Rutas Traspaso
     Route::get('/traspaso', [TraspasoController::class, 'index']);
     Route::post('/traspaso/guardar', [TraspasoController::class, 'guardar']);
@@ -617,8 +586,8 @@ Route::group(['middleware'=>['auth']],function(){
         Route::put('/servicio/anular_tienda1', [OrderServicioController1::class, 'anular']);
         Route::get('/servicio/listarOrdenSinPaginate_tienda1', [OrderServicioController1::class, 'listarOrdenSinPaginate']);
         //Reportes Servicios
-        Route::get('/servicio/pdf_servicios_tienda1',[OrdenServicioController1::class, 'pdfServicios']);
-        Route::get('/servicio/pdf_servicios_general_tienda_1',[OrdenServicioController1::class, 'pdfServiciosGeneral']);
+        Route::get('/servicio/pdf_servicios_tienda1',[OrderServicioController1::class, 'pdfServicios']);
+        Route::get('/servicio/pdf_servicios_general_tienda_1',[OrderServicioController1::class, 'pdfServiciosGeneral']);
 
         //Rutas Cotizacion
         Route::get('/cotizacion1', [CotizacionController1::class, 'index']);
@@ -668,8 +637,8 @@ Route::group(['middleware'=>['auth']],function(){
         Route::put('/servicio/anular_tienda2', [OrderServicioController2::class, 'anular']);
         Route::get('/servicio/listarOrdenSinPaginate_tienda2', [OrderServicioController2::class, 'listarOrdenSinPaginate']);
         //Reportes Servicios
-        Route::get('/servicio/pdf_servicios_tienda2',[OrdenServicioController2::class, 'pdfServicios']);
-        Route::get('/servicio/pdf_servicios_general_tienda_2',[OrdenServicioController2::class, 'pdfServiciosGeneral']);
+        Route::get('/servicio/pdf_servicios_tienda2',[OrderServicioController2::class, 'pdfServicios']);
+        Route::get('/servicio/pdf_servicios_general_tienda_2',[OrderServicioController2::class, 'pdfServiciosGeneral']);
 
         //Rutas Cotizacion
         Route::get('/cotizacion', [CotizacionController::class, 'index']);
@@ -719,8 +688,8 @@ Route::group(['middleware'=>['auth']],function(){
         Route::put('/servicio/anular_tienda3', [OrderServicioController3::class, 'anular']);
         Route::get('/servicio/listarOrdenSinPaginate_tienda3', [OrderServicioController3::class, 'listarOrdenSinPaginate']);
         //Reportes Servicios
-        Route::get('/servicio/pdf_servicios_tienda3',[OrdenServicioController3::class, 'pdfServicios']);
-        Route::get('/servicio/pdf_servicios_general_tienda_3',[OrdenServicioController3::class, 'pdfServiciosGeneral']);
+        Route::get('/servicio/pdf_servicios_tienda3',[OrderServicioController3::class, 'pdfServicios']);
+        Route::get('/servicio/pdf_servicios_general_tienda_3',[OrderServicioController3::class, 'pdfServiciosGeneral']);
 
         //Rutas Cotizacion
         Route::get('/cotizacion3', [CotizacionController3::class, 'index']);
