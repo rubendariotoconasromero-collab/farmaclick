@@ -14,20 +14,21 @@ class MiEmpresaSeeder extends Seeder
      */
     public function run()
     {
-        MiEmpresa::create(['nombre' => 'Mi Empresa',
-        'nit' => '12345678',
-        'representante' => 'SIT',
-        'direccion' => 'Calle Bolívar',
-        'telefono' => '0',
-        'descripcion' => 'SD',
-        'Localidad' => 'MONTERO',
-        'foto' => 'logo.png',
-        'correo' => 'sitnorte22@gmail.com',
-        'sitio_web' => 'sit-norte.com/',
-        'logo_login' => 'logo_login.png',
-        'logo_sistema' => 'logo_sistema.png',
-        'logo_usuario' => 'logo_usuario.png',
-        'fondo_login' => 'fondo_login.jpeg',
+        MiEmpresa::create([
+        'nombre' => null,
+        'nit' => null,
+        'representante' => null,
+        'direccion' => null,
+        'telefono' => null,
+        'descripcion' => null,
+        'Localidad' => null,
+        'foto' => null,
+        'correo' => null,
+        'sitio_web' => null,
+        'logo_login' => null,
+        'logo_sistema' => null,
+        'logo_usuario' => null,
+        'fondo_login' => null,
         'color_login' => '#7ad6e6',
         'color_menu' => '#000000',]);
     }
