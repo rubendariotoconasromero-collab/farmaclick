@@ -40,4 +40,5 @@ mix.styles([
 .js(['resources/js/app.js'],'public/js/app.js')
 .vue()
 .copy('resources/css/app.css', 'public/css/app.css')
-.copy('resources/css/fontawesome.min.css', 'public/css/fontawesome.min.css');
+.copy('resources/css/fontawesome.min.css', 'public/css/fontawesome.min.css')
+.copy('resources/plantilla/js/coreui.bundle.min.js', 'public/js/coreui.bundle.min.js');
