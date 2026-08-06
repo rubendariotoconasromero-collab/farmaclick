@@ -28,6 +28,11 @@ class CreateVentaTable extends Migration
             $table->foreignId('id_tienda');
             $table->foreignId('id_orden_servicio')->nullable();
             $table->foreignId('id_paquete')->nullable();
+            $table->decimal('total_efectivo',11,2)->nullable();
+            $table->decimal('total_deposito',11,2)->nullable();
+            $table->decimal('efectivo',11,2)->nullable();
+            $table->decimal('cambio',11,2)->nullable();
+            $table->integer('control')->default(0);
 
             $table->foreign('id_cliente')->references('id')->on('cliente');
             $table->foreign('id_tipo_pago')->references('id')->on('tipo_pago');

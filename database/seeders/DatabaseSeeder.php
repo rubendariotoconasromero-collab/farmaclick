@@ -32,12 +32,7 @@ class DatabaseSeeder extends Seeder
             TiendaArticuloSeeder::class,
             MotivoGastoSeeder::class,
             GastoSeeder::class,
-            CXCobrarSeeder::class,
             ProveedorSeeder::class,
-            FormularioSeeder::class,
-            PermisoFormSeeder::class,
-            DetalleFormSeeder::class,
-            UsuarioPermisoSeeder::class,
             AnimalSeeder::class,
         ]);
     }

@@ -19,6 +19,8 @@ class CreateDetalleCompraTable extends Migration
             $table->integer('cantidad');
             $table->decimal('costo_compra',11,2)->default(0);
             $table->decimal('sub_total',11,2)->default(0);
+            $table->decimal('descuento',11,2)->default(0);
+            $table->integer('eliminado')->default(0);
             $table->primary(['id_compra', 'id_producto']);
             $table->foreignId('id_lote');
             $table->foreign('id_compra')->references('id')->on('compra');

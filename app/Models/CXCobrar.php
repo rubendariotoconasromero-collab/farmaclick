@@ -17,8 +17,10 @@ class CXCobrar extends Model
         'amortizacion',
         'saldo',
         'descripcion',
-        'id_pago'
-
+        'id_pago',
+        'id_usuario',
+        'id_forma_pago',
+        'control',
     ];
     public $timestamps = false;
 }

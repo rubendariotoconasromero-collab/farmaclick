@@ -23,7 +23,7 @@ class Compra extends Model
         'id_forma_pago',
         'total_efectivo',
         'total_deposito',
-        
+        'control',
     ];
     public $timestamps = false;
 }

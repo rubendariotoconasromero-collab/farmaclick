@@ -16,7 +16,16 @@ class Ajuste extends Model
         'costo_venta',
         'observacion',
         'id_articulo',
-        'id_motivo_ajuste'
-    ];    
+        'id_motivo_ajuste',
+        'fecha',
+        'hora',
+        'id_usuario',
+        'id_venta',
+        'id_compra',
+        'id_transaccion',
+        'descuento',
+        'stock_general',
+        'stock_general_anterior',
+    ];
     public $timestamps = false;
 }

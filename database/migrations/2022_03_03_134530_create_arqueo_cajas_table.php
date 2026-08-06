@@ -37,6 +37,15 @@ class CreateArqueoCajasTable extends Migration
             $table->decimal('saldo_efectivo',11,2)->default(0);
             $table->decimal('diferencia',11,2)->default(0);
             $table->string('estado',20)->nullable();
+            $table->decimal('total_contado',11,2)->nullable();
+            $table->decimal('total_credito',11,2)->nullable();
+            $table->decimal('total_contado_compra',11,2)->nullable();
+            $table->decimal('total_credito_compra',11,2)->nullable();
+            $table->decimal('total_credito_deposito',11,2)->default(0);
+            $table->decimal('total_contado_deposito',11,2)->default(0);
+            $table->decimal('gastos_deposito',11,2)->default(0);
+            $table->decimal('total_contado_deposito_compra',11,2)->default(0);
+            $table->decimal('total_credito_deposito_compra',11,2)->default(0);
             $table->foreignId('id_usuario');
             $table->foreign('id_usuario')->references('id')->on('users');
         });

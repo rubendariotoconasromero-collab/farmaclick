@@ -17,6 +17,10 @@ class DetalleVenta extends Model
         'cantidad',
         'costo_venta',
         'sub_total',
+        'estado',
+        'presentacion',
+        'total_cantidad',
+        'id_eliminado',
     ];
     public $timestamps = false;
 

@@ -27,9 +27,7 @@ class Venta extends Model
         'total_deposito',
         'efectivo',
         'cambio',
-
-        
-        
+        'control',
     ];
     public $timestamps = false;
 }

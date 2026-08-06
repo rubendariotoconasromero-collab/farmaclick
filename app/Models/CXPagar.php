@@ -17,8 +17,10 @@ class CXPagar extends Model
         'amortizacion',
         'saldo',
         'descripcion',
-        'id_pago'
-
+        'id_pago',
+        'id_forma_pago',
+        'control',
+        'id_usuario',
     ];
     public $timestamps = false;
 }

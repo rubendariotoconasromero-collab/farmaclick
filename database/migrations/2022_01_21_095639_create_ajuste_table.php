@@ -26,6 +26,15 @@ class CreateAjusteTable extends Migration
             $table->string('observacion',100)->nullable();
             $table->foreignId('id_lote');
             $table->foreignId('id_motivo_ajuste');
+            $table->date('fecha')->nullable();
+            $table->time('hora')->nullable();
+            $table->integer('id_usuario')->nullable();
+            $table->integer('id_venta')->nullable();
+            $table->integer('id_compra')->nullable();
+            $table->integer('id_transaccion')->nullable();
+            $table->decimal('descuento',11,2)->default(0);
+            $table->decimal('stock_general',11,2)->default(0);
+            $table->decimal('stock_general_anterior',11,2)->default(0);
             $table->foreign('id_lote')->references('id')->on('lote');
             $table->foreign('id_motivo_ajuste')->references('id')->on('motivo_ajuste');
         });

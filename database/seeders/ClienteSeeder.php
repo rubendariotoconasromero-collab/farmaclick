@@ -14,15 +14,16 @@ class ClienteSeeder extends Seeder
      */
     public function run()
     {
-        Cliente::create([
-            'nombre' => 'S/N',
-            'matricula' => '0',
-            'telefono' => '0',
-            'direccion' => 'SD',
-            'descripcion' => 'SD',
-            'descuento' => 1,
-            'estado' => 1
-        ]
-      );
+        Cliente::updateOrCreate(
+            ['nombre' => 'S/N'],
+            [
+                'matricula' => '0',
+                'telefono' => '0',
+                'direccion' => 'SD',
+                'descripcion' => 'SD',
+                'descuento' => 1,
+                'estado' => 1
+            ]
+        );
     }
 }

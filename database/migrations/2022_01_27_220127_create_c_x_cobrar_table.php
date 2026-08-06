@@ -21,6 +21,9 @@ class CreateCXCobrarTable extends Migration
             $table->decimal('amortizacion',11,2)->default(0);
             $table->decimal('saldo',11,2)->default(0);
             $table->string('descripcion',100)->nullable();
+            $table->integer('id_usuario')->nullable();
+            $table->integer('id_forma_pago')->default(0);
+            $table->integer('control')->default(0);
             $table->foreign('id_pago')->references('id')->on('pago');
         });
     }

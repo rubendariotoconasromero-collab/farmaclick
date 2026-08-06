@@ -21,6 +21,10 @@ class CreateDetalleVentaTable extends Migration
             $table->decimal('costo_venta',11,2)->default(0);
             $table->decimal('sub_total',11,2)->default(0);
             $table->foreignId('id_lote');
+            $table->boolean('estado')->nullable();
+            $table->integer('presentacion')->nullable();
+            $table->integer('total_cantidad')->nullable();
+            $table->integer('id_eliminado')->nullable();
             $table->foreign('id_venta')->references('id')->on('venta');
             $table->foreign('id_producto')->references('id')->on('tienda_articulo');
             $table->foreign('id_lote')->references('id')->on('lote');

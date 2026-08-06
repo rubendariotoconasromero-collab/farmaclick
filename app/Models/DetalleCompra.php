@@ -16,6 +16,8 @@ class DetalleCompra extends Model
         'cantidad',
         'costo_compra',
         'sub_total',
+        'descuento',
+        'eliminado',
     ];
     public $timestamps = false;
     protected $primaryKey = ['id_compra', 'id_producto'];

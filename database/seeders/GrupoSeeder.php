@@ -14,6 +14,12 @@ class GrupoSeeder extends Seeder
      */
     public function run()
     {
-        Grupo::create(['nombre' => 'Administrador','descripcion' => 'Control General','estado' => 1,]);
+        Grupo::create([
+            'nombre' => 'Administrador',
+            'slug' => 'administrador',
+            'descripcion' => 'Control General',
+            'estado' => 1,
+            'is_super_admin' => true,
+        ]);
     }
 }

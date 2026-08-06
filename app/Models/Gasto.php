@@ -18,7 +18,8 @@ class Gasto extends Model
         'id_forma_pago',
         'id_usuario',
         'efectivo',
-        'deposito'
-    ];    
+        'deposito',
+        'control',
+    ];
     public $timestamps = false;
 }

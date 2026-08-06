@@ -26,6 +26,7 @@ class CreateDetalleHistoriaTable extends Migration
             $table->boolean('estado')->default(0);
             $table->foreign('id_historia')->references('id')->on('historial_clinico');
             $table->foreign('id_personal')->references('id')->on('personal');
+            $table->foreign('id_paciente')->references('id')->on('paciente');
             //INICIO VACUNA
             // //PERRO
             $table->boolean('parvovirus')->default(0);

@@ -19,6 +19,11 @@ class CreateGastoTable extends Migration
             $table->decimal('monto',11,2)->default(0);
             $table->string('descripcion',100)->nullable();
             $table->foreignId('id_motivo_gasto');
+            $table->integer('id_forma_pago')->nullable();
+            $table->integer('id_usuario')->nullable();
+            $table->decimal('efectivo',11,2)->nullable();
+            $table->decimal('deposito',11,2)->nullable();
+            $table->integer('control')->default(0);
             $table->foreign('id_motivo_gasto')->references('id')->on('motivo_gasto');
         });
     }

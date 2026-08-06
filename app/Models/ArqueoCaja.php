@@ -34,6 +34,15 @@ class ArqueoCaja extends Model
         'diferencia',
         'estado',
         'id_usuario',
+        'total_contado',
+        'total_credito',
+        'total_contado_compra',
+        'total_credito_compra',
+        'total_credito_deposito',
+        'total_contado_deposito',
+        'gastos_deposito',
+        'total_contado_deposito_compra',
+        'total_credito_deposito_compra',
     ];
     public $timestamps = false;
 }

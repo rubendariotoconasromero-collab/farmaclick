@@ -25,6 +25,9 @@ class CreateCompraTable extends Migration
             $table->foreignId('id_usuario');
             $table->foreignId('id_tipo_pago');
             $table->foreignId('id_forma_pago');
+            $table->decimal('total_efectivo',11,2)->nullable();
+            $table->decimal('total_deposito',11,2)->nullable();
+            $table->integer('control')->default(0);
             $table->foreign('id_proveedor')->references('id')->on('proveedor');
             $table->foreign('id_usuario')->references('id')->on('users');
             $table->foreign('id_tipo_pago')->references('id')->on('tipo_pago');
