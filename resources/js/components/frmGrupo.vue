@@ -335,7 +335,7 @@
 </template>
 
 <script>
-    import Swal from 'sweetalert2';
+    import Swal, { dangerConfirm } from '../utils/appSwal';
     export default {
         data(){
             return {
@@ -593,15 +593,7 @@
         
             },
             desactivarGrupo(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Inhabilitar este Grupo??',
                     text: "Puede revertir esta decision!",
                     icon: 'warning',
@@ -614,7 +606,7 @@
                     let me = this;
                     axios.put('/grupo/desactivar',{'id': id}).then(function (response) {
                         me.listarGrupo(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Inhabilitado!',
                         'Este grupo se ha Inhabilitado.',
                         'success'
@@ -623,7 +615,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este grupo no ha tenido cambios :)',
                     'error'
@@ -632,15 +624,7 @@
                 })   
             },
             activarGrupo(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Habilitar este Grupo??',
                     text: "Puede revertir esta decision!",
                     icon: 'warning',
@@ -653,7 +637,7 @@
                     let me = this;
                     axios.put('/grupo/activar',{'id': id}).then(function (response) {
                         me.listarGrupo(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Habilitado!',
                         'Este grupo se ha Habilitado.',
                         'success'
@@ -662,7 +646,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este grupo no ha tenido cambios :)',
                     'error'

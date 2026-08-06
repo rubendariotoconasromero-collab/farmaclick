@@ -58,12 +58,11 @@
             @close-report-modal="cerrarModalReporte"
             @generate-report="generarNotaVenta"
         />
-        <frm-toast ref="toast"></frm-toast>
     </main>
 </template>
 
 <script>
-import Swal from '../../utils/appSwal';
+import Swal, { toast } from '../../utils/appSwal';
 import moment from 'moment';
 import StoreOneSaleWorkspace from '../sales/store-one/StoreOneSaleWorkspace.vue';
 
@@ -222,7 +221,7 @@ export default {
         },
         seleccionarTiendaArticulo(producto) {
             if (this.arrayDetalle.some(item => Number(item.id_lote) === Number(producto.id))) {
-                this.$refs.toast.error('Este lote ya se encuentra agregado.');
+                toast.fire({ icon: 'error', title: 'Este lote ya se encuentra agregado.' });
                 return;
             }
             this.selectedProduct = { ...producto };
@@ -264,7 +263,7 @@ export default {
             this.arrayDetalle.push(detalle);
             this.datos.estado = 'Entregado';
             this.cancelarCantidad();
-            this.$refs.toast.success('Producto agregado.');
+            toast.fire({ icon: 'success', title: 'Producto agregado.' });
         },
         actualizarCampoDetalle({ row, field, value }) {
             this.$set(row, field, value === '' ? '' : Number(value));

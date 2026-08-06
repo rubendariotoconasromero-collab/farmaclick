@@ -546,7 +546,7 @@
 </template>
 
 <script>
-    import Swal from 'sweetalert2';
+    import Swal, { dangerConfirm } from '../../utils/appSwal';
     import moment from 'moment';
     export default {
         created() {
@@ -1100,15 +1100,7 @@
                 this.selectFormaP();        
             },
             anularCompra(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Anular esta Compra??',
                     text: "Puede revertir esta decision!",
                     icon: 'warning',
@@ -1121,7 +1113,7 @@
                     let me = this;
                     axios.put('/compra/anular',{'id': id}).then(function (response) {
                         me.listarVenta(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Habilitado!',
                         'Este compra se ha Anulado.',
                         'success'
@@ -1130,7 +1122,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este categoria no ha tenido cambios :)',
                     'error'

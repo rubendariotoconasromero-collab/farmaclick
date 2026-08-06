@@ -1124,7 +1124,7 @@
 </template>
 
 <script>
-    import Swal from 'sweetalert2';
+    import Swal from '../../utils/appSwal';
     import moment from 'moment';
     export default {
         data(){

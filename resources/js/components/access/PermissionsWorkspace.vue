@@ -155,7 +155,7 @@
 </template>
 
 <script>
-import Swal from 'sweetalert2';
+import Swal, { dangerConfirm } from '../../utils/appSwal';
 
 const blankPagination = () => ({
     total: 0, current_page: 1, per_page: 0, last_page: 1, from: 0, to: 0,
@@ -243,7 +243,7 @@ export default {
                     to: response.data.to || 0,
                 };
             } catch (error) {
-                this.$toaster.error('No fue posible cargar los grupos y permisos.');
+                toast.fire({ icon: 'error', title: 'No fue posible cargar los grupos y permisos.' });
             } finally {
                 this.loading = false;
             }
@@ -284,7 +284,7 @@ export default {
                 const response = await axios.get(`/rbac/roles/${group.id}`);
                 this.details = response.data.permissions || [];
             } catch (error) {
-                this.$toaster.error('No fue posible cargar el detalle de permisos.');
+                toast.fire({ icon: 'error', title: 'No fue posible cargar el detalle de permisos.' });
             } finally {
                 this.detailLoading = false;
             }
@@ -311,7 +311,7 @@ export default {
                 }, []).filter(item => !selectedIds.includes(Number(item.id)))
                     .filter(item => !search || `${item.name} ${item.key} ${item.module}`.toLocaleLowerCase().includes(search));
             } catch (error) {
-                this.$toaster.error('No fue posible cargar el catálogo de permisos.');
+                toast.fire({ icon: 'error', title: 'No fue posible cargar el catálogo de permisos.' });
             } finally {
                 this.permissionLoading = false;
             }
@@ -336,7 +336,7 @@ export default {
         },
         async save() {
             if (!this.form.nombre || !this.details.length) {
-                this.$toaster.error('Completa el nombre y agrega al menos un permiso.');
+                toast.fire({ icon: 'error', title: 'Completa el nombre y agrega al menos un permiso.' });
                 return;
             }
             this.saving = true;
@@ -350,21 +350,21 @@ export default {
                 } else {
                     await axios.put(`/rbac/roles/${this.form.id}`, payload);
                 }
-                this.$toaster.success(this.mode === 'create' ? 'Grupo creado correctamente.' : 'Permisos actualizados.');
+                toast.fire({ icon: 'success', title: this.mode === 'create' ? 'Grupo creado correctamente.' : 'Permisos actualizados.' });
                 this.closeEditor();
                 await this.loadGroups(1);
             } catch (error) {
                 this.errors = error.response && error.response.data && error.response.data.errors
                     ? error.response.data.errors
                     : {};
-                this.$toaster.error('No fue posible guardar la configuración.');
+                toast.fire({ icon: 'error', title: 'No fue posible guardar la configuración.' });
             } finally {
                 this.saving = false;
             }
         },
         async toggleStatus(group) {
             const active = Number(group.estado) === 1;
-            const result = await Swal.fire({
+            const result = await dangerConfirm.fire({
                 title: active ? '¿Desactivar este grupo?' : '¿Activar este grupo?',
                 text: 'El cambio afectará a las cuentas asociadas.',
                 icon: 'warning',
@@ -376,9 +376,9 @@ export default {
             try {
                 await axios.put(`/rbac/roles/${group.id}/status`, { estado: active ? 0 : 1 });
                 await this.loadGroups(this.pagination.current_page || 1);
-                this.$toaster.success('Estado actualizado correctamente.');
+                toast.fire({ icon: 'success', title: 'Estado actualizado correctamente.' });
             } catch (error) {
-                this.$toaster.error('No fue posible actualizar el estado.');
+                toast.fire({ icon: 'error', title: 'No fue posible actualizar el estado.' });
             }
         },
     },

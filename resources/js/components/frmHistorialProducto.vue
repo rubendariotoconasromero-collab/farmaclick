@@ -26,7 +26,7 @@
 
 <script>
 import moment from 'moment';
-import Swal from 'sweetalert2';
+import Swal from '../utils/appSwal';
 import ProductSalesReportWorkspace from './sales/reports/ProductSalesReportWorkspace.vue';
 
 const pagination = () => ({ total: 0, current_page: 1, per_page: 0, last_page: 1, from: 0, to: 0 });

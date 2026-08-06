@@ -204,7 +204,7 @@
 </template>
 
 <script>
-import Swal from 'sweetalert2';
+import Swal from '../utils/appSwal';
 import moment from 'moment';
 
 const currencyFormatter = new Intl.NumberFormat('es-BO', {

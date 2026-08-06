@@ -10,16 +10,9 @@ window.Vue = require('vue').default;
 
 import Vue from 'vue'
 import router from './router'
- 
-import Toaster from 'v-toaster'
+
 import VueNumeric from 'vue-numeric'
 
-
-
-// You need a specific loader for CSS files like https://github.com/webpack/css-loader
-import 'v-toaster/dist/v-toaster.css'
-// optional set default imeout, the default is 10000 (10 seconds).
-Vue.use(Toaster, {timeout: 3500})
 Vue.use(VueNumeric)
 
 Vue.component('app-module-header', require('./components/ui/AppModuleHeader.vue').default);
@@ -158,7 +151,6 @@ Vue.component('frm-tp3-historialcotizacion', require('./components/tiendaTercera
 Vue.component('frm-traspaso', require('./components/frmTraspaso.vue').default);
 Vue.component('frm-pago', require('./components/frmPago.vue').default);
 Vue.component('frm-caja', require('./components/frmCaja.vue').default);
-Vue.component('frm-toast', require('./components/frmToast.vue').default);
 
 /**
  * Next, we will create a fresh Vue application instance and attach it to

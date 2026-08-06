@@ -21,7 +21,7 @@
 
 <script>
 import moment from 'moment';
-import Swal from 'sweetalert2';
+import Swal from '../utils/appSwal';
 import CashHistoryWorkspace from './cash/CashHistoryWorkspace.vue';
 
 const emptyPagination = () => ({

@@ -407,7 +407,7 @@
 </template>
 
 <script>
-    import Swal from 'sweetalert2';
+    import Swal, { dangerConfirm } from '../utils/appSwal';
     import moment from 'moment';
     export default {
         data(){
@@ -730,7 +730,7 @@
                                 })
                             } else {
                                 if(me.datos.id_motivo_ajuste == 1 && me.arrayDetalle.find(seg => (seg.saldoStock > 0))){
-                                Swal.fire({
+                                dangerConfirm.fire({
                                     title: 'Esta seguro de restablecer el stock?',
                                     icon: 'warning',
                                     showCancelButton: true,

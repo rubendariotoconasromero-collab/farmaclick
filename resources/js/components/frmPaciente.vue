@@ -471,7 +471,7 @@
 </template>
 
 <script>
-    import Swal from 'sweetalert2';
+    import Swal, { dangerConfirm } from '../utils/appSwal';
     import moment from 'moment';
     export default {
 
@@ -1081,15 +1081,7 @@
                 this.datos.id_cliente = cliente.id;
             },
             desactivarArticulo(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Inhabilitar este Paciente??',
                     text: "Puede revertir esta decision!",
                     icon: 'warning',
@@ -1103,7 +1095,7 @@
                     axios.put('/paciente/desactivar',{'id': id}).then(function (response) {
                         me.listarArticulo(1,'', 'nombre');
                         //me.listar2(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Inhabilitado!',
                         'Este paciente se ha Inhabilitado.',
                         'success'
@@ -1112,7 +1104,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este paciente no ha tenido cambios :)',
                     'error'
@@ -1121,15 +1113,7 @@
                 })   
             },
             activarArticulo(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Habilitar este Paciente??',
                     text: "Puede revertir esta decision!",
                     icon: 'warning',
@@ -1143,7 +1127,7 @@
                     axios.put('/paciente/activar',{'id': id}).then(function (response) {
                         me.listarArticulo(1,'', 'nombre');
                         me.listar2(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Habilitado!',
                         'Este paciente se ha Habilitado.',
                         'success'
@@ -1152,7 +1136,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este articulo no ha tenido cambios :)',
                     'error'

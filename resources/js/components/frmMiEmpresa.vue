@@ -363,7 +363,7 @@
 </template>
 
 <script>
-    import Swal from 'sweetalert2';
+    import Swal from '../utils/appSwal';
 
     export default {
         data(){

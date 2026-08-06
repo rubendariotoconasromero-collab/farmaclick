@@ -215,7 +215,7 @@
 </template>
 
 <script>
-import Swal from 'sweetalert2';
+import Swal, { dangerConfirm } from '../../utils/appSwal';
 
 const blankPagination = () => ({
     total: 0, current_page: 1, per_page: 0, last_page: 1, from: 0, to: 0,
@@ -416,7 +416,7 @@ export default {
         },
         async toggleStatus(record) {
             const activating = Number(record.estado) !== 1;
-            const result = await Swal.fire({
+            const result = await dangerConfirm.fire({
                 title: `${activating ? 'Activar' : 'Desactivar'} ${this.singular.toLowerCase()}`,
                 text: activating ? 'El registro volverá a estar disponible.' : 'El registro no podrá utilizarse en nuevas operaciones.',
                 icon: 'warning',

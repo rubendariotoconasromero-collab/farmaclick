@@ -79,6 +79,8 @@
 </template>
 
 <script>
+import { toast } from '../../utils/appSwal';
+
 export default {
     name: 'GroupUsersWorkspace',
     data() {
@@ -126,7 +128,7 @@ export default {
                 const response = await axios.get('/grupo_listar', { params: { buscar: this.search } });
                 this.groups = Array.isArray(response.data) ? response.data : [];
             } catch (error) {
-                this.$toaster.error('No fue posible cargar los grupos de usuarios.');
+                toast.fire({ icon: 'error', title: 'No fue posible cargar los grupos de usuarios.' });
             } finally {
                 this.loading = false;
             }
@@ -147,7 +149,7 @@ export default {
                 const response = await axios.get('/usuario/grupo_usuario', { params: { id: group.id } });
                 this.members = Array.isArray(response.data) ? response.data : [];
             } catch (error) {
-                this.$toaster.error('No fue posible cargar los integrantes del grupo.');
+                toast.fire({ icon: 'error', title: 'No fue posible cargar los integrantes del grupo.' });
             } finally {
                 this.detailLoading = false;
             }

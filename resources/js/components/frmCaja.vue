@@ -249,7 +249,7 @@
 </template>
 
 <script>
-import Swal from 'sweetalert2';
+import Swal, { dangerConfirm } from '../utils/appSwal';
 
 const numberValue = value => {
     const parsed = Number(value);
@@ -564,7 +564,7 @@ export default {
             }
 
             this.calcularArqueo();
-            const confirmation = await Swal.fire({
+            const confirmation = await dangerConfirm.fire({
                 title: '¿Confirmar cierre de caja?',
                 html: `Efectivo contado: <strong>Bs ${this.formatAmount(this.total_efec)}</strong><br>Diferencia: <strong>Bs ${this.formatAmount(this.datos.diferencia)}</strong>`,
                 icon: Math.abs(numberValue(this.datos.diferencia)) < 0.005 ? 'question' : 'warning',

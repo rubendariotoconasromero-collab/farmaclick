@@ -38,7 +38,7 @@
 
 <script>
 import moment from 'moment';
-import Swal from 'sweetalert2';
+import Swal from '../../utils/appSwal';
 import StoreOnePaymentsWorkspace from '../sales/store-one/StoreOnePaymentsWorkspace.vue';
 
 const emptyClient = () => ({

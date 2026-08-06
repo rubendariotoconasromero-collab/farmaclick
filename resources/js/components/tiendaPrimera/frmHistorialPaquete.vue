@@ -446,7 +446,7 @@
 </template>
 
 <script>
-    import Swal from 'sweetalert2';
+    import Swal, { dangerConfirm } from '../../utils/appSwal';
     import moment from 'moment';
     export default {
         created() {
@@ -964,15 +964,7 @@
                 this.selectFormaP();        
             },
             anularServicio(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Anular esta Servicio??',
                     text: "No Puede revertir esta decision!",
                     icon: 'warning',
@@ -985,7 +977,7 @@
                     let me = this;
                     axios.put('/servicio/anular',{'id': id}).then(function (response) {
                         me.listarPaquete(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Anulado!',
                         'Este servicio se ha Anulado.',
                         'success'
@@ -994,7 +986,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este servicio no ha tenido cambios :)',
                     'error'
@@ -1027,15 +1019,7 @@
                 }
             },
             desactivarCliente(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Inhabilitar este Cliente??',
                     text: "Puede revertir esta decision!",
                     icon: 'warning',
@@ -1048,7 +1032,7 @@
                     let me = this;
                     axios.put('/paquete/desactivar',{'id': id}).then(function (response) {
                         me.listarPaquete(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Inhabilitado!',
                         'Este cliente se ha Inhabilitado.',
                         'success'
@@ -1057,7 +1041,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este cliente no ha tenido cambios :)',
                     'error'
@@ -1066,15 +1050,7 @@
                 })   
             },
             activarCliente(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Habilitar este Cliente??',
                     text: "Puede revertir esta decision!",
                     icon: 'warning',
@@ -1087,7 +1063,7 @@
                     let me = this;
                     axios.put('/paquete/activar',{'id': id}).then(function (response) {
                         me.listarPaquete(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Habilitado!',
                         'Este cliente se ha Habilitado.',
                         'success'
@@ -1096,7 +1072,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este cliente no ha tenido cambios :)',
                     'error'

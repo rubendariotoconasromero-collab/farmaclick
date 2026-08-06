@@ -226,7 +226,7 @@
 </template>
 
 <script>
-import Swal from 'sweetalert2';
+import Swal, { dangerConfirm } from '../../utils/appSwal';
 
 const blankPagination = () => ({
     total: 0, current_page: 1, per_page: 0, last_page: 1, from: 0, to: 0,
@@ -331,7 +331,7 @@ export default {
                     to: response.data.to || 0,
                 };
             } catch (error) {
-                this.$toaster.error('No fue posible cargar los usuarios.');
+                toast.fire({ icon: 'error', title: 'No fue posible cargar los usuarios.' });
             } finally {
                 this.loading = false;
             }
@@ -347,7 +347,7 @@ export default {
                 this.staff = staff.data || [];
                 this.cargos = cargos.data || [];
             } catch (error) {
-                this.$toaster.error('No fue posible cargar los grupos, el personal o los cargos.');
+                toast.fire({ icon: 'error', title: 'No fue posible cargar los grupos, el personal o los cargos.' });
             }
         },
         scheduleSearch() {
@@ -435,16 +435,16 @@ export default {
                     this.form.id_personal = data.id;
                     this.personalCreatorOpen = false;
                     this.personalForm = this.blankPersonalForm();
-                    this.$toaster.success('Personal creado y vinculado a la cuenta.');
+                    toast.fire({ icon: 'success', title: 'Personal creado y vinculado a la cuenta.' });
                 } else {
-                    this.$toaster.error('No fue posible crear el personal.');
+                    toast.fire({ icon: 'error', title: 'No fue posible crear el personal.' });
                 }
             } catch (error) {
                 this.personalErrors = error.response && error.response.data && error.response.data.errors
                     ? error.response.data.errors
                     : {};
                 if (!Object.keys(this.personalErrors).length) {
-                    this.$toaster.error('No fue posible crear el personal.');
+                    toast.fire({ icon: 'error', title: 'No fue posible crear el personal.' });
                 }
             } finally {
                 this.personalSaving = false;
@@ -459,7 +459,7 @@ export default {
                 const response = await axios.get(`/rbac/roles/${this.form.id_grupo}`);
                 this.editorPermissions = response.data.permissions || [];
             } catch (error) {
-                this.$toaster.error('No fue posible cargar los permisos del grupo.');
+                toast.fire({ icon: 'error', title: 'No fue posible cargar los permisos del grupo.' });
             }
         },
         fieldError(field) {
@@ -482,17 +482,17 @@ export default {
                         1: 'El nombre del usuario ya existe.',
                         2: 'Debes seleccionar un personal.',
                     };
-                    this.$toaster.error(messages[response.data.error] || 'No fue posible guardar el usuario.');
+                    toast.fire({ icon: 'error', title: messages[response.data.error] || 'No fue posible guardar el usuario.' });
                     return;
                 }
                 this.closeEditor();
                 await this.loadUsers(1);
-                this.$toaster.success(this.editing ? 'Usuario actualizado.' : 'Usuario creado correctamente.');
+                toast.fire({ icon: 'success', title: this.editing ? 'Usuario actualizado.' : 'Usuario creado correctamente.' });
             } catch (error) {
                 this.errors = error.response && error.response.data && error.response.data.errors
                     ? error.response.data.errors
                     : {};
-                this.$toaster.error('Revisa los datos requeridos del usuario.');
+                toast.fire({ icon: 'error', title: 'Revisa los datos requeridos del usuario.' });
             } finally {
                 this.saving = false;
             }
@@ -517,7 +517,7 @@ export default {
                 const response = await axios.get(`/rbac/roles/${this.form.id_grupo}`);
                 this.permissions = response.data.permissions || [];
             } catch (error) {
-                this.$toaster.error('No fue posible cargar los permisos del usuario.');
+                toast.fire({ icon: 'error', title: 'No fue posible cargar los permisos del usuario.' });
             } finally {
                 this.permissionLoading = false;
             }
@@ -530,7 +530,7 @@ export default {
         },
         async toggleStatus(user) {
             const active = Number(user.estado) === 1;
-            const result = await Swal.fire({
+            const result = await dangerConfirm.fire({
                 title: active ? '¿Desactivar este usuario?' : '¿Activar este usuario?',
                 text: active ? 'La cuenta no podrá ingresar al sistema.' : 'La cuenta recuperará el acceso.',
                 icon: 'warning',
@@ -542,9 +542,9 @@ export default {
             try {
                 await axios.put(active ? '/usuario/desactivar' : '/usuario/activar', { id: user.id });
                 await this.loadUsers(this.pagination.current_page || 1);
-                this.$toaster.success('Estado del usuario actualizado.');
+                toast.fire({ icon: 'success', title: 'Estado del usuario actualizado.' });
             } catch (error) {
-                this.$toaster.error('No fue posible actualizar el estado.');
+                toast.fire({ icon: 'error', title: 'No fue posible actualizar el estado.' });
             }
         },
     },

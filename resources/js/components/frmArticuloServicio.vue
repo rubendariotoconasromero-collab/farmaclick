@@ -355,7 +355,7 @@
 </template>
 
 <script>
-    import Swal from 'sweetalert2';
+    import Swal, { dangerConfirm } from '../utils/appSwal';
     import moment from 'moment';
     export default {
 
@@ -728,15 +728,7 @@
                 return this.errorArticulo;
             },
             desactivarArticulo(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Inhabilitar este Articulo??',
                     text: "Puede revertir esta decision!",
                     icon: 'warning',
@@ -750,7 +742,7 @@
                     axios.put('/articulo/desactivar',{'id': id}).then(function (response) {
                         me.listarArticulo(1,'', 'nombre');
                         me.listar2(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Inhabilitado!',
                         'Este articulo se ha Inhabilitado.',
                         'success'
@@ -759,7 +751,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este cargo no ha tenido cambios :)',
                     'error'
@@ -768,15 +760,7 @@
                 })   
             },
             activarArticulo(id){
-                const swalWithBootstrapButtons = Swal.mixin({
-                    customClass: {
-                        confirmButton: 'btn btn-success',
-                        cancelButton: 'btn btn-danger'
-                    },
-                    buttonsStyling: false
-                })
-
-                swalWithBootstrapButtons.fire({
+                dangerConfirm.fire({
                     title: 'Esta seguro de Habilitar este Articulo??',
                     text: "Puede revertir esta decision!",
                     icon: 'warning',
@@ -790,7 +774,7 @@
                     axios.put('/articulo/activar',{'id': id}).then(function (response) {
                         me.listarArticulo(1,'', 'nombre');
                         me.listar2(1,'', 'nombre');
-                        swalWithBootstrapButtons.fire(
+                        Swal.fire(
                         'Habilitado!',
                         'Este articulo se ha Habilitado.',
                         'success'
@@ -799,7 +783,7 @@
                         console.log(error);
                     });                    
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    swalWithBootstrapButtons.fire(
+                    Swal.fire(
                     'Cancelado',
                     'Este articulo no ha tenido cambios :)',
                     'error'
