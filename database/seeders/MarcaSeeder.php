@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-class ProveedorSeeder extends Seeder
+class MarcaSeeder extends Seeder
 {
     /**
      * Run the database seeds.
@@ -14,6 +14,6 @@ class ProveedorSeeder extends Seeder
      */
     public function run()
     {
-        DB::unprepared(file_get_contents(database_path('seeders/data/proveedor.sql')));
+        DB::unprepared(file_get_contents(database_path('seeders/data/marca.sql')));
     }
 }

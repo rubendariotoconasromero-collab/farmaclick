@@ -3,7 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Categoria;
+use Illuminate\Support\Facades\DB;
 
 class CategoriaSeeder extends Seeder
 {
@@ -14,18 +14,6 @@ class CategoriaSeeder extends Seeder
      */
     public function run()
     {
-      // Categoria::create([
-      //       'nombre' => 'Vacunas',
-      //       'descripcion' => '',
-      //       'estado' => 1
-      //   ]
-      // );
-      // Categoria::create(
-      //   [
-      //       'nombre' => 'Antiparasitario',
-      //       'descripcion' => '',
-      //       'estado' => 1
-      //   ]
-      // );
+        DB::unprepared(file_get_contents(database_path('seeders/data/categoria.sql')));
     }
 }
