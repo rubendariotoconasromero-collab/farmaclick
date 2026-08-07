@@ -22,7 +22,7 @@
                     </select>
                     <app-button icon="icons/magnifying-glass.svg" @click="$emit('search')">Buscar</app-button>
                 </div>
-                <app-table :columns="columns" :rows="products" row-key="id" min-width="1180px" :row-class="rowClass" empty-title="Sin productos" empty-message="No se encontraron lotes para los filtros seleccionados.">
+                <app-table class="product-picker__table" :columns="columns" :rows="products" row-key="id" min-width="1180px" :row-class="rowClass" empty-title="Sin productos" empty-message="No se encontraron lotes para los filtros seleccionados.">
                     <template #cell-product="{ row }"><strong>{{ row.articulo }}</strong><small>{{ row.nombre_generico || 'Sin nombre genérico' }}</small></template>
                     <template #cell-presentation="{ row }"><strong>{{ row.presentacion }}</strong><small>{{ row.laboratorio }}</small></template>
                     <template #cell-expiry="{ row }"><strong>{{ row.fecha_vecimiento }}</strong><small>Lote: {{ row.lote }}</small></template>
@@ -32,6 +32,27 @@
                     <template #cell-stock="{ value }"><span class="product-picker__stock" :class="{ 'is-empty': Number(value) <= 0 }">{{ value }}</span></template>
                     <template #cell-action="{ row }"><app-button variant="secondary" :disabled="Number(row.stock) <= 0 || selectedIds.includes(Number(row.id))" @click="$emit('select', row)">{{ selectedIds.includes(Number(row.id)) ? 'Agregado' : 'Agregar' }}</app-button></template>
                 </app-table>
+
+                <!-- Versión móvil: tarjetas con markup propio (no una tabla disfrazada), misma información que la tabla de arriba. -->
+                <div class="product-picker__cards">
+                    <article v-for="row in products" :key="row.id" class="product-picker__card" :class="{ 'is-expired': isExpired(row.fecha_vecimiento) }">
+                        <header>
+                            <strong>{{ row.articulo }}</strong>
+                            <small>{{ row.nombre_generico || 'Sin nombre genérico' }}</small>
+                        </header>
+                        <dl>
+                            <div><dt>Presentación / laboratorio</dt><dd>{{ row.presentacion }}<small>{{ row.laboratorio }}</small></dd></div>
+                            <div><dt>Vencimiento / lote</dt><dd>{{ row.fecha_vecimiento }}<small>Lote: {{ row.lote }}</small></dd></div>
+                            <div><dt>Unidad</dt><dd>{{ money(row.costo_unitario) }}</dd></div>
+                            <div><dt>Blíster</dt><dd>{{ money(row.precio_blister) }}</dd></div>
+                            <div><dt>Caja</dt><dd>{{ money(row.precio_caja) }}</dd></div>
+                            <div><dt>Stock</dt><dd><span class="product-picker__stock" :class="{ 'is-empty': Number(row.stock) <= 0 }">{{ row.stock }}</span></dd></div>
+                        </dl>
+                        <app-button variant="secondary" :disabled="Number(row.stock) <= 0 || selectedIds.includes(Number(row.id))" @click="$emit('select', row)">{{ selectedIds.includes(Number(row.id)) ? 'Agregado' : 'Agregar' }}</app-button>
+                    </article>
+                    <p v-if="!products.length" class="product-picker__cards-empty">No se encontraron lotes para los filtros seleccionados.</p>
+                </div>
+
                 <purchase-pagination :pagination="pagination" :pages="pages" @change="$emit('page', $event)" />
             </div>
             <footer><app-button variant="ghost" @click="$emit('close')">Terminar</app-button></footer>
@@ -96,6 +117,29 @@ export default {
 .product-picker__stock { display: inline-flex; min-width: 34px; justify-content: center; padding: .25rem .45rem; color: var(--fc-green-700, #1f6b45); font-weight: 900; background: var(--fc-green-50, #effaf4); border-radius: 999px; }
 .product-picker__stock.is-empty { color: #a72f36; background: #fde8e9; }
 .product-picker__dialog > footer { display: flex; justify-content: flex-end; padding: .7rem 1rem; background: #fff; border-top: 1px solid var(--system-border-color, #d8e5df); }
+
+/* Tarjetas para móvil: markup propio (no una tabla reinterpretada), oculto por defecto. */
+.product-picker__cards { display: none; }
+.product-picker__cards-empty { padding: 2rem 1rem; color: var(--system-text-muted, #5f716a); text-align: center; }
+.product-picker__card { display: grid; gap: .3rem; padding: .9rem 1rem; margin-bottom: .75rem; background: #fff; border: 1px solid var(--system-border-color, #d8e5df); border-radius: var(--system-radius-lg, 14px); box-shadow: var(--system-shadow-sm, 0 2px 10px rgba(10,56,42,.06)); }
+.product-picker__card.is-expired { background: #fff0f0; }
+.product-picker__card header { padding-bottom: .6rem; margin-bottom: .3rem; border-bottom: 1px solid var(--system-border-color, #d8e5df); }
+.product-picker__card header strong { display: block; color: var(--fc-ink, #17362b); }
+.product-picker__card header small { color: var(--system-text-muted, #5f716a); font-size: .64rem; }
+.product-picker__card dl { margin: 0; }
+.product-picker__card dl > div { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; padding: .45rem 0; border-bottom: 1px dashed var(--system-border-color, #d8e5df); }
+.product-picker__card dl > div:last-child { border-bottom: 0; }
+.product-picker__card dt { flex: 0 0 auto; margin: 0; color: var(--system-text-muted, #5f716a); font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.product-picker__card dd { margin: 0; color: var(--fc-ink, #17362b); font-weight: 700; text-align: right; }
+.product-picker__card dd small { display: block; color: var(--system-text-muted, #5f716a); font-size: .64rem; font-weight: 500; }
+.product-picker__card .app-button { width: 100%; margin-top: .5rem; }
+
 @media (max-width: 950px) { .product-picker__filters { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 620px) { .product-picker { padding: 0; } .product-picker__dialog { height: 100vh; border-radius: 0; } .product-picker__filters { grid-template-columns: 1fr; } }
+@media (max-width: 620px) {
+    .product-picker { padding: 0; }
+    .product-picker__dialog { height: 100vh; border-radius: 0; }
+    .product-picker__filters { grid-template-columns: 1fr; }
+    .product-picker__table { display: none; }
+    .product-picker__cards { display: block; }
+}
 </style>

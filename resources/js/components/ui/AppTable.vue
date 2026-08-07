@@ -27,7 +27,7 @@
                         :key="row[rowKey] !== undefined ? row[rowKey] : index"
                         :class="resolveRowClass(row, index)"
                     >
-                        <td v-for="column in columns" :key="column.key" :class="column.className">
+                        <td v-for="column in columns" :key="column.key" :class="column.className" :data-label="column.label">
                             <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]">
                                 {{ displayValue(row[column.key]) }}
                             </slot>
