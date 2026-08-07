@@ -102,7 +102,7 @@ export default {
 
 <style scoped>
 .product-picker { position: fixed; inset: 0; z-index: 1060; display: grid; padding: .75rem; place-items: center; background: rgba(11, 45, 35, .58); backdrop-filter: blur(3px); }
-.product-picker__dialog { display: grid; width: min(1500px, 100%); height: min(900px, 96vh); grid-template-rows: auto 1fr auto; overflow: hidden; background: var(--system-body-bg, #f4f9f7); border-radius: var(--system-radius-lg, 14px); box-shadow: var(--system-shadow-lg, 0 24px 70px rgba(10,56,42,.26)); }
+.product-picker__dialog { display: grid; width: min(1800px, 96vw); height: min(900px, 96vh); grid-template-rows: auto 1fr auto; overflow: hidden; background: var(--system-body-bg, #f4f9f7); border-radius: var(--system-radius-lg, 14px); box-shadow: var(--system-shadow-lg, 0 24px 70px rgba(10,56,42,.26)); }
 .product-picker__dialog > header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.2rem; color: #fff; background: linear-gradient(110deg, var(--system-sidebar-bg, #163f32), var(--fc-green-600, #1f8a4c)); border-bottom: 3px solid var(--fc-cyan-500, #3ec6e0); }
 .product-picker__dialog header h5 { margin: .1rem 0 0; font-weight: 800; }
 .product-picker__dialog header small { color: #80dcec; font-size: .65rem; font-weight: 900; text-transform: uppercase; letter-spacing: .07em; }
@@ -113,6 +113,9 @@ export default {
 .product-picker ::v-deep .app-table td strong { display: block; color: var(--fc-ink, #17362b); }
 .product-picker ::v-deep .app-table td small { color: var(--system-text-muted, #5f716a); font-size: .64rem; }
 .product-picker ::v-deep .app-table__scroll { max-height: calc(96vh - 250px); }
+.product-picker ::v-deep .app-table,
+.product-picker ::v-deep .app-table__scroll,
+.product-picker ::v-deep .app-table table { width: 100%; }
 .product-picker ::v-deep tr.is-expired td { background: #fff0f0 !important; }
 .product-picker__stock { display: inline-flex; min-width: 34px; justify-content: center; padding: .25rem .45rem; color: var(--fc-green-700, #1f6b45); font-weight: 900; background: var(--fc-green-50, #effaf4); border-radius: 999px; }
 .product-picker__stock.is-empty { color: #a72f36; background: #fde8e9; }
