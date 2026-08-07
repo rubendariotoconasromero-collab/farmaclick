@@ -501,54 +501,44 @@ class VentaController1 extends BitacoraController
                 foreach($stock_producto_paquetes as $ep=>$stock){
                     if($stock['tipo_producto']=='Producto Venta'){
 
+                        //  Descontar Lote
+                        $id_prod = $stock['id_articulo'];
+                        $cantidadRequerida = $stock['cantidad_aux'];
 
-                    //  Descontar Lote
-                    $id_prod = $stock['id_articulo'];
-                    //dd($id_prod);
-                    $variable=DB::select("SELECT id as id from lote where estado!=0 and cantidad>0 and  id_producto= $id_prod");
-                    $var = $variable;
-                    $var2 = 0;
-                    $var3 = 0;
-                    $var5 = 0;
-                    $var7 = $stock['cantidad_aux'];
-                    $array = json_decode(json_encode($var), true);
+                        $lotesDisponibles = Lote::where('estado', '!=', 0)
+                            ->where('cantidad', '>', 0)
+                            ->where('id_producto', $id_prod)
+                            ->lockForUpdate()
+                            ->get();
 
-                    //dd($variable);
-                       foreach ($array as $i => $value) {
-                           $var2=$array[$i];
-                           $gg = implode(" ",$var2);
-                           $id_lote = intval($gg);
-                           $var4=DB::select("SELECT cantidad as cantidad from lote where id=$gg");
-                           $var6 = $var4;
-                           $array2 = json_decode(json_encode($var6), true);
-                           $var5=$array2[0];
-                           $ggc = implode(" ",$var5);
-                           $valor_lote = intval($ggc);
-                           //dd($valor_lote);
-                           if($var7 != 0)
-                           {
-                               if($var7>$valor_lote)
-                               {
-                                   DB::table('lote')->where('lote.id','=',$id_lote)->decrement('cantidad',$valor_lote);
-                                   DB::table('lote')->where('lote.id','=',$id_lote)->update(['estado' => 2]);
+                        $stockDisponible = $lotesDisponibles->sum('cantidad');
+                        if ($stockDisponible < $cantidadRequerida) {
+                            throw ValidationException::withMessages([
+                                'detalle' => ["Stock insuficiente para completar la venta (producto id $id_prod): disponible $stockDisponible, solicitado $cantidadRequerida."],
+                            ]);
+                        }
 
-                                   $var7=$var7-$valor_lote;
+                        $var7 = $cantidadRequerida;
+                        foreach ($lotesDisponibles as $lote) {
+                            if ($var7 == 0) {
+                                break;
+                            }
+                            $valor_lote = $lote->cantidad;
+                            if ($var7 > $valor_lote) {
+                                DB::table('lote')->where('lote.id','=',$lote->id)->decrement('cantidad',$valor_lote);
+                                DB::table('lote')->where('lote.id','=',$lote->id)->update(['estado' => 2]);
 
-                               }
-                               else
-                               {
-                                   DB::table('lote')->where('lote.id','=',$id_lote)->decrement('cantidad',$var7);
-                                   DB::table('lote')->where('lote.id','=',$id_lote)->update(['estado' => 2]);
+                                $var7 = $var7 - $valor_lote;
+                            } else {
+                                DB::table('lote')->where('lote.id','=',$lote->id)->decrement('cantidad',$var7);
+                                DB::table('lote')->where('lote.id','=',$lote->id)->update(['estado' => 2]);
 
-                                   if($request->tipo_venta=='Venta Directa'){
+                                if($request->tipo_venta=='Venta Directa'){
                                     TiendaArticulo::recalcularStock($stock['id_tienda_articulo']);
-                                } else {
-
                                 }
-                                    $var7=0;
-                               }
-                           }
-                       }
+                                $var7 = 0;
+                            }
+                        }
 
                     }
                 }
@@ -580,6 +570,14 @@ class VentaController1 extends BitacoraController
                         }
                         $obj->sub_total= $det['sub_total'];
                         $obj->save();
+
+                        $loteVenta = Lote::where('id', $det['id_lote'])->lockForUpdate()->first();
+                        if (!$loteVenta || (float) $loteVenta->cantidad < (float) $det['descuento_stock']) {
+                            $nombreProducto = $det['articulo'] ?? ('producto ' . $det['id_tienda_articulo']);
+                            throw ValidationException::withMessages([
+                                'detalle' => ["Stock insuficiente para $nombreProducto: disponible " . ($loteVenta ? $loteVenta->cantidad : 0) . ", solicitado {$det['descuento_stock']}."],
+                            ]);
+                        }
                         $this->actualizarStock($det['id_lote'],$det['descuento_stock']);
 
                         TiendaArticulo::recalcularStock($det['id_tienda_articulo']);
@@ -733,6 +731,9 @@ class VentaController1 extends BitacoraController
                 'id' => $venta->id,
                 'message' => 'Venta registrada correctamente.',
             ], 201);
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
         } catch (\Throwable $e){
             DB::rollBack();
             report($e);

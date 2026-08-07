@@ -673,6 +673,7 @@
                 else{
                     me.arrayDetalle.push({
                         id_articulo:data['id_articulo'],
+                        id_tienda_articulo:data['id'],
                         categoria : data['categoria'],
                         articulo : data['articulo'],
                         marca : data['marca'],

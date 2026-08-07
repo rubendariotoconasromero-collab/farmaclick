@@ -171,10 +171,10 @@ class AjusteController extends BitacoraController
             $detalles = $request->detalle;
             //dd($request->detalle);
             foreach($detalles as $ep=>$det){
-                $id_articulo = $det['id_articulo'];
+                $id_tienda_articulo = $det['id_tienda_articulo'];
                 $tienda_articulo=DB::select("SELECT ta.stock
                 FROM tienda_articulo ta
-                WHERE ta.id = '$id_articulo'");
+                WHERE ta.id = ?", [$id_tienda_articulo]);
 
                 if($request->id_motivo_ajuste == 1 && !empty($det['id_lote'])){
                     DB::rollBack();
@@ -185,7 +185,7 @@ class AjusteController extends BitacoraController
 
                 if($request->id_motivo_ajuste == 1 && empty($det['id_lote'])){
                     $lote = new Lote();
-                    $lote->id_producto = $det['id_articulo'];
+                    $lote->id_producto = $det['id_tienda_articulo'];
                     $lote->cantidad = $det['stock'];
                     $lote->fecha_vecimiento = $det['fecha_vencimiento'];
                     $lote->lote = $det['lote'];
@@ -238,19 +238,19 @@ class AjusteController extends BitacoraController
                     ->where('id', $obj->id_lote)
                     ->update(['fecha_vecimiento' => $det['fecha_vencimiento']]); 
 
-                    TiendaArticulo::recalcularStock($det['id_articulo']);
+                    TiendaArticulo::recalcularStock($det['id_tienda_articulo']);
 
                 }else {
-                    if( $obj->id_motivo_ajuste == 2){ 
+                    if( $obj->id_motivo_ajuste == 2){
                         // DB::table('tienda_articulo')->where('tienda_articulo.id_tienda',1)->where('tienda_articulo.id_articulo','=',$det['id_articulo'])->decrement('stock',- $det['stock']);
                         DB::table('lote')->where('lote.id','=',$det['id_lote'])->decrement('cantidad',- $det['stock']);
-                        TiendaArticulo::recalcularStock($det['id_articulo']);
-                    }else 
-                    {                
+                        TiendaArticulo::recalcularStock($det['id_tienda_articulo']);
+                    }else
+                    {
                     if( $obj->id_motivo_ajuste == 3){
                         // DB::table('tienda_articulo')->where('tienda_articulo.id_tienda',1)->where('tienda_articulo.id_articulo','=',$det['id_articulo'])->increment('stock',- $obj->stock);
                         DB::table('lote')->where('lote.id','=',$det['id_lote'])->increment('cantidad',- $obj->stock);
-                        TiendaArticulo::recalcularStock($det['id_articulo']);
+                        TiendaArticulo::recalcularStock($det['id_tienda_articulo']);
                     }else 
                     {
                         if( $obj->id_motivo_ajuste == 4){
