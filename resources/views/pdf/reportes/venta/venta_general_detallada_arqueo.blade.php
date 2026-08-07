@@ -1,163 +1,75 @@
-@include('pdf.reportes.partials.system-theme')
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ $title }}</title>
-    <style>
-        @page {
-            margin: 0.7cm;
-            font-family: Arial, sans-serif;
-            font-size: 12px;
-        }
-        body {
-            background: #FFFFFF;
-            font-size: 11px;
-            margin: 0;
-            padding: 0;
-            color: #000;
-            font-family: Arial, sans-serif;
-        }
-        .table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-        }
-        .table th, .table td {
-            padding: 6px;
-            vertical-align: middle;
-            border: 1px solid #000;
-        }
-        .no-border {
-            border: none !important;
-        }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .bg-primary { background-color: #001843; color: #fff; }
-        .bg-secondary { background-color: #FF0107; color: #fff; }
-        .bg-light { background-color: #f8f8f8; }
-    </style>
-</head>
-<body>
+@php
+    $eyebrow = 'Ventas';
+    $documentLabel = 'Ventas detalladas';
+    $sectionTitle = 'Ventas detalladas por arqueo';
+    $description = 'Detalle de productos y paquetes vendidos durante el arqueo de caja.';
+    $recordCount = collect($venta ?? [])->pluck('id')->unique()->count();
+    $recordLabel = 'Ventas';
+    $footerLabel = 'Ventas detalladas';
+@endphp
+@extends('pdf.reportes.layouts.corporate-letter')
 
-<!-- Encabezado del reporte -->
-<table class="table" style="margin-bottom: 15px;">
-    <tr>
-        <th rowspan="2" style="width: 30%; text-align: center; vertical-align: middle;" class="no-border">
-            @if($logo_sistema)
-                <img src="{{ public_path('img/logo/' . $logo_sistema) }}" height="70" alt="Logo Empresa">
-            @else
-                <div style="width: 70px; height: 70px; background-color: #f0f0f0; border: 1px solid #ccc;"></div>
-            @endif
-        </th>
-        <th rowspan="2" style="text-align: center; vertical-align: middle; width: 40%;" class="no-border">
-            <div style="font-size: 16px; font-weight: bold; color: #001843;">
-                {{ $title }}
-            </div>
-            @if(isset($fecha_inicio_arqueo) || isset($fecha_fin_arqueo))
-                <div style="font-size: 11px; color: #555; margin-top: 6px;">
-                    @if($fecha_inicio_arqueo) Apertura: {{ $fecha_inicio_arqueo }} @endif
-                    @if($fecha_fin_arqueo) | Cierre: {{ $fecha_fin_arqueo }} @endif
-                </div>
-            @endif
-            @if(isset($usuario_arqueo))
-                <div style="font-size: 10px; color: #777; margin-top: 4px;">Caja gestionada por: {{ $usuario_arqueo }}</div>
-            @endif
-        </th>
-        <th style="width: 30%;" class="no-border"></th>
-    </tr>
-</table>
-
-<table class="table">
-    <tr class="bg-primary">
-        <th>Total Venta: {{ number_format($totalV ?? 0, 2) }} Bs.</th>
-    </tr>
-    <tr class="bg-secondary" style="color: white;">
-        <th>Total Contado: {{ number_format($totalC ?? 0, 2) }} Bs.</th>
-        <th>Total Crédito: {{ number_format($totalCr ?? 0, 2) }} Bs.</th>
-    </tr>
-    <tr style="background-color: #a0d2f3;">
-        <th>Total Efectivo: {{ number_format($totalEf ?? 0, 2) }} Bs.</th>
-        <th>Total Depósito: {{ number_format($totalDep ?? 0, 2) }} Bs.</th>
-    </tr>
-</table>
-
-<!-- Listado de ventas -->
-@if(isset($venta) && count($venta) > 0)
-    @php
-        $ventasAgrupadas = collect($venta)->groupBy('id');
-    @endphp
-
-    @foreach($ventasAgrupadas as $id_venta => $grupo)
-        @php
-            $comp = $grupo->first();
-            $detallesVenta = $detalles->where('id_venta', $id_venta);
-            $paquetesVenta = $detallesPaquete->where('id_venta', $id_venta);
-            $tieneDetalles = $detallesVenta->isNotEmpty() || $paquetesVenta->isNotEmpty();
-        @endphp
-
-        <table class="table" style="margin-bottom: 15px; page-break-inside: avoid;">
-            <thead>
-                <tr class="bg-primary">
-                    <th style="width: 20%;">Cliente: {{ $comp->cliente ?? 'N/A' }}</th>
-                    <th style="width: 12%;">Tipo P.: {{ $comp->tipo_pago ?? 'N/A' }}</th>
-                    <th style="width: 15%;">Forma P.: {{ $comp->forma_pago ?? 'N/A' }}</th>
-                    <th style="width: 10%;">Desc.: {{ number_format($comp->descuento ?? 0, 2) }}</th>
-                    <th style="width: 13%;">Total: {{ number_format($comp->total ?? 0, 2) }} Bs.</th>
-                    <th style="width: 10%;">Efectivo: {{ number_format($comp->total_efectivo ?? 0, 2) }} Bs.</th>
-                    <th style="width: 10%;">Depósito: {{ number_format($comp->total_deposito ?? 0, 2) }} Bs.</th>
-                    <th style="width: 10%;">Fecha: {{ \Carbon\Carbon::parse($comp->fecha)->format('d/m/Y') }}</th>
-                </tr>
-                <tr class="bg-secondary">
-                    <th>Producto / Paquete</th>
-                    <th class="text-center">Cantidad</th>
-                    <th class="text-center">P.U.</th>
-                    <th class="text-center">Sub Total</th>
-                    <th class="text-center" colspan="4">Tipo</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if($tieneDetalles)
-                    <!-- Productos -->
-                    @foreach($detallesVenta as $det)
-                        <tr>
-                            <td>{{ $det->producto ?? 'Producto no disponible' }}</td>
-                            <td class="text-center">{{ $det->cantidad ?? 0 }}</td>
-                            <td class="text-right">{{ number_format($det->costo_venta ?? 0, 2) }}</td>
-                            <td class="text-right">{{ number_format($det->sub_total ?? 0, 2) }}</td>
-                            <td class="text-center" colspan="4">Producto</td>
-                        </tr>
-                    @endforeach
-
-                    @foreach($paquetesVenta as $det)
-                        <tr>
-                            <td>{{ $det->producto ?? 'Paquete no disponible' }}</td>
-                            <td class="text-center">{{ $det->cantidad ?? 0 }}</td>
-                            <td class="text-right">{{ number_format($det->costo_venta ?? 0, 2) }}</td>
-                            <td class="text-right">{{ number_format($det->sub_total ?? 0, 2) }}</td>
-                            <td class="text-center" colspan="4">Paquete</td>
-                        </tr>
-                    @endforeach
-                @else
-                    <tr>
-                        <td colspan="8" class="text-center" style="padding: 12px; font-style: italic; color: #666;">
-                            No se encontraron detalles para esta venta
-                        </td>
-                    </tr>
-                @endif
-            </tbody>
-        </table>
-    @endforeach
-@else
-    <table class="table">
+@section('content')
+@include('pdf.reportes.partials.corporate-summary-cards', ['items' => [
+    ['label' => 'Total venta', 'value' => 'Bs ' . number_format((float) ($totalV ?? 0), 2)],
+    ['label' => 'Contado', 'value' => 'Bs ' . number_format((float) ($totalC ?? 0), 2)],
+    ['label' => 'Crédito', 'value' => 'Bs ' . number_format((float) ($totalCr ?? 0), 2)],
+    ['label' => 'Efectivo', 'value' => 'Bs ' . number_format((float) ($totalEf ?? 0), 2)],
+    ['label' => 'Depósito', 'value' => 'Bs ' . number_format((float) ($totalDep ?? 0), 2)],
+]])
+<table class="fc-table">
+    <thead>
         <tr>
-            <td class="text-center" style="padding: 25px; background-color: #f8f8f8; color: #666;">
-                No hay ventas registradas en este arqueo.
-            </td>
+            <th style="width:30%">Producto / Paquete</th>
+            <th style="width:10%">Cantidad</th>
+            <th style="width:15%">P.U.</th>
+            <th style="width:15%">Sub total</th>
+            <th style="width:15%">Tipo</th>
+            <th style="width:15%">Fecha</th>
         </tr>
-    </table>
-@endif
-
-</body>
-</html>
+    </thead>
+    <tbody>
+        @php $ventasAgrupadas = collect($venta ?? [])->groupBy('id'); @endphp
+        @forelse($ventasAgrupadas as $id_venta => $grupo)
+            @php
+                $comp = $grupo->first();
+                $detallesVenta = $detalles->where('id_venta', $id_venta);
+                $paquetesVenta = $detallesPaquete->where('id_venta', $id_venta);
+                $tieneDetalles = $detallesVenta->isNotEmpty() || $paquetesVenta->isNotEmpty();
+            @endphp
+            <tr class="fc-group-row">
+                <td colspan="6">
+                    {{ $comp->cliente ?? 'N/A' }} · {{ $comp->tipo_pago ?? 'N/A' }} / {{ $comp->forma_pago ?? 'N/A' }}
+                    <div class="is-muted">Total: Bs {{ number_format((float) ($comp->total ?? 0), 2) }} · Efectivo: Bs {{ number_format((float) ($comp->total_efectivo ?? 0), 2) }} · Depósito: Bs {{ number_format((float) ($comp->total_deposito ?? 0), 2) }} · {{ \Carbon\Carbon::parse($comp->fecha)->format('d/m/Y') }}</div>
+                </td>
+            </tr>
+            @if($tieneDetalles)
+                @foreach($detallesVenta as $det)
+                    <tr class="fc-subrow">
+                        <td>{{ $det->producto ?? 'Producto no disponible' }}</td>
+                        <td class="is-center">{{ $det->cantidad ?? 0 }}</td>
+                        <td class="is-right">Bs {{ number_format((float) ($det->costo_venta ?? 0), 2) }}</td>
+                        <td class="is-right">Bs {{ number_format((float) ($det->sub_total ?? 0), 2) }}</td>
+                        <td class="is-center">Producto</td>
+                        <td></td>
+                    </tr>
+                @endforeach
+                @foreach($paquetesVenta as $det)
+                    <tr class="fc-subrow">
+                        <td>{{ $det->producto ?? 'Paquete no disponible' }}</td>
+                        <td class="is-center">{{ $det->cantidad ?? 0 }}</td>
+                        <td class="is-right">Bs {{ number_format((float) ($det->costo_venta ?? 0), 2) }}</td>
+                        <td class="is-right">Bs {{ number_format((float) ($det->sub_total ?? 0), 2) }}</td>
+                        <td class="is-center">Paquete</td>
+                        <td></td>
+                    </tr>
+                @endforeach
+            @else
+                <tr class="fc-subrow"><td colspan="6" class="is-muted is-center">No se encontraron detalles para esta venta.</td></tr>
+            @endif
+        @empty
+            <tr><td class="fc-empty" colspan="6">No hay ventas registradas en este arqueo.</td></tr>
+        @endforelse
+    </tbody>
+</table>
+@endsection

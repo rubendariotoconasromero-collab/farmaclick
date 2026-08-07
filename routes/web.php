@@ -711,8 +711,6 @@ Route::group(['middleware'=>['auth', 'rbac']],function(){
         Route::get('/reporte/pdfCliente',[ReporteController::class, 'pdfCliente']);
         Route::get('/reporte/pdfPersonal',[ReporteController::class, 'pdfPersonal']);
         Route::get('/reporte/pdfUsuario',[ReporteController::class, 'pdfUsuario']);
-        Route::get('/reporte/pdfProducto',[ReporteController::class, 'pdfProducto']);
-        Route::get('/reporte/pdfAjuste',[ReporteController::class, 'pdfAjuste']);
         Route::get('/reporte/pdfOrdenGeneral',[ReporteController::class, 'pdfOrdenGeneral']);
         Route::get('/reporte/pdfOrdenDetallada',[ReporteController::class, 'pdfOrdenDetallada']);
         Route::get('/reporte/pdfCompraGeneral',[ReporteController::class, 'pdfCompraGeneral']);
@@ -736,15 +734,8 @@ Route::group(['middleware'=>['auth', 'rbac']],function(){
         Route::get('/reporte/pdfPagoCompra',[ReporteController::class, 'pdfPagoCompra']);
         Route::get('/reporte/pdfPagoVenta',[ReporteController::class, 'pdfPagoVenta']);
 
-        Route::get('/reporte/pdfTraspasoGeneral',[ReporteController::class, 'pdfTraspasoGeneral']);
-        Route::get('/reporte/pdfTraspasoDetallado',[ReporteController::class, 'pdfTraspasoDetallado']);
-        Route::get('/reporte/pdfAlmacen',[ReporteController::class, 'pdfAlmacen']);
-
 
         Route::get('/reporte/pdfProveedor',[ReporteController::class, 'pdfProveedor']);
-        Route::get('/reporte/pdfPaciente',[ReporteController::class, 'pdfPaciente']);
-        Route::get('/reporte/pdfProductoStock',[ReporteController::class, 'pdfProductoStock']);
-        Route::get('/reporte/pdfProductoMinimo',[ReporteController::class, 'pdfProductoMinimo']);
 
         Route::get('/reporte/pdfVentaDetalladaUsuario',[ReporteController::class, 'pdfVentaDetalladaUsuario']);
         Route::get('/reporte/pdfVentaClienteCreditoUsuario',[ReporteController::class, 'pdfVentaClienteCreditoUsuario']);
