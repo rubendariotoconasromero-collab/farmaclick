@@ -40,7 +40,13 @@
             @forelse($detallesVenta as $det)
                 <tr class="fc-subrow">
                     <td>{{ $det->producto ?? 'Producto no disponible' }}</td>
-                    <td class="is-center">{{ $det->cantidad ?? 0 }}</td>
+                    <td class="is-center">
+                        @php $presentacionLabel = [1 => 'Blíster', 2 => 'Caja'][$det->presentacion ?? 0] ?? null; @endphp
+                        {{ $det->cantidad ?? 0 }}
+                        @if($presentacionLabel)
+                            {{ $presentacionLabel }} <small>({{ $det->total_cantidad ?? 0 }} un.)</small>
+                        @endif
+                    </td>
                     <td class="is-right">Bs {{ number_format((float) ($det->costo_venta ?? 0), 2) }}</td>
                     <td class="is-right">Bs {{ number_format((float) ($det->sub_total ?? 0), 2) }}</td>
                     <td class="is-center">{{ \Carbon\Carbon::parse($comp->fecha)->format('d/m/Y') }}</td>

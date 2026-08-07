@@ -11,8 +11,11 @@
                 <app-button v-if="mode !== 'list'" variant="ghost" icon="icons/arrow-left.svg" @click="$emit('back')">
                     Volver
                 </app-button>
-                <app-button v-if="mode === 'detail'" icon="icons/print.svg" :loading="printing" @click="$emit('print')">
-                    Imprimir
+                <app-button v-if="mode === 'detail'" icon="icons/print.svg" :loading="printingFormat === 'carta'" :disabled="printing && printingFormat !== 'carta'" @click="$emit('print', 'carta')">
+                    Imprimir carta
+                </app-button>
+                <app-button v-if="mode === 'detail'" variant="ghost" icon="icons/print.svg" :loading="printingFormat === 'ticket'" :disabled="printing && printingFormat !== 'ticket'" @click="$emit('print', 'ticket')">
+                    Imprimir ticket
                 </app-button>
             </template>
         </app-module-header>
@@ -93,6 +96,7 @@ export default {
         isAdministrator: { type: Boolean, default: false },
         voidingIds: { type: Array, default: () => [] },
         printing: { type: Boolean, default: false },
+        printingFormat: { type: String, default: null },
     },
     computed: {
         headerTitle() {

@@ -770,7 +770,7 @@ class VentaController1 extends BitacoraController
             ->leftJoin('lote', 'detalle_venta.id_lote', '=', 'lote.id')
             ->select(
                 'detalle_venta.cantidad', 'detalle_venta.costo_venta', 'detalle_venta.sub_total',
-                'detalle_venta.presentacion', 'articulo.nombre_comercial as articulo',
+                'detalle_venta.presentacion', 'detalle_venta.total_cantidad', 'articulo.nombre_comercial as articulo',
                 'categoria.nombre as categoria', 'lote.lote', 'lote.fecha_vecimiento'
             )
             ->where('detalle_venta.id_venta', $id)

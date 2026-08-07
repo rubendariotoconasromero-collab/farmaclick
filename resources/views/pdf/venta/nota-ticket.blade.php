@@ -49,7 +49,8 @@
             <tr><td>
                 <div class="item__name">{{ $loop->iteration }}. {{ $detalle->articulo }}</div>
                 @if($detalle->lote)<div class="item__meta">Lote: {{ $detalle->lote }}@if($detalle->fecha_vecimiento) | Vence: {{ \Carbon\Carbon::parse($detalle->fecha_vecimiento)->format('d/m/Y') }}@endif</div>@endif
-                <div>{{ number_format((float) $detalle->cantidad, 0, ',', '.') }} x Bs {{ number_format((float) $detalle->costo_venta, 2, ',', '.') }}<span class="item__subtotal">Bs {{ number_format((float) $detalle->sub_total, 2, ',', '.') }}</span></div>
+                @php $presentacionLabel = [1 => 'Blíster', 2 => 'Caja'][$detalle->presentacion ?? 0] ?? null; @endphp
+                <div>{{ number_format((float) $detalle->cantidad, 0, ',', '.') }}@if($presentacionLabel) {{ $presentacionLabel }} ({{ number_format((float) $detalle->total_cantidad, 0, ',', '.') }} un.)@endif x Bs {{ number_format((float) $detalle->costo_venta, 2, ',', '.') }}<span class="item__subtotal">Bs {{ number_format((float) $detalle->sub_total, 2, ',', '.') }}</span></div>
             </td></tr>
         @empty
             <tr><td>Sin productos registrados.</td></tr>

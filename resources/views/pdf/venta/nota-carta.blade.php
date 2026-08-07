@@ -67,7 +67,13 @@
                     <td class="index">{{ $loop->iteration }}</td>
                     <td class="product">{{ $detalle->articulo }}<small>{{ $detalle->categoria ?: 'Producto' }}</small></td>
                     <td>{{ $detalle->lote ?: 'S/L' }}<br><small>{{ $detalle->fecha_vecimiento ? \Carbon\Carbon::parse($detalle->fecha_vecimiento)->format('d/m/Y') : 'Sin vencimiento' }}</small></td>
-                    <td class="qty">{{ number_format((float) $detalle->cantidad, 0, ',', '.') }}</td>
+                    <td class="qty">
+                        @php $presentacionLabel = [1 => 'Blíster', 2 => 'Caja'][$detalle->presentacion ?? 0] ?? null; @endphp
+                        {{ number_format((float) $detalle->cantidad, 0, ',', '.') }}
+                        @if($presentacionLabel)
+                            {{ $presentacionLabel }}<br><small>({{ number_format((float) $detalle->total_cantidad, 0, ',', '.') }} un.)</small>
+                        @endif
+                    </td>
                     <td class="money">Bs {{ number_format((float) $detalle->costo_venta, 2, ',', '.') }}</td>
                     <td class="money"><strong>Bs {{ number_format((float) $detalle->sub_total, 2, ',', '.') }}</strong></td>
                 </tr>

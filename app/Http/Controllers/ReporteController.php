@@ -2908,6 +2908,8 @@ class ReporteController extends BitacoraController
                     ->select(
                         'd.id_venta',
                         'd.cantidad',
+                        'd.presentacion',
+                        'd.total_cantidad',
                         DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
                         'd.costo_venta',
                         'd.sub_total'
@@ -2999,6 +3001,8 @@ class ReporteController extends BitacoraController
                     ->select(
                         'd.id_venta',
                         'd.cantidad',
+                        'd.presentacion',
+                        'd.total_cantidad',
                         DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
                         'd.costo_venta',
                         'd.sub_total'
@@ -3088,6 +3092,8 @@ class ReporteController extends BitacoraController
                     ->select(
                         'd.id_venta',
                         'd.cantidad',
+                        'd.presentacion',
+                        'd.total_cantidad',
                         DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
                         'd.costo_venta',
                         'd.sub_total'
@@ -3178,6 +3184,8 @@ class ReporteController extends BitacoraController
                     ->select(
                         'd.id_venta',
                         'd.cantidad',
+                        'd.presentacion',
+                        'd.total_cantidad',
                         DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
                         'd.costo_venta',
                         'd.sub_total'
@@ -3281,6 +3289,8 @@ class ReporteController extends BitacoraController
                     ->select(
                         'd.id_venta',
                         'd.cantidad',
+                        'd.presentacion',
+                        'd.total_cantidad',
                         DB::raw('COALESCE(p.nombre_comercial, "Producto no encontrado") as producto'),
                         'd.costo_venta',
                         'd.sub_total'
@@ -3511,7 +3521,7 @@ class ReporteController extends BitacoraController
                     ->join('articulo as p', 'ta.id_articulo', '=', 'p.id')
                     ->whereIn('d.id_venta', $ventasIds)
                     ->where('d.estado', '!=', '1')
-                    ->select('d.id_venta', 'd.cantidad', 'p.nombre_comercial as producto', 'd.costo_venta', 'd.sub_total')
+                    ->select('d.id_venta', 'd.cantidad', 'd.presentacion', 'd.total_cantidad', 'p.nombre_comercial as producto', 'd.costo_venta', 'd.sub_total')
                     ->get();
 
                 $detallesPaquete = DB::table('detalle_venta_paquete as dvp')

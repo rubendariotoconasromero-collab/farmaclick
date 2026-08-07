@@ -20,6 +20,7 @@
         :is-administrator="isAdministrator"
         :voiding-ids="voidingSaleIds"
         :printing="printing"
+        :printing-format="printingFormat"
         @update-filter="actualizarFiltro"
         @search-customer="buscarClientesFiltro"
         @apply-filters="aplicarFiltros"
@@ -31,7 +32,7 @@
         @return="verModificar"
         @void="anularVenta"
         @back="volverVentaListado"
-        @print="cargarPdf(datos.id, datos.foto)"
+        @print="cargarPdf(datos.id, $event)"
         @remove-detail="eliminarDetalleDb"
         @update-cash="updateReturnCash"
         @save-return="modificarCantidad"
@@ -105,6 +106,7 @@ export default {
             detailLoading: false,
             saving: false,
             printing: false,
+            printingFormat: null,
             eliminandoDetalle: false,
             detalleEliminandoIds: [],
             returnDetailIds: [],
@@ -540,15 +542,15 @@ export default {
                 this.voidingSaleIds = this.voidingSaleIds.filter(id => id !== sale.id);
             }
         },
-        async cargarPdf(id, foto) {
+        async cargarPdf(id, formato = 'carta') {
             if (!id || this.printing) {
                 return;
             }
 
             this.printing = true;
+            this.printingFormat = formato;
             try {
-                const response = await axios.get('/venta/pdfVentasGeneral', {
-                    params: { id, foto },
+                const response = await axios.get(`/venta/tienda1/${id}/nota/${formato}`, {
                     responseType: 'blob',
                 });
                 const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
@@ -559,6 +561,7 @@ export default {
                 console.error(error);
             } finally {
                 this.printing = false;
+                this.printingFormat = null;
             }
         },
         showError(message) {
