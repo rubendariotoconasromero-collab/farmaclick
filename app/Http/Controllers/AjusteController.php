@@ -173,7 +173,25 @@ class AjusteController extends BitacoraController
                 $id_articulo = $det['id_articulo'];
                 $tienda_articulo=DB::select("SELECT ta.stock
                 FROM tienda_articulo ta
-                WHERE ta.id = '$id_articulo'"); 
+                WHERE ta.id = '$id_articulo'");
+
+                if($request->id_motivo_ajuste == 1 && !empty($det['id_lote'])){
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => 'Este producto ya tiene stock registrado. Usa "Ingreso" o "Egreso" para modificarlo, "Inventario Inicial" es solo para productos sin stock previo.',
+                    ], 422);
+                }
+
+                if($request->id_motivo_ajuste == 1 && empty($det['id_lote'])){
+                    $lote = new Lote();
+                    $lote->id_producto = $det['id_articulo'];
+                    $lote->cantidad = $det['stock'];
+                    $lote->fecha_vecimiento = $det['fecha_vencimiento'];
+                    $lote->lote = $det['lote'];
+                    $lote->estado = 1;
+                    $lote->save();
+                    $det['id_lote'] = $lote->id;
+                }
 
                 $obj = new Ajuste();
                 $obj->stock=$det['stock'];
@@ -272,7 +290,7 @@ class AjusteController extends BitacoraController
     }
 
     public function selectMotivo(){  
-        $obj = MotivoAjuste::select('id', 'nombre')->whereIn('id',[2,3])->orderBy('motivo_ajuste.id','asc')->get(); 
+        $obj = MotivoAjuste::select('id', 'nombre')->whereIn('id',[1,2,3])->orderBy('motivo_ajuste.id','asc')->get();
         return $obj;
     }
 

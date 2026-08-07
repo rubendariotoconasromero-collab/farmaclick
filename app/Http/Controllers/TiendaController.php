@@ -378,7 +378,7 @@ class TiendaController extends BitacoraController
         //dd($id_proveedor);  
         if ($buscar==''){
 
-            $tienda_articulo = TiendaArticulo::join('lote','tienda_articulo.id','=','lote.id_producto')
+            $tienda_articulo = TiendaArticulo::leftJoin('lote','tienda_articulo.id','=','lote.id_producto')
             ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
             ->join('tienda','tienda_articulo.id_tienda','=','tienda.id')
             ->join('categoria','articulo.id_categoria','=','categoria.id')
@@ -388,13 +388,15 @@ class TiendaController extends BitacoraController
             'articulo.nombre_comercial as articulo','tienda.nombre as tienda',
             'articulo.costo_compra','articulo.costo_unitario','articulo.costo_mayorista',
             'articulo.costo_preferencial','articulo.id_categoria','categoria.nombre as categoria','lote.cantidad','lote.fecha_vecimiento','lote.lote','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion')
-            ->where('lote.estado', '!=',0)
+            ->where(function ($q) {
+                $q->whereNull('lote.id')->orWhere('lote.estado', '!=', 0);
+            })
             ->orderBy('tienda_articulo.id', 'desc')
             ->paginate(100);
             //->get();
         }
         else{
-            $tienda_articulo = TiendaArticulo::join('lote','tienda_articulo.id','=','lote.id_producto')
+            $tienda_articulo = TiendaArticulo::leftJoin('lote','tienda_articulo.id','=','lote.id_producto')
             ->join('articulo','tienda_articulo.id_articulo','=','articulo.id')
             ->join('tienda','tienda_articulo.id_tienda','=','tienda.id')
             ->join('categoria','articulo.id_categoria','=','categoria.id')
@@ -404,7 +406,9 @@ class TiendaController extends BitacoraController
             'articulo.nombre_comercial as articulo','tienda.nombre as tienda',
             'articulo.costo_compra','articulo.costo_unitario','articulo.costo_mayorista',
             'articulo.costo_preferencial','articulo.id_categoria','categoria.nombre as categoria','lote.cantidad','lote.fecha_vecimiento','lote.lote','proveedor.nombre as laboratorio','unidad_medida.nombre as presentacion')
-            ->where('lote.estado', '!=',0)
+            ->where(function ($q) {
+                $q->whereNull('lote.id')->orWhere('lote.estado', '!=', 0);
+            })
             ->where($criterio, 'like', '%'.$buscar.'%')
             ->orderBy('tienda_articulo.id', 'desc')
             ->paginate(100);

@@ -292,11 +292,11 @@
                                                     <input v-model="detalle.observacion" type="text"  id="Preferencial" class="form-control">
                                                 </td>       
                                                 <td>
-                                                    <input v-model="detalle.fecha_vencimiento" type="date"  id="Preferencial" class="form-control" :disabled="true">
-                                                </td>     
+                                                    <input v-model="detalle.fecha_vencimiento" type="date"  id="Preferencial" class="form-control" :disabled="!!detalle.id_lote">
+                                                </td>
                                                 <td>
-                                                    <input v-model="detalle.lote" type="text"  id="Preferencial" class="form-control" :disabled="true">
-                                                </td>                                                               
+                                                    <input v-model="detalle.lote" type="text"  id="Preferencial" class="form-control" :disabled="!!detalle.id_lote">
+                                                </td>
                                             </tr>
                                         </tbody>
                                         <tbody v-else>
@@ -643,7 +643,7 @@
             encuentra(id){
                 var sw=0;
                 for(var i=0;i<this.arrayDetalle.length;i++){
-                    if(this.arrayDetalle[i].id_lote==id){
+                    if(this.arrayDetalle[i].id_articulo==id){
                         sw=true;
                     }
                 }
@@ -656,11 +656,18 @@
             
             seleccionarArticulo(data=[],index){
                 let me = this;
-                if(me.encuentra(data['id_lote'])){
+                if(me.encuentra(data['id_articulo'])){
                     Swal.fire({
                         icon: 'error',
                         title: 'Error...',
                         text: 'Este producto ya se encuentra agregado!'
+                    })
+                }
+                else if(me.datos.id_motivo_ajuste == 1 && data['id_lote']){
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error...',
+                        text: 'Este producto ya tiene stock registrado. Usa "Ingreso" o "Egreso" para modificarlo.'
                     })
                 }
                 else{
@@ -866,8 +873,16 @@
                     })
                     return true;
                 }
+                if(me.datos.id_motivo_ajuste == 1 && me.arrayDetalle.find(seg => (!seg.id_lote && (!seg.lote || !seg.fecha_vencimiento)))){
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error...',
+                        text: 'Debe indicar el código de lote y la fecha de vencimiento para productos nuevos!'
+                    })
+                    return true;
+                }
                 return false;
-            }           
+            }
         },
         async mounted() {
             try {
