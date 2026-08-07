@@ -22,7 +22,7 @@
                     </select>
                     <app-button icon="icons/magnifying-glass.svg" @click="$emit('search')">Buscar</app-button>
                 </div>
-                <app-table class="product-picker__table" :columns="columns" :rows="products" row-key="id" min-width="1180px" :row-class="rowClass" empty-title="Sin productos" empty-message="No se encontraron lotes para los filtros seleccionados.">
+                <app-table class="product-picker__table" fill-height :columns="columns" :rows="products" row-key="id" min-width="1180px" :row-class="rowClass" empty-title="Sin productos" empty-message="No se encontraron lotes para los filtros seleccionados.">
                     <template #cell-product="{ row }"><strong>{{ row.articulo }}</strong><small>{{ row.nombre_generico || 'Sin nombre genérico' }}</small></template>
                     <template #cell-presentation="{ row }"><strong>{{ row.presentacion }}</strong><small>{{ row.laboratorio }}</small></template>
                     <template #cell-expiry="{ row }"><strong>{{ row.fecha_vecimiento }}</strong><small>Lote: {{ row.lote }}</small></template>
@@ -53,7 +53,9 @@
                     <p v-if="!products.length" class="product-picker__cards-empty">No se encontraron lotes para los filtros seleccionados.</p>
                 </div>
 
-                <purchase-pagination :pagination="pagination" :pages="pages" @change="$emit('page', $event)" />
+                <div class="product-picker__pagination">
+                    <purchase-pagination :pagination="pagination" :pages="pages" @change="$emit('page', $event)" />
+                </div>
             </div>
             <footer><app-button variant="ghost" @click="$emit('close')">Terminar</app-button></footer>
         </div>
@@ -107,22 +109,23 @@ export default {
 .product-picker__dialog header h5 { margin: .1rem 0 0; font-weight: 800; }
 .product-picker__dialog header small { color: #80dcec; font-size: .65rem; font-weight: 900; text-transform: uppercase; letter-spacing: .07em; }
 .product-picker__dialog header button { width: 36px; height: 36px; color: #fff; font-size: 1.5rem; background: rgba(255,255,255,.1); border: 0; border-radius: 9px; }
-.product-picker__body { min-height: 0; padding: 1rem; overflow: auto; }
-.product-picker__filters { display: grid; grid-template-columns: 210px minmax(260px, 1fr) 220px auto; gap: .55rem; margin-bottom: 1rem; }
+.product-picker__body { display: flex; flex-direction: column; min-height: 0; padding: 1rem; overflow: hidden; }
+.product-picker__filters { flex: 0 0 auto; display: grid; grid-template-columns: 210px minmax(260px, 1fr) 220px auto; gap: .55rem; margin-bottom: 1rem; }
 .product-picker__filters select { min-height: 40px; padding: .48rem .65rem; color: var(--fc-ink, #17362b); background: #fff; border: 1px solid #bdd2c9; border-radius: var(--system-radius, 9px); }
+.product-picker__table { flex: 1 1 auto; min-height: 0; margin-bottom: .5rem; }
 .product-picker ::v-deep .app-table td strong { display: block; color: var(--fc-ink, #17362b); }
 .product-picker ::v-deep .app-table td small { color: var(--system-text-muted, #5f716a); font-size: .64rem; }
-.product-picker ::v-deep .app-table__scroll { max-height: calc(96vh - 250px); }
 .product-picker ::v-deep .app-table,
 .product-picker ::v-deep .app-table__scroll,
 .product-picker ::v-deep .app-table table { width: 100%; }
 .product-picker ::v-deep tr.is-expired td { background: #fff0f0 !important; }
+.product-picker__pagination { flex: 0 0 auto; }
 .product-picker__stock { display: inline-flex; min-width: 34px; justify-content: center; padding: .25rem .45rem; color: var(--fc-green-700, #1f6b45); font-weight: 900; background: var(--fc-green-50, #effaf4); border-radius: 999px; }
 .product-picker__stock.is-empty { color: #a72f36; background: #fde8e9; }
 .product-picker__dialog > footer { display: flex; justify-content: flex-end; padding: .7rem 1rem; background: #fff; border-top: 1px solid var(--system-border-color, #d8e5df); }
 
 /* Tarjetas para móvil: markup propio (no una tabla reinterpretada), oculto por defecto. */
-.product-picker__cards { display: none; }
+.product-picker__cards { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; }
 .product-picker__cards-empty { padding: 2rem 1rem; color: var(--system-text-muted, #5f716a); text-align: center; }
 .product-picker__card { display: grid; gap: .3rem; padding: .9rem 1rem; margin-bottom: .75rem; background: #fff; border: 1px solid var(--system-border-color, #d8e5df); border-radius: var(--system-radius-lg, 14px); box-shadow: var(--system-shadow-sm, 0 2px 10px rgba(10,56,42,.06)); }
 .product-picker__card.is-expired { background: #fff0f0; }
