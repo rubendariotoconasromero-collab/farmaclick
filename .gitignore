@@ -20,3 +20,18 @@ public/js/*
 public/js/app.js
 public/css/app.css
 !/js/*
+
+# Logos subidos por usuarios (Mi Empresa) - contenido de runtime, no de código.
+# logo.png y logo_login.png son las imágenes por defecto que usa el código
+# cuando nadie subió nada (ver MiEmpresaController.php), por eso sí se versionan.
+/public/img/logo/*
+!/public/img/logo/.gitkeep
+!/public/img/logo/logo.png
+!/public/img/logo/logo_login.png
+
+# Igual para public/img/mi_empresa - se dejan los defaults conocidos.
+/public/img/mi_empresa/*
+!/public/img/mi_empresa/Logo.png
+!/public/img/mi_empresa/logo_default.png
+!/public/img/mi_empresa/logo_vet.png
+!/public/img/mi_empresa/sin_image.png

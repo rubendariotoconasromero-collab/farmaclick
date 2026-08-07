@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             CargoSeeder::class,
             PersonalSeeder::class,
             GrupoSeeder::class,
+            CajeroSeeder::class,
             UserSeeder::class,
             MiEmpresaSeeder::class,
             TiendaSeeder::class,
