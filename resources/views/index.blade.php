@@ -40,7 +40,7 @@ window.FarmaClickAuth = @json($rbacBootstrap);
 <div class="wrapper d-flex flex-column min-vh-100">
     <header class="header header-sticky mb-12">
         <div class="container-fluid">
-            <button class="header-toggler px-md-0 me-md-3" type="button" onclick="coreui.Sidebar.getInstance(document.querySelector(&#39;#sidebar&#39;)).toggle()">
+            <button class="header-toggler px-md-0 me-md-3" type="button" onclick="coreui.Sidebar.getOrCreateInstance(document.querySelector(&#39;#sidebar&#39;)).toggle()">
                 <img class="header-action-icon" src="{{ asset('icons/menu.svg') }}" alt="" aria-hidden="true">
             </button>
           

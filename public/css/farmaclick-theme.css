@@ -745,6 +745,43 @@ textarea.form-control:focus {
   }
 }
 
+/*
+ * Sidebar móvil: se agrega un botón "X" propio dentro del sidebar para
+ * cerrarlo (ver menu_admin.blade.php). Vive dentro de .sidebar, que ya
+ * tiene z-index:1031 (por encima del backdrop, z-index:1030), así que
+ * no hace falta tocar el z-index del header — subirlo por encima del
+ * sidebar lo tapaba por completo (el header ocupa todo el ancho, no
+ * solo la esquina), dejando el sidebar con aspecto "cortado".
+ */
+@media (max-width: 767.98px) {
+  /* Deja espacio arriba para que el botón de cerrar no se solape con el primer ítem del menú */
+  #sidebar .sidebar-nav {
+    padding-top: 3.2rem;
+  }
+
+  .sidebar-close-mobile {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.08);
+    border: 0;
+    border-radius: 999px;
+  }
+
+  .sidebar-close-mobile img {
+    width: 18px;
+    height: 18px;
+    filter: invert(1);
+  }
+}
+
 @media (max-width: 380px) {
   .login-layout {
     padding: 0;

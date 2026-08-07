@@ -49,4 +49,8 @@ export default {
 .quantity-dialog__stock strong { color: var(--fc-green-700, #1f6b45); }
 .quantity-dialog__error { color: #b62e35; font-weight: 700; }
 .quantity-dialog footer { display: flex; justify-content: flex-end; gap: .5rem; padding: .75rem 1rem; border-top: 1px solid var(--system-border-color, #d8e5df); }
+@media (max-width: 700px) {
+    .quantity-dialog footer { flex-direction: column-reverse; }
+    .quantity-dialog footer .app-button { width: 100%; }
+}
 </style>

@@ -1,5 +1,8 @@
 @php($navigation = \App\Support\Navigation::forUser(Auth::user()))
 <aside class="sidebar sidebar-dark sidebar-fixed" id="sidebar">
+  <button class="sidebar-close-mobile d-md-none" type="button" aria-label="Cerrar menú" onclick="coreui.Sidebar.getOrCreateInstance(document.querySelector('#sidebar')).hide()">
+    <img src="{{ asset('icons/x.svg') }}" alt="" aria-hidden="true">
+  </button>
   <div class="sidebar-brand d-none d-md-flex">
     <img class="sidebar-brand-logo" src="{{ asset('img/FarmaClick_logo_horizontal.png') }}" alt="FarmaClick">
   </div>
