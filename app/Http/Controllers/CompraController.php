@@ -272,7 +272,7 @@ class CompraController extends BitacoraController
                 $obj->descuento= $det['descuento'];
                 $obj->id_lote= $lote->id;
                 $obj->save();
-                $consulta = DB::select('CALL stock(?)', [$det['id_tienda_articulo']]);
+                TiendaArticulo::recalcularStock($det['id_tienda_articulo']);
 
 
                 $articulo = Articulo::findOrFail($det['id_articulo']);
@@ -545,7 +545,7 @@ class CompraController extends BitacoraController
                     $lote->estado = $lote->cantidad > 0 ? 1 : 0;
                     $lote->save();
 
-                    DB::statement('CALL stock(?)', [$detalle->id_producto]);
+                    TiendaArticulo::recalcularStock($detalle->id_producto);
                     $tiendaArticuloActual = DB::table('tienda_articulo')->where('id', $detalle->id_producto)->first();
                     $stockGeneralActual = $tiendaArticuloActual ? (float) $tiendaArticuloActual->stock : 0;
 
@@ -623,7 +623,7 @@ class CompraController extends BitacoraController
                 $stock_actual_lote = $lote->cantidad;
                 $tienda_articulo_ant = DB::table('tienda_articulo')->where('id', $det->id_producto)->first();
                 $stock_general_anterior = $tienda_articulo_ant ? $tienda_articulo_ant->stock : 0;
-                DB::statement('CALL stock(?)', [$det->id_producto]);
+                TiendaArticulo::recalcularStock($det->id_producto);
                 $tienda_articulo_act = DB::table('tienda_articulo')->where('id', $det->id_producto)->first();
                 $stock_general_actual = $tienda_articulo_act ? $tienda_articulo_act->stock : 0;
 
@@ -1679,7 +1679,7 @@ class CompraController extends BitacoraController
                     $articuloTienda = TiendaArticulo::findOrFail($idProducto);
                     Articulo::where('id', $articuloTienda->id_articulo)->update(['costo_compra' => $costo]);
 
-                    DB::statement('CALL stock(?)', [$idProducto]);
+                    TiendaArticulo::recalcularStock($idProducto);
                     $tiendaArticuloActual = DB::table('tienda_articulo')->where('id', $idProducto)->first();
                     $stockGeneralActual = $tiendaArticuloActual ? (float) $tiendaArticuloActual->stock : 0;
 
@@ -1920,7 +1920,7 @@ class CompraController extends BitacoraController
                             ->where('id',$det['id_lote'])
                             ->update(['fecha_vecimiento' => $det['fecha_vecimiento'],'lote' => $det['lote']]);
                             
-                            $consulta = DB::select('CALL stock(?)', [$detall->id_producto]);
+                            TiendaArticulo::recalcularStock($detall->id_producto);
                             
                             $id_producto = $det['id_producto'];
                             $tienda_articulo=DB::select("SELECT ta.stock
@@ -1992,7 +1992,7 @@ class CompraController extends BitacoraController
                                 ->where('id',$det['id_lote'])
                                 ->update(['fecha_vecimiento' => $det['fecha_vecimiento'],'lote' => $det['lote']]);
     
-                                $consulta = DB::select('CALL stock(?)', [$detall->id_producto]);
+                                TiendaArticulo::recalcularStock($detall->id_producto);
                             
                                 $id_producto = $det['id_producto'];
                                 $tienda_articulo=DB::select("SELECT ta.stock

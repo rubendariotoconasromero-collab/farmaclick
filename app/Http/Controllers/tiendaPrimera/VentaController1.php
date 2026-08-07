@@ -18,6 +18,7 @@ use App\Models\ArqueoCaja;
 use App\Models\Cliente;
 use App\Models\Auxiliar;
 use App\Models\Lote;
+use App\Models\TiendaArticulo;
 use App\Models\MiEmpresa;
 use App\Http\Controllers\BitacoraController;
 use Illuminate\Validation\ValidationException;
@@ -540,7 +541,7 @@ class VentaController1 extends BitacoraController
                                    DB::table('lote')->where('lote.id','=',$id_lote)->update(['estado' => 2]);
 
                                    if($request->tipo_venta=='Venta Directa'){
-                                    $consulta = DB::select('CALL stock(?)', [$stock['id_tienda_articulo']]);
+                                    TiendaArticulo::recalcularStock($stock['id_tienda_articulo']);
                                 } else {
 
                                 }
@@ -581,7 +582,7 @@ class VentaController1 extends BitacoraController
                         $obj->save();
                         $this->actualizarStock($det['id_lote'],$det['descuento_stock']);
 
-                        $consulta = DB::select('CALL stock(?)', [$det['id_tienda_articulo']]);
+                        TiendaArticulo::recalcularStock($det['id_tienda_articulo']);
 
                         $tienda_articulo=DB::select("SELECT ta.stock
                         FROM tienda_articulo ta
@@ -1235,7 +1236,7 @@ class VentaController1 extends BitacoraController
                     $cantidadRestituida = (float) ($detalle->total_cantidad ?: $detalle->cantidad);
                     $lote->cantidad = $stockLoteAnterior + $cantidadRestituida;
                     $lote->save();
-                    DB::statement('CALL stock(?)', [$detalle->id_producto]);
+                    TiendaArticulo::recalcularStock($detalle->id_producto);
                     $stockActual = DB::table('tienda_articulo')->where('id', $detalle->id_producto)->value('stock');
 
                     $detalle->total_cantidad = $cantidadRestituida;
@@ -1548,7 +1549,7 @@ class VentaController1 extends BitacoraController
                                 DB::table('lote')->where('lote.id','=',$id_lote)->update(['estado' => 2]);
 
                                 // if($request->tipo_venta=='Venta Directa'){
-                                $consulta = DB::select('CALL stock(?)', [$det['id_tienda_articulo']]);
+                                TiendaArticulo::recalcularStock($det['id_tienda_articulo']);
                             // } else {
 
                             // }
@@ -1716,7 +1717,7 @@ class VentaController1 extends BitacoraController
                                 DB::table('lote')->where('lote.id','=',$id_lote)->update(['estado' => 2]);
 
                                 // if($request->tipo_venta=='Venta Directa'){
-                                $consulta = DB::select('CALL stock(?)', [$det['id_tienda_articulo']]);
+                                TiendaArticulo::recalcularStock($det['id_tienda_articulo']);
                             // } else {
 
                             // }
@@ -1806,7 +1807,7 @@ class VentaController1 extends BitacoraController
                     $detalle->estado = 1;
                     $detalle->id_eliminado = \Auth::id();
                     $detalle->save();
-                    DB::statement('CALL stock(?)', [$detalle->id_producto]);
+                    TiendaArticulo::recalcularStock($detalle->id_producto);
                     $stockActual = DB::table('tienda_articulo')->where('id', $detalle->id_producto)->value('stock');
 
                     $detalle->total_cantidad = $cantidadRestituida;

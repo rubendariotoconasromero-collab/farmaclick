@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Ajuste;
 use App\Models\Lote;
 use App\Models\MotivoAjuste;
+use App\Models\TiendaArticulo;
 use App\Http\Requests\AjusteRequest;
 use DB;
 use DateTime;
@@ -237,19 +238,19 @@ class AjusteController extends BitacoraController
                     ->where('id', $obj->id_lote)
                     ->update(['fecha_vecimiento' => $det['fecha_vencimiento']]); 
 
-                    $consulta = DB::select('CALL stock(?)', [$det['id_articulo']]);
+                    TiendaArticulo::recalcularStock($det['id_articulo']);
 
                 }else {
                     if( $obj->id_motivo_ajuste == 2){ 
                         // DB::table('tienda_articulo')->where('tienda_articulo.id_tienda',1)->where('tienda_articulo.id_articulo','=',$det['id_articulo'])->decrement('stock',- $det['stock']);
                         DB::table('lote')->where('lote.id','=',$det['id_lote'])->decrement('cantidad',- $det['stock']);
-                        $consulta = DB::select('CALL stock(?)', [$det['id_articulo']]);
+                        TiendaArticulo::recalcularStock($det['id_articulo']);
                     }else 
                     {                
                     if( $obj->id_motivo_ajuste == 3){
                         // DB::table('tienda_articulo')->where('tienda_articulo.id_tienda',1)->where('tienda_articulo.id_articulo','=',$det['id_articulo'])->increment('stock',- $obj->stock);
                         DB::table('lote')->where('lote.id','=',$det['id_lote'])->increment('cantidad',- $obj->stock);
-                        $consulta = DB::select('CALL stock(?)', [$det['id_articulo']]);
+                        TiendaArticulo::recalcularStock($det['id_articulo']);
                     }else 
                     {
                         if( $obj->id_motivo_ajuste == 4){

@@ -643,7 +643,7 @@ class ArticuloController extends BitacoraController
     public function contador(Request $request){
         $id = $request->id;
 
-     $consulta = DB::select('CALL stock(?)', [$id]);    
+     TiendaArticulo::recalcularStock($id);
 
      }
      public function selectUnitario(Request $request){  

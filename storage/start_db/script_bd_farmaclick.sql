@@ -279,7 +279,7 @@ CREATE TABLE `bitacora` (
   PRIMARY KEY (`id`),
   KEY `bitacora_id_usuario_foreign` (`id_usuario`),
   CONSTRAINT `bitacora_id_usuario_foreign` FOREIGN KEY (`id_usuario`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -288,6 +288,7 @@ CREATE TABLE `bitacora` (
 
 LOCK TABLES `bitacora` WRITE;
 /*!40000 ALTER TABLE `bitacora` DISABLE KEYS */;
+INSERT INTO `bitacora` VALUES (1,'2026-08-07','02:58:50','ajuste',1,'guardar',1),(2,'2026-08-07','02:58:50','ajuste',2,'guardar',1);
 /*!40000 ALTER TABLE `bitacora` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1207,7 +1208,7 @@ CREATE TABLE `lote` (
   PRIMARY KEY (`id`),
   KEY `lote_id_producto_foreign` (`id_producto`),
   CONSTRAINT `lote_id_producto_foreign` FOREIGN KEY (`id_producto`) REFERENCES `tienda_articulo` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1297,7 +1298,7 @@ CREATE TABLE `migrations` (
   `migration` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `batch` int NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=63 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1306,7 +1307,7 @@ CREATE TABLE `migrations` (
 
 LOCK TABLES `migrations` WRITE;
 /*!40000 ALTER TABLE `migrations` DISABLE KEYS */;
-INSERT INTO `migrations` VALUES (1,'2014_10_12_100000_create_password_resets_table',1),(2,'2019_08_19_000000_create_failed_jobs_table',1),(3,'2019_12_14_000001_create_personal_access_tokens_table',1),(4,'2022_01_07_024055_create_cliente_table',1),(5,'2022_01_09_142223_create_proveedor_table',1),(6,'2022_01_09_142337_create_cargo_table',1),(7,'2022_01_09_142414_create_personal_table',1),(8,'2022_01_09_142440_create_grupo_table',1),(9,'2022_01_09_142441_create_users_table',1),(10,'2022_01_09_213313_create_permiso_table',1),(11,'2022_01_09_213352_create_grupo_permiso_table',1),(12,'2022_01_10_151817_create_mi_empresas_table',1),(13,'2022_01_10_220331_create_categoria_table',1),(14,'2022_01_10_222227_create_marca_table',1),(15,'2022_01_10_222228_create_unidad_medida_table',1),(16,'2022_01_10_222229_create_articulo_table',1),(17,'2022_01_11_135814_create_tienda_table',1),(18,'2022_01_11_140001_create_tienda_articulo_table',1),(19,'2022_01_12_174900_create_motivo_gasto_table',1),(20,'2022_01_12_175008_create_gasto_table',1),(21,'2022_01_14_141047_create_forma_pago_table',1),(22,'2022_01_14_141218_create_tipo_pago_table',1),(23,'2022_01_14_141219_create_paquetes_table',1),(24,'2022_01_14_141220_create_detalle_paquete_table',1),(25,'2022_01_14_141343_create_lote_table',1),(26,'2022_01_14_141344_create_compra_table',1),(27,'2022_01_14_141357_create_detalle_compra_table',1),(28,'2022_01_21_095224_create_motivo_ajuste_table',1),(29,'2022_01_21_095639_create_ajuste_table',1),(30,'2022_01_25_135142_create_orden_servicio_table',1),(31,'2022_01_26_185830_create_venta_table',1),(32,'2022_01_26_200634_create_detalle_venta_table',1),(33,'2022_01_26_220155_create_pago_table',1),(34,'2022_01_27_220127_create_c_x_cobrar_table',1),(35,'2022_01_31_122614_create_bitacora_table',1),(36,'2022_02_02_104645_create_control_table',1),(37,'2022_02_04_151217_create_detalle_orden_servicio_table',1),(38,'2022_02_18_120034_create_permiso_forms_table',1),(39,'2022_02_18_133831_create_formularios_table',1),(40,'2022_02_18_180135_create_detalle_forms_table',1),(41,'2022_02_19_161936_create_usuario_permisos_table',1),(42,'2022_02_28_233247_create_traspasos_table',1),(43,'2022_03_01_001522_create_detalle_traspasos_table',1),(44,'2022_03_03_134530_create_arqueo_cajas_table',1),(45,'2022_06_03_143702_create_pago_compra_table',1),(46,'2022_06_03_143817_create_c_x_pagar_table',1),(47,'2022_06_09_140255_create_detalle_venta_paquete_table',1),(48,'2022_06_09_141340_create_animal_table',1),(49,'2022_06_09_141818_create_paciente_table',1),(50,'2022_06_13_151128_create_detalle_vacuna_table',1),(51,'2022_06_14_202256_create_control_vacuna_table',1),(52,'2022_06_14_203929_create_detalle_control_vacuna_table',1),(53,'2022_07_05_202422_create_antiparasitario_table',1),(54,'2022_07_05_202527_create_detalle_antiparasitario_table',1),(55,'2022_07_06_210732_create_historial_clinico_table',1),(56,'2022_07_07_160235_create_detalle_historia_table',1),(57,'2022_07_07_160237_create_auxiliar_table',1),(58,'2026_08_02_000001_add_purchase_history_filter_indexes',1),(59,'2026_08_04_000001_create_cotizacion_table',1),(60,'2026_08_04_000002_create_detalle_cotizacion_table',1),(61,'2026_08_04_100000_create_native_rbac_tables',1),(62,'2026_08_04_110000_remove_legacy_permission_system',1);
+INSERT INTO `migrations` VALUES (1,'2014_10_12_100000_create_password_resets_table',1),(2,'2019_08_19_000000_create_failed_jobs_table',1),(3,'2019_12_14_000001_create_personal_access_tokens_table',1),(4,'2022_01_07_024055_create_cliente_table',1),(5,'2022_01_09_142223_create_proveedor_table',1),(6,'2022_01_09_142337_create_cargo_table',1),(7,'2022_01_09_142414_create_personal_table',1),(8,'2022_01_09_142440_create_grupo_table',1),(9,'2022_01_09_142441_create_users_table',1),(10,'2022_01_09_213313_create_permiso_table',1),(11,'2022_01_09_213352_create_grupo_permiso_table',1),(12,'2022_01_10_151817_create_mi_empresas_table',1),(13,'2022_01_10_220331_create_categoria_table',1),(14,'2022_01_10_222227_create_marca_table',1),(15,'2022_01_10_222228_create_unidad_medida_table',1),(16,'2022_01_10_222229_create_articulo_table',1),(17,'2022_01_11_135814_create_tienda_table',1),(18,'2022_01_11_140001_create_tienda_articulo_table',1),(19,'2022_01_12_174900_create_motivo_gasto_table',1),(20,'2022_01_12_175008_create_gasto_table',1),(21,'2022_01_14_141047_create_forma_pago_table',1),(22,'2022_01_14_141218_create_tipo_pago_table',1),(23,'2022_01_14_141219_create_paquetes_table',1),(24,'2022_01_14_141220_create_detalle_paquete_table',1),(25,'2022_01_14_141343_create_lote_table',1),(26,'2022_01_14_141344_create_compra_table',1),(27,'2022_01_14_141357_create_detalle_compra_table',1),(28,'2022_01_21_095224_create_motivo_ajuste_table',1),(29,'2022_01_21_095639_create_ajuste_table',1),(30,'2022_01_25_135142_create_orden_servicio_table',1),(31,'2022_01_26_185830_create_venta_table',1),(32,'2022_01_26_200634_create_detalle_venta_table',1),(33,'2022_01_26_220155_create_pago_table',1),(34,'2022_01_27_220127_create_c_x_cobrar_table',1),(35,'2022_01_31_122614_create_bitacora_table',1),(36,'2022_02_02_104645_create_control_table',1),(37,'2022_02_04_151217_create_detalle_orden_servicio_table',1),(38,'2022_02_18_120034_create_permiso_forms_table',1),(39,'2022_02_18_133831_create_formularios_table',1),(40,'2022_02_18_180135_create_detalle_forms_table',1),(41,'2022_02_19_161936_create_usuario_permisos_table',1),(42,'2022_02_28_233247_create_traspasos_table',1),(43,'2022_03_01_001522_create_detalle_traspasos_table',1),(44,'2022_03_03_134530_create_arqueo_cajas_table',1),(45,'2022_06_03_143702_create_pago_compra_table',1),(46,'2022_06_03_143817_create_c_x_pagar_table',1),(47,'2022_06_09_140255_create_detalle_venta_paquete_table',1),(48,'2022_06_09_141340_create_animal_table',1),(49,'2022_06_09_141818_create_paciente_table',1),(50,'2022_06_13_151128_create_detalle_vacuna_table',1),(51,'2022_06_14_202256_create_control_vacuna_table',1),(52,'2022_06_14_203929_create_detalle_control_vacuna_table',1),(53,'2022_07_05_202422_create_antiparasitario_table',1),(54,'2022_07_05_202527_create_detalle_antiparasitario_table',1),(55,'2022_07_06_210732_create_historial_clinico_table',1),(56,'2022_07_07_160235_create_detalle_historia_table',1),(57,'2022_07_07_160237_create_auxiliar_table',1),(58,'2026_08_02_000001_add_purchase_history_filter_indexes',1),(59,'2026_08_04_000001_create_cotizacion_table',1),(60,'2026_08_04_000002_create_detalle_cotizacion_table',1),(61,'2026_08_04_100000_create_native_rbac_tables',1),(62,'2026_08_04_110000_remove_legacy_permission_system',1),(63,'2026_08_07_000000_create_stock_procedure',1),(64,'2026_08_07_000001_drop_stock_procedure',2);
 /*!40000 ALTER TABLE `migrations` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1586,7 +1587,7 @@ CREATE TABLE `permissions` (
 
 LOCK TABLES `permissions` WRITE;
 /*!40000 ALTER TABLE `permissions` DISABLE KEYS */;
-INSERT INTO `permissions` VALUES (1,'dashboard.view','Ver datos gráficos','Inicio',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(2,'cash.manage','Gestionar arqueo de caja','Caja',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(3,'purchases.create','Registrar compras','Compras',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(4,'purchases.view','Consultar historial de compras','Compras',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(5,'purchases.update','Modificar compras','Compras',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(6,'purchases.cancel','Anular compras','Compras',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(7,'purchases.payments','Gestionar pagos de compras','Compras',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(8,'sales.create','Registrar ventas','Ventas',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(9,'sales.view','Consultar historial de ventas','Ventas',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(10,'sales.update','Modificar ventas','Ventas',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(11,'sales.cancel','Anular ventas','Ventas',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(12,'sales.return','Registrar devoluciones','Ventas',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(13,'sales.payments','Gestionar pagos de ventas','Ventas',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(14,'inventory.view','Consultar inventario','Almacén',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(15,'inventory.products.manage','Gestionar productos','Almacén',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(16,'inventory.categories.manage','Gestionar categorías','Almacén',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(17,'inventory.adjustments.manage','Gestionar ajustes','Almacén',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(18,'inventory.presentations.manage','Gestionar presentaciones','Almacén',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(19,'inventory.lines.manage','Gestionar líneas','Almacén',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(20,'inventory.lots.manage','Gestionar lotes','Almacén',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(21,'expenses.reasons.manage','Gestionar motivos de gasto','Gastos',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(22,'expenses.manage','Gestionar gastos','Gastos',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(23,'data.clients.manage','Gestionar clientes','Datos maestros',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(24,'data.laboratories.manage','Gestionar laboratorios','Datos maestros',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(25,'data.personal.manage','Gestionar personal','Datos maestros',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(26,'data.positions.manage','Gestionar cargos','Datos maestros',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(27,'data.company.manage','Gestionar empresa','Datos maestros',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(28,'users.roles.manage','Gestionar grupos de usuarios','Usuarios',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(29,'users.manage','Gestionar usuarios','Usuarios',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(30,'users.permissions.manage','Asignar permisos','Usuarios',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(31,'reports.view','Acceder al módulo de reportes','Reportes',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18'),(32,'reports.generate','Generar reportes','Reportes',NULL,'2026-08-07 00:17:18','2026-08-07 00:17:18');
+INSERT INTO `permissions` VALUES (1,'dashboard.view','Ver datos gráficos','Inicio',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(2,'cash.manage','Gestionar arqueo de caja','Caja',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(3,'purchases.create','Registrar compras','Compras',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(4,'purchases.view','Consultar historial de compras','Compras',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(5,'purchases.update','Modificar compras','Compras',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(6,'purchases.cancel','Anular compras','Compras',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(7,'purchases.payments','Gestionar pagos de compras','Compras',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(8,'sales.create','Registrar ventas','Ventas',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(9,'sales.view','Consultar historial de ventas','Ventas',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(10,'sales.update','Modificar ventas','Ventas',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(11,'sales.cancel','Anular ventas','Ventas',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(12,'sales.return','Registrar devoluciones','Ventas',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(13,'sales.payments','Gestionar pagos de ventas','Ventas',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(14,'inventory.view','Consultar inventario','Almacén',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(15,'inventory.products.manage','Gestionar productos','Almacén',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(16,'inventory.categories.manage','Gestionar categorías','Almacén',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(17,'inventory.adjustments.manage','Gestionar ajustes','Almacén',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(18,'inventory.presentations.manage','Gestionar presentaciones','Almacén',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(19,'inventory.lines.manage','Gestionar líneas','Almacén',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(20,'inventory.lots.manage','Gestionar lotes','Almacén',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(21,'expenses.reasons.manage','Gestionar motivos de gasto','Gastos',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(22,'expenses.manage','Gestionar gastos','Gastos',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(23,'data.clients.manage','Gestionar clientes','Datos maestros',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(24,'data.laboratories.manage','Gestionar laboratorios','Datos maestros',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(25,'data.personal.manage','Gestionar personal','Datos maestros',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(26,'data.positions.manage','Gestionar cargos','Datos maestros',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(27,'data.company.manage','Gestionar empresa','Datos maestros',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(28,'users.roles.manage','Gestionar grupos de usuarios','Usuarios',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(29,'users.manage','Gestionar usuarios','Usuarios',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(30,'users.permissions.manage','Asignar permisos','Usuarios',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(31,'reports.view','Acceder al módulo de reportes','Reportes',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58'),(32,'reports.generate','Generar reportes','Reportes',NULL,'2026-08-07 06:41:58','2026-08-07 06:41:58');
 /*!40000 ALTER TABLE `permissions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1705,7 +1706,7 @@ CREATE TABLE `rbac_migration_audits` (
 
 LOCK TABLES `rbac_migration_audits` WRITE;
 /*!40000 ALTER TABLE `rbac_migration_audits` DISABLE KEYS */;
-INSERT INTO `rbac_migration_audits` VALUES (1,'legacy-rbac-before-migration','{\"grupo\":[],\"formularios\":[],\"permiso_forms\":[],\"detalle_forms\":[],\"usuario_permisos\":[],\"permiso\":[],\"grupo_permiso\":[]}','2026-08-06 20:17:18');
+INSERT INTO `rbac_migration_audits` VALUES (1,'legacy-rbac-before-migration','{\"grupo\":[],\"formularios\":[],\"permiso_forms\":[],\"detalle_forms\":[],\"usuario_permisos\":[],\"permiso\":[],\"grupo_permiso\":[]}','2026-08-07 02:41:58');
 /*!40000 ALTER TABLE `rbac_migration_audits` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1888,7 +1889,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'Administrador','001','admin@admin.com','$2y$10$AiDbKuDeur/hBHeTclZxje8n3hlivuWwhNNpwaKZLKlGermVytE4y',1,1,1);
+INSERT INTO `users` VALUES (1,'Administrador','001','admin@admin.com','$2y$10$wTy/2vDLIqyEMDpp5v8NrO4s.0SDIEJGdO07knFMalmnG.ve.3AuK',1,1,1);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1949,27 +1950,6 @@ UNLOCK TABLES;
 --
 -- Dumping routines for database 'bd_farmacia_demo'
 --
-/*!50003 DROP PROCEDURE IF EXISTS `stock` */;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8mb4 */ ;
-/*!50003 SET character_set_results = utf8mb4 */ ;
-/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'NO_AUTO_VALUE_ON_ZERO' */ ;
-DELIMITER ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `stock`(IN `id_producto` FLOAT)
-begin
-      UPDATE tienda_articulo
-      SET tienda_articulo.stock = ( SELECT SUM(lote.cantidad) FROM lote WHERE(lote.id_producto = id_producto and lote.estado !=0))
-      WHERE tienda_articulo.id = id_producto;
-end ;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -1980,4 +1960,4 @@ DELIMITER ;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-08-06 16:18:53
+-- Dump completed on 2026-08-06 22:59:19

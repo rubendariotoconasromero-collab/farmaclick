@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Lote;
 use App\Models\Ajuste;
+use App\Models\TiendaArticulo;
 use DB;
 use DateTime;
 
@@ -31,7 +32,7 @@ class LoteController extends BitacoraController
                 $obj->estado=1;
                 $obj->save();
                 
-                $consulta = DB::select('CALL stock(?)', [$det['id_tienda_articulo']]);
+                TiendaArticulo::recalcularStock($det['id_tienda_articulo']);
 
                 $tienda_articulo=DB::select("SELECT ta.stock
                 FROM tienda_articulo ta
@@ -137,7 +138,7 @@ class LoteController extends BitacoraController
         $ajuste->hora=$hora;
         $ajuste->save();
 
-        $consulta = DB::select('CALL stock(?)', [$id_producto]);
+        TiendaArticulo::recalcularStock($id_producto);
 
     }
 }
